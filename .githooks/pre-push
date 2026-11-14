@@ -1,0 +1,18 @@
+#!/bin/sh
+# ==============================================================================
+# Git Pre-Push Hook Ã¢â‚¬â€ AgroPhasor (Nasa_AgroFarm)
+# Basado en la arquitectura de Quippu.
+# Ejecuta las validaciones locales de CI antes de permitir 'git push'.
+# Si falla Gitleaks o las validaciones del proyecto, el push se cancela.
+# ==============================================================================
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+if [ -f "$REPO_ROOT/check-ci.sh" ]; then
+    exec "$REPO_ROOT/check-ci.sh"
+else
+    echo "Ã¢Å¡Â Ã¯Â¸Â  [pre-push] check-ci.sh no encontrado en la raÃƒÂ­z del repositorio."
+    exit 0
+fi

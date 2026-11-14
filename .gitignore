@@ -1,0 +1,93 @@
+# ==============================================================================
+# .gitignore — AgroPhasor (Nasa_AgroFarm)
+# Cumplimiento estricto de la tarea CC-01 y estándares de seguridad
+# ==============================================================================
+
+# Entorno y Secretos (CRÍTICO: nunca subir a Git)
+.env
+.env.*
+.env*.bak*
+*.bak*
+!.env.example
+.netrc
+
+# Credenciales de Google Cloud y llaves privadas
+*credentials*.json
+client_secret*.json
+*gcp*.json
+*service_account*.json
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.jks
+id_rsa
+id_rsa.pub
+
+# Python (Backend y Simulador EDO / FFT)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Node.js / TypeScript / Frontend (Leaflet, Mapas, Dashboard)
+node_modules/
+.next/
+.nuxt/
+out/
+.cache/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Datos satelitales en caché y temporales
+data/cache/
+data/raw/
+data/temp/
+*.tmp
+*.log
+
+# Editores e IDEs
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Archivos del Sistema Operativo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

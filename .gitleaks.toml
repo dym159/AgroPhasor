@@ -1,0 +1,22 @@
+# ==============================================================================
+# Configuración de Gitleaks — AgroPhasor (Nasa_AgroFarm)
+# Reto NASA Space Apps Challenge 2026: "Field Shift: Adapting Farms with NASA Data"
+# ==============================================================================
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "URLs públicas de APIs de la NASA y ejemplos documentados"
+regexes = [
+  '''https://power\.larc\.nasa\.gov/api/.*''',
+  '''https://server\.arcgisonline\.com/ArcGIS/rest/services/.*''',
+  '''https://urs\.earthdata\.nasa\.gov/.*''',
+]
+
+paths = [
+  '''\.env\.example$''',
+  '''README\.md$''',
+  '''docs/.*''',
+  '''referencias/.*''',
+]
