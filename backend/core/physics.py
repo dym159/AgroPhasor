@@ -57,22 +57,22 @@ def stomatal_conductance_factor(
 ) -> float:
     """
     Función rampa acotada de conductancia estomática gamma_c(W) / gamma_max [0, 1] (Sección 3.3).
-    - Si W <= W_pmp: 0.04 (estomas cerrados / transpiración cuticular mínima).
+    - Si W <= W_pmp: cero (sin reserva hídrica utilizable).
     - Si W >= W_crit: 1.0 (máxima apertura estomática).
     - Si W_pmp < W < W_crit: decaimiento lineal.
-    - Nocturno (is_daylight=False): estomas cerrados por fotoperiodo (f_W <= 0.04).
+    - Nocturno (is_daylight=False): cierre estomático, sin conductancia residual.
     """
     if not is_daylight:
-        return 0.04  # Cierre nocturno natural de estomas
+        return 0.0
     
     if soil_water_mm <= w_pmp_mm:
-        return 0.04  # Transpiración residual cuticular en marchitez
+        return 0.0
     elif soil_water_mm >= w_crit_mm:
         return 1.0
     else:
         denom = max(epsilon, w_crit_mm - w_pmp_mm)
         ratio = (soil_water_mm - w_pmp_mm) / denom
-        return max(0.04, min(1.0, 0.04 + 0.96 * ratio))
+        return max(0.0, min(1.0, ratio))
 
 
 def thermal_comfort_index(temperature_c: float, t_opt_c: float, delta_t_tol_c: float) -> float:

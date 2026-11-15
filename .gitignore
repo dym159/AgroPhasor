@@ -71,6 +71,8 @@ pnpm-debug.log*
 data/cache/
 data/raw/
 data/temp/
+/tmp/rotation-deps/
+/tmp/rotation-test-results.txt
 *.tmp
 *.log
 

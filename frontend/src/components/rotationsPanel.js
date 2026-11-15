@@ -25,7 +25,16 @@ export function createRotationsPanel(container, onApply) {
   }
   const scenario = el('textarea',{attrs:{rows:4,'aria-label':'Escenarios climáticos JSON',
     placeholder:'Vacío: NASA POWER. Opcional: lista JSON de escenarios {id, daily}'}});
+  const periodCount = el('select',{attrs:{'aria-label':'Número de periodos a recomendar'}},
+    [2,3,4,5,6].map(n => el('option',{text:`${n} periodos`,attrs:{value:n}})));
+  periodCount.value = '2';
+  const startDate = el('input',{type:'date',attrs:{required:'','aria-label':'Inicio de la rotación'}});
+  const respectDates = el('input',{type:'checkbox'});
   const form = el('form',{className:'rotation-form'},[
+    label('¿Cuántos periodos quieres planificar?',periodCount),
+    label('Fecha de inicio de la rotación',startDate),
+    text('p','No necesitas completar el calendario: el optimizador propone los cultivos y calcula sus fechas. Marca abajo los cultivos que quieras mantener.'),
+    label('Respetar exactamente los inicios del calendario',respectDates),
     text('p','Completa los datos iniciales; no se rellenan con valores de ejemplo.'),
     el('details',{attrs:{open:''}},[text('summary','Suelo inicial y manejo'),
       number('W','Agua inicial (mm)'),number('N','Nitrógeno (kg/ha)'),
@@ -60,13 +69,20 @@ export function createRotationsPanel(container, onApply) {
 
   function payload() {
     if (!state?.selectedParcel) throw new Error('Selecciona o dibuja una parcela.');
-    if (state.phases.length < 2 || state.phases.length > 6 || state.phases.some(p => !p.cropId || !p.harvest))
-      throw new Error('Crea entre dos y seis periodos con cultivo y cosecha en el calendario.');
+    const m = Number(periodCount.value);
+    if (!Number.isInteger(m) || m < 2 || m > 6) throw new Error('Elige entre dos y seis periodos.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate.value) || !Number.isFinite(Date.parse(startDate.value)))
+      throw new Error('Indica una fecha de inicio válida.');
+    if ([...fixedChecks].some(([i,c]) => c.checked && i >= m))
+      throw new Error('Amplía el número de periodos para incluir los cultivos que marcaste para mantener.');
+    if (respectDates.checked && (state.phases.length !== m || state.phases.some(p => !p.start) || state.phases[0].start !== startDate.value))
+      throw new Error('Para respetar fechas, crea los mismos periodos en el calendario y usa su fecha inicial. Puedes desmarcar esta opción para calcular fechas nuevas.');
     if (!form.reportValidity()) throw new Error('Completa los datos de suelo y manejo.');
     const value = key => fields[key].valueAsNumber;
     const p = {
       geometry:parcelToGeoJsonGeometry(state.selectedParcel),
-      periods:state.phases.map(p => ({start:p.start})), m:state.phases.length,
+      start_date:startDate.value, m,
+      ...(respectDates.checked ? {periods:state.phases.map(p => ({start:p.start}))} : {}),
       crop_ids:Object.keys(state.cropCycles).filter(id => names[id]),
       fixed:Object.fromEntries([...fixedChecks].filter(([,c]) => c.checked).map(([i]) => [i,state.phases[i].cropId])),
       initial_state:Object.fromEntries(['W','N','P','K','H','residue','OM'].map(k => [k,value(k)])),
@@ -137,7 +153,8 @@ export function createRotationsPanel(container, onApply) {
     const same = Object.entries(data.recomendada_por_ruta).filter(([key,v]) => key !== route && v?.id === selected.id)
       .map(([key]) => ROUTE_NAMES[key]);
     if (same.length) result.append(text('p',`Es la misma que en ${same.join(', ')}.`));
-    result.append(text('h3','Tu plan actual'),plan(state.phases,true),
+    result.append(text('h3','Tu plan actual'),
+      state.phases.length ? plan(state.phases,true) : text('p','Todavía no has creado periodos en el calendario.'),
       text('p','Comparación numérica no disponible: este endpoint no devuelve la simulación del plan actual.'),
       text('h3','Rotación sugerida · Estimación'),plan(selected.stages));
     ['Agua y estrés: menos estrés ambiental.','Tierra: menos deterioro del suelo.',
@@ -177,9 +194,12 @@ export function createRotationsPanel(container, onApply) {
     const current = JSON.stringify([state.selectedParcel?.id,state.selectedParcel?.polygon,state.phases]);
     if (current !== signature) {
       signature = current;
+      startDate.value = state.phases[0]?.start ?? state.plantingStart ?? '';
+      periodCount.value = String(Math.min(6,Math.max(2,state.phases.length)));
       const checked = new Set([...fixedChecks].filter(([,c]) => c.checked).map(([i]) => i));
       fixedChecks.clear(); fixed.replaceChildren(text('legend','Cultivos que deseas mantener'));
       state.phases.forEach((phase,i) => {
+        if (!phase.cropId) return;
         const input = el('input',{type:'checkbox'}); input.checked = checked.has(i); fixedChecks.set(i,input);
         fixed.append(label(`Mantener periodo ${i+1}: ${cropName(phase.cropId)}`,input));
       });

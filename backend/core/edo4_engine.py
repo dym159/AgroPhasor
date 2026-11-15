@@ -213,14 +213,17 @@ def solve_edo4_step(
     2. Acotamiento físico estricto 0 <= B(t) <= Bmax.
     3. Conservación de biomasa y decaimiento monótono exacto en modo transición.
     """
-    b_curr = max(0.0, min(crop.B_max_t_ha, float(b_current_t_ha)))
+    if not math.isfinite(dt_days) or dt_days <= 0 or crop.B_max_t_ha <= 0:
+        raise ValueError("dt_days y B_max deben ser positivos y finitos.")
+    b_curr = max(0.0, float(b_current_t_ha))
+    if q_is_crop:
+        b_curr = min(crop.B_max_t_ha, b_curr)
 
     if not q_is_crop:
         # Modo Transición / Suelo Desnudo / Descomposición de Rastrojo:
         # dB/dt = - k_dec * B
         # Solución exacta: B(t+dt) = B(t) * exp(-k_dec * dt)
-        k_dec_eff = k_dec_daily * (q10 ** ((temp_canopy_c - 20.0) / 10.0))
-        k_dec_eff = max(0.001, min(0.15, k_dec_eff))
+        k_dec_eff = max(0.0, k_dec_daily)
         
         b_next = b_curr * math.exp(-k_dec_eff * dt_days)
         db_dt = (b_next - b_curr) / dt_days
@@ -230,10 +233,10 @@ def solve_edo4_step(
         ndvi = biomass_to_satellite_ndvi(b_next, lambda_b=lambda_b)
 
         return EDO4StepOutput(
-            biomass_t_ha=round(b_next, 4),
+            biomass_t_ha=b_next,
             db_dt=round(db_dt, 4),
             gross_growth_t_ha=0.0,
-            maintenance_loss_t_ha=round(loss, 4),
+            maintenance_loss_t_ha=loss,
             eta_thermal=0.0,
             eta_water=0.0,
             eta_nutrients=0.0,
@@ -281,19 +284,19 @@ def solve_edo4_step(
     # 3. Respiración de mantenimiento modulada térmicamente por Q10
     km_base = getattr(crop, "km_c", 0.008)
     temp_factor_q10 = q10 ** ((temp_canopy_c - 20.0) / 10.0)
-    km_eff = max(0.001, km_base * temp_factor_q10)
+    km_eff = max(0.0, km_base * temp_factor_q10)
 
     # 4. Integrador analítico incondicionalmente estable
     # dB/dt = A * (1 - B/Bmax) - km * B = A - (A/Bmax + km)*B
-    b_max = max(1.0, crop.B_max_t_ha)
+    b_max = crop.B_max_t_ha
     lambda_eff = (a_flux / b_max) + km_eff
     
-    if lambda_eff > epsilon:
+    if lambda_eff > 0:
         # Estado asintótico estacionario de equilibrio
         b_inf = a_flux / lambda_eff
         # B(t+dt) = b_inf + (B(t) - b_inf) * exp(-lambda_eff * dt)
         exp_factor = math.exp(-lambda_eff * dt_days)
-        b_next = b_inf + (b_curr - b_inf) * exp_factor
+        b_next = b_curr * exp_factor + a_flux * (-math.expm1(-lambda_eff*dt_days))/lambda_eff
     else:
         b_next = b_curr
 
@@ -303,8 +306,12 @@ def solve_edo4_step(
 
     # Diagnósticos y componentes
     logistic_brake = max(0.0, 1.0 - (b_curr / b_max))
-    gross_growth = a_flux * logistic_brake * dt_days
-    maint_loss = km_eff * b_curr * dt_days
+    z = lambda_eff*dt_days
+    phi = -math.expm1(-z)/z if z else 1.0
+    phi2 = (0.5-z/6+z*z/24) if abs(z)<1e-5 else (1-phi)/z
+    integral_b = b_curr*dt_days*phi + a_flux*dt_days**2*phi2
+    gross_growth = a_flux*(dt_days-integral_b/b_max)
+    maint_loss = km_eff*integral_b
     cover = biomass_to_canopy_cover(b_next, lambda_b)
     ndvi = biomass_to_satellite_ndvi(b_next, lambda_b=lambda_b)
 
@@ -314,10 +321,10 @@ def solve_edo4_step(
     is_nutrient_arrest = (eta_N <= 0.10)
 
     return EDO4StepOutput(
-        biomass_t_ha=round(b_next, 4),
+        biomass_t_ha=b_next,
         db_dt=round(db_dt, 4),
-        gross_growth_t_ha=round(gross_growth, 4),
-        maintenance_loss_t_ha=round(maint_loss, 4),
+        gross_growth_t_ha=gross_growth,
+        maintenance_loss_t_ha=maint_loss,
         eta_thermal=round(eta_T, 3),
         eta_water=round(eta_W, 3),
         eta_nutrients=round(eta_N, 3),
@@ -361,11 +368,11 @@ def execute_harvest_event(
 
     return EDO4HarvestResult(
         crop_name=crop.name,
-        biomass_pre_harvest_t_ha=round(b_pre, 3),
+        biomass_pre_harvest_t_ha=b_pre,
         harvest_index_hi=round(hi, 3),
         residue_fraction_rres=round(r_res, 3),
-        commercial_yield_t_ha=round(commercial_yield, 3),
-        residue_left_t_ha=round(residue_left, 3),
+        commercial_yield_t_ha=commercial_yield,
+        residue_left_t_ha=residue_left,
         market_price_usd_t=round(price, 2),
         gross_revenue_usd_ha=round(gross_revenue, 2),
         base_cost_usd_ha=round(base_cost, 2),

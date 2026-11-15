@@ -41,7 +41,9 @@ def evaluate(serialized: str):
     initial = p["initial_state"]
     state = (numeric(initial["W"], "W"), tuple(numeric(initial[k], k) for k in ("N","P","K")),
              numeric(initial["H"], "H", .000001), numeric(initial["residue"], "rastrojo"),
-             tuple(numeric(t, "historial térmico", -100, 100) for t in initial.get("history", [])), numeric(initial["OM"], "OM", 0, 100))
+             tuple(tuple(numeric(v,"historial térmico",-100,100) for v in t)
+                   if isinstance(t,list) and len(t)==2 else numeric(t,"historial térmico",-100,100)
+                   for t in initial.get("history", [])), numeric(initial["OM"], "OM", 0, 100))
     transition = p["transition_days"]
     if type(transition) is not int or not 0 <= transition <= 365:
         raise ValueError("transition_days debe ser entero entre 0 y 365.")

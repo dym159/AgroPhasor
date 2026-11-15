@@ -47,6 +47,9 @@ class EDO3StepOutput:
     leaching_k_kg: float              # Pérdida de K por lixiviación vertical [kg/ha]
     erosion_loss_p_kg: float          # Pérdida de P por arrastre de suelo erosionado [kg/ha]
     f_t_microbial: float              # Factor térmico microbiano Q10 [adimensional]
+    sources_npk_kg_ha: Dict[str, float] = field(default_factory=dict)
+    uptake_npk_kg_ha: Dict[str, float] = field(default_factory=dict)
+    erosion_npk_kg_ha: Dict[str, float] = field(default_factory=dict)
 
 
 def calculate_phi_ph_ec(ph: float, ec: float) -> float:
@@ -82,7 +85,7 @@ def phi1(z: float) -> float:
     """
     if abs(z) < 1e-6:
         return 1.0 - 0.5 * z + (z * z) / 6.0
-    return (1.0 - math.exp(-z)) / z
+    return -math.expm1(-z) / z
 
 
 def compute_liebig_factor(
@@ -149,6 +152,8 @@ def solve_edo3_step(
     """
     Integra un paso de tiempo dt de EDO 3 (Dinámica Vectorial de Macronutrientes).
     """
+    if not math.isfinite(dt_days) or dt_days <= 0:
+        raise ValueError("dt_days debe ser positivo y finito.")
     if soil is None:
         soil = SoilChemicalProperties()
 
@@ -240,14 +245,22 @@ def solve_edo3_step(
     )
 
     # Diagnósticos de flujos físicos en el paso
-    leach_n = (k_ln_val / cic) * w_mm * 0.10 * n_current_kg_ha * dt_days
-    leach_k = (k_lk_val / cic) * w_mm * 0.10 * k_current_kg_ha * dt_days
-    eros_p = xi_p_val * eros * p_current_kg_ha * dt_days
+    def integral(x0, source, rate):
+        z = rate * dt_days
+        # Integral de X0 exp(-rate*t) + source*t*phi1(rate*t).
+        phi2 = (0.5-z/6+z*z/24) if abs(z) < 1e-5 else (1-phi1(z))/z
+        return max(0.0, x0)*dt_days*phi1(z)+source*dt_days**2*phi2
+    int_n = integral(n_current_kg_ha, sn_total, lambda_n)
+    int_p = integral(p_current_kg_ha, sp_total, lambda_p)
+    int_k = integral(k_current_kg_ha, sk_total, lambda_k)
+    leach_n = (k_ln_val / cic) * w_mm * int_n
+    leach_k = (k_lk_val / cic) * w_mm * int_k
+    eros_p = xi_p_val * eros * int_p
 
     return EDO3StepOutput(
-        n_kg_ha=round(n_next, 2),
-        p_kg_ha=round(p_next, 2),
-        k_kg_ha=round(k_next, 2),
+        n_kg_ha=n_next,
+        p_kg_ha=p_next,
+        k_kg_ha=k_next,
         dn_dt=round(dn_dt, 3),
         dp_dt=round(dp_dt, 3),
         dk_dt=round(dk_dt, 3),
@@ -257,10 +270,15 @@ def solve_edo3_step(
         biological_n_fixation_kg=round(sn_fixation * dt_days, 3),
         p_solubilization_kg=round(sp_solubilization * dt_days, 3),
         k_stover_recycling_kg=round(sk_stover * dt_days, 3),
-        leaching_n_kg=round(leach_n, 3),
-        leaching_k_kg=round(leach_k, 3),
-        erosion_loss_p_kg=round(eros_p, 3),
-        f_t_microbial=round(f_t, 3)
+        leaching_n_kg=leach_n,
+        leaching_k_kg=leach_k,
+        erosion_loss_p_kg=eros_p,
+        f_t_microbial=round(f_t, 3),
+        sources_npk_kg_ha=dict(zip(('N','P','K'),(sn_total*dt_days,sp_total*dt_days,sk_total*dt_days))),
+        uptake_npk_kg_ha=dict(zip(('N','P','K'),(w_mm*ic*phi_chem*ka_n*f_t*int_n,
+                                               w_mm*ic*phi_chem*ka_p*f_t*int_p,
+                                               w_mm*ic*phi_chem*ka_k*f_t*int_k))),
+        erosion_npk_kg_ha=dict(zip(('N','P','K'),(xi_n_val*eros*int_n,eros_p,xi_k_val*eros*int_k)))
     )
 
 

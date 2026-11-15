@@ -7,9 +7,12 @@ Cambiar modo o perilla selecciona localmente con la suma ponderada sobre f_hat.
 Cambiar clima/manejo vuelve a consultar; respuestas atrasadas se descartan.
 Solicitudes idénticas consecutivas en carga o completadas se deduplican.
 
-El calendario aporta periodos, fechas y cultivos; las casillas del panel permiten
-fijar cultivos. Todas las fechas se envían al motor: si ninguna secuencia respeta
-esas fechas y las duraciones del catálogo, se muestra sin viables con sus motivos.
+El panel permite elegir de dos a seis periodos y una fecha inicial, incluso sin
+completar el calendario. Las casillas permiten fijar cultivos existentes. Por
+defecto el motor calcula fechas encadenadas; solo se envían todos los inicios del
+calendario si se marca «Respetar exactamente los inicios del calendario».
+Si ninguna secuencia respeta esas fechas y las duraciones del catálogo, se
+muestra sin viables con sus motivos.
 Aplicar requiere pulsar el botón y conserva una copia del plan para Deshacer.
 
 Los datos iniciales de suelo y manejo se introducen explícitamente, sin valores

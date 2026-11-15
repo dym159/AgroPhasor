@@ -273,13 +273,15 @@ class TestEDO5Engine(unittest.TestCase):
         
         self.assertLess(step.h_current_mm, 300.0)
         # Wcc debe reducirse en sincronía
-        expected_w_cc = round(theta_fc * step.h_current_mm, 2)
+        # Conservar precisión física; el redondeo corresponde a presentación.
+        expected_w_cc = theta_fc * step.h_current_mm
         self.assertAlmostEqual(step.w_cc_mm, expected_w_cc)
         
         # Debe haber pérdida de fósforo por arrastre
         p_loss = step.nutrient_drag_kg_ha["P"]
         self.assertGreater(p_loss, 0.0)
-        expected_p_loss = round(0.008 * step.erosion_loss_step_mm * nutrients["P"], 4)
+        # Integral de P'=-xi*Hloss*P, no flujo Euler con P inicial.
+        expected_p_loss = -math.expm1(-0.008 * step.erosion_loss_step_mm) * nutrients["P"]
         self.assertAlmostEqual(p_loss, expected_p_loss)
 
     def test_criterion_7_pareto_metric_f2_and_visual_subsidence(self):

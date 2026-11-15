@@ -27,7 +27,7 @@ class EDO5StepOutput:
     """Resultados físicos de un paso de integración dt de EDO 5."""
     h_current_mm: float                 # Espesor de capa fértil actual H(t+dt) [mm]
     h_initial_mm: float                 # Espesor original H(0) [mm]
-    dh_dt_mm_day: float                 # Tasa instantánea de erosión dH/dt <= 0 [mm/día]
+    dh_dt_mm_day: float                 # Tasa media efectiva (H1-H0)/dt <= 0 [mm/día]
     erosion_loss_step_mm: float         # Pérdida de suelo en el paso Delta_H [mm]
     accumulated_erosion_mm: float       # Pérdida acumulada total H(0) - H(t) [mm]
     soil_retention_ratio: float         # Fracción de suelo conservado H(t)/H(0) in [0, 1]
@@ -98,6 +98,8 @@ def solve_edo5_step(
     - current_nutrients_kg_ha: Vector actual [N, P, K] para calcular arrastre mecánico.
     - kappa_er: Factor de escala visual para hundimiento de malla 3D [m/mm].
     """
+    if not math.isfinite(dt_days) or dt_days <= 0:
+        raise ValueError("dt_days debe ser positivo y finito.")
     # 1. Cargar constantes agrofísicas
     if k_er_cultivo is None:
         k_er_cultivo = float(GLOBAL_CONSTANTS.get("k_er_cultivo", 0.0004))
@@ -166,8 +168,8 @@ def solve_edo5_step(
     retention_ratio = h_next / h0 if h0 > 0.0 else 0.0
 
     # 7. Retroalimentación edáfica con EDO 2
-    w_cc_updated = round(theta_fc * h_next, 2)
-    w_pmp_updated = round(theta_wp * h_next, 2)
+    w_cc_updated = theta_fc * h_next
+    w_pmp_updated = theta_wp * h_next
 
     # 8. Retroalimentación bioquímica con EDO 3 (arrastre de nutrientes)
     nut_drag = {"N": 0.0, "P": 0.0, "K": 0.0}
@@ -176,9 +178,11 @@ def solve_edo5_step(
         p_curr = max(0.0, current_nutrients_kg_ha.get("P", 0.0))
         k_curr = max(0.0, current_nutrients_kg_ha.get("K", 0.0))
         # Pérdida proporcional al desgaste relativo del horizonte orgánico: xi * |dH/dt| * Nutriente
-        nut_drag["N"] = round(xi_n * effective_loss * n_curr, 4)
-        nut_drag["P"] = round(xi_p * effective_loss * p_curr, 4)
-        nut_drag["K"] = round(xi_k * effective_loss * k_curr, 4)
+        # Integral exacta del arrastre aislado X'=-xi*Hloss*X.
+        # EDO3 es la fuente del balance cuando también hay otras tasas/fuentes.
+        nut_drag["N"] = -math.expm1(-xi_n * effective_loss) * n_curr
+        nut_drag["P"] = -math.expm1(-xi_p * effective_loss) * p_curr
+        nut_drag["K"] = -math.expm1(-xi_k * effective_loss) * k_curr
 
     # 9. Capa visual WebGL 3D
     mesh_subsidence = round(kappa_er * accumulated_loss, 4)
@@ -186,10 +190,10 @@ def solve_edo5_step(
     is_bedrock = h_next <= 0.05
 
     return EDO5StepOutput(
-        h_current_mm=round(h_next, 4),
+        h_current_mm=h_next,
         h_initial_mm=round(h0, 4),
-        dh_dt_mm_day=round(dh_dt, 6),
-        erosion_loss_step_mm=round(effective_loss, 6),
+        dh_dt_mm_day=-effective_loss/dt_days,
+        erosion_loss_step_mm=effective_loss,
         accumulated_erosion_mm=round(accumulated_loss, 4),
         soil_retention_ratio=round(retention_ratio, 4),
         topographic_slope_deg=clamped_slope,

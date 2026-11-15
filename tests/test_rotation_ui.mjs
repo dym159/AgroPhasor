@@ -87,6 +87,8 @@ test('Cliente usa contrato real y muestra error del servidor',async () => {
     assert.equal((await fetchRotation({m:2})).pareto.length,7);
     globalThis.fetch = async () => ({ok:false,json:async () => ({error:'Fecha inválida'})});
     await assert.rejects(fetchRotation({}),/Fecha inválida/);
+    globalThis.fetch = async () => {throw new TypeError('Failed to fetch');};
+    await assert.rejects(fetchRotation({}),/No se pudo conectar con el servidor de rotaciones/);
   } finally {globalThis.fetch=original;}
 });
 
@@ -102,6 +104,28 @@ class Element {
   all() {return [this,...this.children.flatMap(c => c instanceof Element ? c.all() : [])];}
   content() {return this.textContent+this.children.map(c => c instanceof Element ? c.content() : c).join(' ');}
 }
+
+test('Consultar sin completar calendario: cero, uno o dos periodos incompletos',async () => {
+  const originalDocument=globalThis.document, originalFetch=globalThis.fetch;
+  globalThis.document={createElement:tag => new Element(tag),createTextNode:value => value};
+  try {
+    for (const phases of [[],[{cropId:'papa',start:'2026-01-01',harvest:null}],
+      [{cropId:'papa',start:'2026-01-01',harvest:null},{cropId:'',start:'2026-03-01',harvest:null}]]) {
+      let sent;
+      globalThis.fetch=async (url,options) => {sent=JSON.parse(options.body); return {ok:true,json:async () => response()};};
+      const root=new Element('section');
+      const panel=createRotationsPanel(root,() => {});
+      panel.update({selectedParcel:{id:'p',polygon:[[0,0],[0,1],[1,1]]},phases,
+        plantingStart:'2026-01-01',cropCycles:{papa:90,frijol:90}});
+      root.all().filter(n => n.type==='number').forEach(n => {n.value='1';});
+      root.all().find(n => n.tag==='form').events.submit({preventDefault(){}});
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(sent.m,2); assert.equal(sent.start_date,'2026-01-01');
+      assert.equal(sent.periods,undefined); assert.deepEqual(sent.fixed,{});
+      assert(root.content().includes('Rotación sugerida'));
+    }
+  } finally {globalThis.document=originalDocument; globalThis.fetch=originalFetch;}
+});
 
 test('Panel presenta respaldo, aplica por botón, restaura y muestra fallos',async () => {
   const originalDocument = globalThis.document, originalFetch = globalThis.fetch;

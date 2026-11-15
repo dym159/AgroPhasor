@@ -91,12 +91,18 @@ export async function searchPlaces(query) {
 }
 
 export async function fetchRotation(payload, signal) {
-  const response = await fetch('/api/v1/parcelas/rotaciones', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal,
-  });
+  let response;
+  try {
+    response = await fetch('/api/v1/parcelas/rotaciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw new Error('No se pudo conectar con el servidor de rotaciones. Si trabajas en local, abre http://127.0.0.1:5173 con server.py en ejecución; no abras index.html directamente. Si usas una web publicada, comprueba que su API esté disponible.');
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok || !Array.isArray(data?.pareto)) {
     throw new Error(data?.error || 'No se pudo calcular la rotación.');
