@@ -41,8 +41,7 @@ function bootstrapApp() {
   const timelineEl = document.getElementById('timeline-bar');
 
   const store = createUiState();
-  const rotationsPanel = createRotationsPanel(rotationsEl, (stages) => {
-    const phases = stages.map(({ crop_id, start, harvest, residue_fraction, irrigation_mm_day }) => ({ cropId: crop_id, start, harvest, residue_fraction, irrigation_mm_day }));
+  const rotationsPanel = createRotationsPanel(rotationsEl, (phases) => {
     store.setState({ phases });
     scheduleParcelSimulation();
   });
