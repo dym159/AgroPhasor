@@ -1,7 +1,15 @@
 /**
- * AgroPhasor - Visor Isométrico 2.5D "Escudo Ambiental y Gemelo Digital"
- * Renderiza el bloque de suelo (H, W), cultivos (B) y la malla suspendida del escudo protector (T)
- * Basado en el boceto conceptual del gemelo digital.
+ * AgroPhasor - Visor Isométrico 2.5D "Cerros en Cuadrado + Escudo Plano + Curvas"
+ * Sincronizado en tiempo real con el modelo físico:
+ * - Hundimiento físico de la tierra por erosión (H)
+ * - Transición de color del suelo: Marrón fértil <-> Gris rocoso degradado
+ * - Altura del dosel según biomasa aérea (B)
+ * - Malla de Lissajous que respira y modula su área de protección
+ * - 4 Estados del Escudo:
+ *     1. Azul Cobalto (Psi -> 1)
+ *     2. Violeta / Ámbar (Psi ~ 0.5)
+ *     3. Rojo Intenso (Psi -> 0)
+ *     4. Escudo Desactivado (q = Transición, suelo desnudo)
  */
 
 export class Escudo3DViewer {
@@ -10,25 +18,34 @@ export class Escudo3DViewer {
     if (!this.canvas) return;
     this.ctx = this.canvas.getContext('2d');
 
-    // Estado del modelo físico
+    // Estado físico sincronizado
     this.state = {
-      humedad_W: 142.5,
-      temperatura_T: 16.8,
-      espesor_H: 278,
-      escudoScore: 87,
-      biomasa_B: 11.8,
-      cropName: "Papa Canchán",
-      cropIcon: "🥔",
-      hasSubzone: true,
-      shieldActive: true,
-      shieldColor: "#38bdf8",
-      glowColor: "rgba(56, 189, 248, 0.4)"
+      W: 142.5,
+      T: 16.8,
+      H: 278,
+      B: 11.8,
+      erosionSinkingMm: 4.5,
+      degradationFactor: 0.15,
+      soilColor: {
+        top: "rgb(38, 44, 28)",
+        front: "rgb(28, 32, 20)",
+        side: "rgb(18, 22, 14)",
+        hex: "#262c1c"
+      },
+      eta_nutrientes: 0.78,
+      limitingNutrient: "Nitrógeno (N)",
+      Psi: 0.85,
+      shieldState: "azul_cobalto", // "azul_cobalto" | "violeta_ambar" | "rojo_intenso" | "desactivado"
+      shieldColor: "#2563eb",
+      shieldName: "Azul Cobalto (Óptima Resiliencia)",
+      stage: "cultivo",
+      cropName: "Papa Canchán"
     };
 
-    // Parámetros de renderizado isométrico
+    // Parámetros de proyección isométrica
     this.angle = Math.PI / 6; // 30 grados
     this.scale = 1.0;
-    this.rotation = 0; // Rotación interactiva leve
+    this.rotation = 0;
     this.animTime = 0;
     this.isDragging = false;
     this.lastMouseX = 0;
@@ -43,12 +60,12 @@ export class Escudo3DViewer {
       if (!this.canvas) return;
       const rect = this.canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      this.width = rect.width || 380;
-      this.height = rect.height || 260;
+      this.width = rect.width || 420;
+      this.height = rect.height || 300;
       this.canvas.width = this.width * dpr;
       this.canvas.height = this.height * dpr;
       this.ctx.scale(dpr, dpr);
-      this.scale = Math.min(this.width / 340, this.height / 240);
+      this.scale = Math.min(this.width / 360, this.height / 270);
     };
 
     resize();
@@ -58,7 +75,6 @@ export class Escudo3DViewer {
   bindInteractions() {
     if (!this.canvas) return;
 
-    // Permitir rotación interactiva con el dedo o ratón
     const onDown = (clientX) => {
       this.isDragging = true;
       this.lastMouseX = clientX;
@@ -90,43 +106,24 @@ export class Escudo3DViewer {
     window.addEventListener('touchend', onUp);
   }
 
-  updateMetrics(metrics) {
-    if (!metrics) return;
-    if (metrics.humedad_W !== undefined) this.state.humedad_W = metrics.humedad_W;
-    if (metrics.temperatura_T !== undefined) this.state.temperatura_T = metrics.temperatura_T;
-    if (metrics.espesor_H !== undefined) this.state.espesor_H = metrics.espesor_H;
-    if (metrics.escudoScore !== undefined) this.state.escudoScore = metrics.escudoScore;
-    if (metrics.biomasa_B !== undefined) this.state.biomasa_B = metrics.biomasa_B;
-    if (metrics.cropName) this.state.cropName = metrics.cropName;
-    if (metrics.cropIcon) this.state.cropIcon = metrics.cropIcon;
-
-    // Color del escudo según resiliencia
-    if (this.state.escudoScore >= 80) {
-      this.state.shieldColor = "#10b981"; // Esmeralda óptimo
-      this.state.glowColor = "rgba(16, 185, 129, 0.4)";
-    } else if (this.state.escudoScore >= 50) {
-      this.state.shieldColor = "#38bdf8"; // Azul medio
-      this.state.glowColor = "rgba(56, 189, 248, 0.4)";
-    } else {
-      this.state.shieldColor = "#f59e0b"; // Ámbar estrés
-      this.state.glowColor = "rgba(245, 158, 11, 0.4)";
-    }
+  /**
+   * Actualizar el estado completo desde el motor de física
+   */
+  updatePhysicsState(physData) {
+    if (!physData) return;
+    Object.assign(this.state, physData);
   }
 
-  // Transformación isométrica de coordenadas 3D (x, y, z) a 2D (px, py)
+  // Transformación isométrica 3D -> 2D con rotación interactiva
   isoProject(x, y, z, originX, originY) {
-    const effectiveAngle = this.angle + this.rotation;
-    const cosA = Math.cos(effectiveAngle);
-    const sinA = Math.sin(effectiveAngle);
-
-    // Rotación suave respecto al centro del terreno
-    const cx = x - 90;
-    const cy = y - 60;
+    // Centro del bloque
+    const cx = x - 95;
+    const cy = y - 65;
     const rx = cx * Math.cos(this.rotation) - cy * Math.sin(this.rotation);
     const ry = cx * Math.sin(this.rotation) + cy * Math.cos(this.rotation);
 
     const px = originX + (rx - ry) * Math.cos(this.angle) * this.scale;
-    const py = originY + (rx + ry) * Math.sin(this.angle) * this.scale - (z * this.scale * 0.9);
+    const py = originY + (rx + ry) * Math.sin(this.angle) * this.scale - (z * this.scale * 0.92);
     return { x: px, y: py };
   }
 
@@ -140,168 +137,209 @@ export class Escudo3DViewer {
 
     const originX = w * 0.5;
     const originY = h * 0.58;
-    this.animTime += 0.03;
+    this.animTime += 0.025;
 
-    // Dimensiones de la losa de terreno
-    const slabW = 180;
-    const slabL = 120;
-    const slabH = 24; // Espesor fértil H
-    const shieldZ = 70 + Math.sin(this.animTime * 1.5) * 3; // Flotación sutil del dosel
+    // Dimensiones del bloque cuadrado de tierra
+    const slabW = 190;
+    const slabL = 130;
+    
+    // 1. HUNDIMIENTO DE LA TIERRA POR EROSIÓN
+    // A mayor erosión (erosionSinkingMm), el sustrato se hunde en el eje Z
+    const visualSinkingZ = Math.min(22, (this.state.erosionSinkingMm || 0) * 0.5);
+    const baseHeight = 26; // Espesor visual
+    const effectiveSlabH = Math.max(8, baseHeight - visualSinkingZ);
 
-    // 1. DIBUJAR LOSA DE SUELO 3D (Espesor fértil H y Capa radicular W)
-    this.drawSoilSlab(ctx, originX, originY, slabW, slabL, slabH);
-
-    // 2. DIBUJAR SUB-ZONA / TERRAZA AGRÍCOLA (como en el boceto)
-    if (this.state.hasSubzone) {
-      this.drawSubzone(ctx, originX, originY, slabH);
+    // 2. ALTURA DEL ESCUDO PLANO
+    // Depende de la biomasa B (dosel vegetal). En transición baja cerca al suelo
+    let shieldHeight = 75;
+    if (this.state.stage === "transicion") {
+      shieldHeight = 35; // Colapsado en barbecho/suelo desnudo
+    } else {
+      const biomassOffset = Math.min(25, (this.state.B || 10) * 1.5);
+      shieldHeight = 55 + biomassOffset + Math.sin(this.animTime * 1.5) * 2;
     }
 
-    // 3. DIBUJAR CULTIVOS AGRÍCOLAS (Biomasa verde B)
-    this.drawCrops(ctx, originX, originY, slabH, slabW, slabL);
+    // 1. DIBUJAR LOSA DE SUELO CUADRADA CON COLOR DEGRADADO Y HUNDIMIENTO
+    this.drawSquareSlab(ctx, originX, originY, slabW, slabL, effectiveSlabH, visualSinkingZ);
 
-    // 4. DIBUJAR PILARES / VECTORES DE PROTECCIÓN (Líneas verticales que conectan el suelo al escudo)
-    this.drawShieldPilars(ctx, originX, originY, slabW, slabL, slabH, shieldZ);
+    // 2. DIBUJAR CERROS Y ANDENES EN CUADRADO (Terrazas agrícolas andinas)
+    this.drawSquareTerraces(ctx, originX, originY, effectiveSlabH, visualSinkingZ);
 
-    // 5. DIBUJAR LA MALLA DEL ESCUDO AMBIENTAL (Canopy Grid suspendido en 3D)
-    this.drawShieldGrid(ctx, originX, originY, slabW, slabL, shieldZ);
+    // 3. DIBUJAR CULTIVOS (Solo si no está en transición)
+    if (this.state.stage !== "transicion") {
+      this.drawCrops(ctx, originX, originY, effectiveSlabH, slabW, slabL, visualSinkingZ);
+    } else {
+      this.drawStubbleResidue(ctx, originX, originY, effectiveSlabH, slabW, slabL, visualSinkingZ);
+    }
 
-    // 6. AURA / ENTORNO CIRCUNDANTE (Aura verde como el dibujo)
-    this.drawProtectiveAura(ctx, originX, originY, slabW, slabL, shieldZ);
+    // 4. PILARES DE CONEXIÓN ENTRE SUELO Y ESCUDO
+    this.drawShieldPilars(ctx, originX, originY, slabW, slabL, shieldHeight, visualSinkingZ);
 
-    // 7. HUD Y ETIQUETAS FLOTANTES DE ESTADO
-    this.drawHUD(ctx, originX, originY, slabW, slabL, shieldZ);
+    // 5. ESCUDO PLANO SUSPENDIDO CON ÁREA DE LISSAJOUS Y LOS 4 ESTADOS
+    this.drawFlatShield(ctx, originX, originY, slabW, slabL, shieldHeight);
+
+    // 6. HUD Y ETIQUETA EN VIVO DEL ESCUDO
+    this.drawHUD(ctx, originX, originY, slabW, slabL, shieldHeight);
   }
 
-  drawSoilSlab(ctx, ox, oy, sw, sl, sh) {
-    // Vértices de la base inferior (z = -sh)
-    const p0_b = this.isoProject(0, 0, -sh, ox, oy);
-    const p1_b = this.isoProject(sw, 0, -sh, ox, oy);
-    const p2_b = this.isoProject(sw, sl, -sh, ox, oy);
-    const p3_b = this.isoProject(0, sl, -sh, ox, oy);
+  /**
+   * 1. Losa cuadrada de tierra: Marrón fértil <-> Gris rocoso y hundimiento
+   */
+  drawSquareSlab(ctx, ox, oy, sw, sl, sh, sinkingZ) {
+    const topZ = -sinkingZ;
+    const botZ = -sinkingZ - sh;
 
-    // Vértices de la superficie superior (z = 0)
-    const p0 = this.isoProject(0, 0, 0, ox, oy);
-    const p1 = this.isoProject(sw, 0, 0, ox, oy);
-    const p2 = this.isoProject(sw, sl, 0, ox, oy);
-    const p3 = this.isoProject(0, sl, 0, ox, oy);
+    // Vértices inferiores
+    const b0 = this.isoProject(0, 0, botZ, ox, oy);
+    const b1 = this.isoProject(sw, 0, botZ, ox, oy);
+    const b2 = this.isoProject(sw, sl, botZ, ox, oy);
+    const b3 = this.isoProject(0, sl, botZ, ox, oy);
 
-    // Cara frontal izquierda (z: -sh -> 0)
+    // Vértices superiores (con hundimiento)
+    const t0 = this.isoProject(0, 0, topZ, ox, oy);
+    const t1 = this.isoProject(sw, 0, topZ, ox, oy);
+    const t2 = this.isoProject(sw, sl, topZ, ox, oy);
+    const t3 = this.isoProject(0, sl, topZ, ox, oy);
+
+    const soil = this.state.soilColor || {
+      top: "#262c1c",
+      front: "#1c2014",
+      side: "#12160e"
+    };
+
+    // Cara frontal izquierda
     ctx.beginPath();
-    ctx.moveTo(p3.x, p3.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.lineTo(p2_b.x, p2_b.y);
-    ctx.lineTo(p3_b.x, p3_b.y);
+    ctx.moveTo(t3.x, t3.y);
+    ctx.lineTo(t2.x, t2.y);
+    ctx.lineTo(b2.x, b2.y);
+    ctx.lineTo(b3.x, b3.y);
     ctx.closePath();
-    ctx.fillStyle = "#1e293b";
+    ctx.fillStyle = soil.front;
     ctx.fill();
-    ctx.strokeStyle = "#334155";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Franja de humedad radicular W en la cara frontal
-    const moistureH = Math.min(sh * (this.state.humedad_W / 180), sh);
-    const pw_top = this.isoProject(0, sl, -sh + moistureH, ox, oy);
-    const pw_right = this.isoProject(sw, sl, -sh + moistureH, ox, oy);
+    // Franja de humedad radicular W en el perfil
+    const moistureFrac = Math.min(1.0, this.state.W / 180);
+    const mwHeight = sh * moistureFrac * 0.7;
+    const mwTop = this.isoProject(0, sl, botZ + mwHeight, ox, oy);
+    const mwRight = this.isoProject(sw, sl, botZ + mwHeight, ox, oy);
+
     ctx.beginPath();
-    ctx.moveTo(pw_top.x, pw_top.y);
-    ctx.lineTo(pw_right.x, pw_right.y);
-    ctx.lineTo(p2_b.x, p2_b.y);
-    ctx.lineTo(p3_b.x, p3_b.y);
+    ctx.moveTo(mwTop.x, mwTop.y);
+    ctx.lineTo(mwRight.x, mwRight.y);
+    ctx.lineTo(b2.x, b2.y);
+    ctx.lineTo(b3.x, b3.y);
     ctx.closePath();
-    ctx.fillStyle = "rgba(56, 189, 248, 0.18)"; // Azul humedad radicular
+    ctx.fillStyle = "rgba(56, 189, 248, 0.22)"; // Azul humedad radicular
     ctx.fill();
 
     // Cara frontal derecha
     ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.lineTo(p2_b.x, p2_b.y);
-    ctx.lineTo(p1_b.x, p1_b.y);
+    ctx.moveTo(t1.x, t1.y);
+    ctx.lineTo(t2.x, t2.y);
+    ctx.lineTo(b2.x, b2.y);
+    ctx.lineTo(b1.x, b1.y);
     ctx.closePath();
-    ctx.fillStyle = "#0f172a";
+    ctx.fillStyle = soil.side;
     ctx.fill();
-    ctx.strokeStyle = "#334155";
     ctx.stroke();
 
     // Superficie Superior (Suelo cultivable)
     ctx.beginPath();
-    ctx.moveTo(p0.x, p0.y);
-    ctx.lineTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.lineTo(p3.x, p3.y);
+    ctx.moveTo(t0.x, t0.y);
+    ctx.lineTo(t1.x, t1.y);
+    ctx.lineTo(t2.x, t2.y);
+    ctx.lineTo(t3.x, t3.y);
     ctx.closePath();
-    
-    // Gradiente de fertilidad de suelo
-    const grad = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
-    grad.addColorStop(0, "#142d1f"); // Tierra fértil profunda
-    grad.addColorStop(1, "#0d1f15");
-    ctx.fillStyle = grad;
+    ctx.fillStyle = soil.top;
     ctx.fill();
-    ctx.strokeStyle = "rgba(16, 185, 129, 0.5)";
-    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1.2;
     ctx.stroke();
+
+    // Si el suelo se ha hundido por erosión, dibujar marcas de escorrentía/grietas rocosas
+    if (sinkingZ > 6) {
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.4)";
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      const r1 = this.isoProject(sw * 0.2, sl * 0.3, topZ, ox, oy);
+      const r2 = this.isoProject(sw * 0.7, sl * 0.8, topZ, ox, oy);
+      ctx.moveTo(r1.x, r1.y);
+      ctx.lineTo(r2.x, r2.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
 
-  drawSubzone(ctx, ox, oy, sh) {
-    // Sub-zona interna (Mesa/Terraza central del boceto)
-    const zx = 60;
-    const zy = 35;
-    const zw = 70;
-    const zl = 50;
-    const zh = 8; // Elevación de terraza
+  /**
+   * 2. Cerros y andenes en cuadrado (Terrazas escalonadas como en el boceto)
+   */
+  drawSquareTerraces(ctx, ox, oy, sh, sinkingZ) {
+    const topZ = -sinkingZ;
 
-    const s0 = this.isoProject(zx, zy, zh, ox, oy);
-    const s1 = this.isoProject(zx + zw, zy, zh, ox, oy);
-    const s2 = this.isoProject(zx + zw, zy + zl, zh, ox, oy);
-    const s3 = this.isoProject(zx, zy + zl, zh, ox, oy);
+    // Terraza 1 (Elevada en la ladera)
+    const tx = 55;
+    const ty = 30;
+    const tw = 75;
+    const tl = 55;
+    const th = 10;
 
-    // Contorno de la terraza
+    const t0 = this.isoProject(tx, ty, topZ + th, ox, oy);
+    const t1 = this.isoProject(tx + tw, ty, topZ + th, ox, oy);
+    const t2 = this.isoProject(tx + tw, ty + tl, topZ + th, ox, oy);
+    const t3 = this.isoProject(tx, ty + tl, topZ + th, ox, oy);
+
     ctx.beginPath();
-    ctx.moveTo(s0.x, s0.y);
-    ctx.lineTo(s1.x, s1.y);
-    ctx.lineTo(s2.x, s2.y);
-    ctx.lineTo(s3.x, s3.y);
+    ctx.moveTo(t0.x, t0.y);
+    ctx.lineTo(t1.x, t1.y);
+    ctx.lineTo(t2.x, t2.y);
+    ctx.lineTo(t3.x, t3.y);
     ctx.closePath();
-    ctx.fillStyle = "rgba(16, 185, 129, 0.12)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.05)";
     ctx.fill();
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.7)";
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
     ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.setLineDash([]);
   }
 
-  drawCrops(ctx, ox, oy, sh, sw, sl) {
-    // Matriz de plantas cultivadas
+  /**
+   * 3. Cultivos agrícolas (Biomasa B verde)
+   */
+  drawCrops(ctx, ox, oy, sh, sw, sl, sinkingZ) {
+    const topZ = -sinkingZ;
     const rows = 4;
     const cols = 5;
-    const cropScale = Math.min(Math.max(this.state.biomasa_B / 10, 0.7), 1.4);
+    const growthScale = Math.min(1.4, Math.max(0.4, (this.state.B || 10) / 12));
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const cx = 25 + (c * (sw - 50) / (cols - 1));
         const cy = 20 + (r * (sl - 40) / (rows - 1));
-        const baseZ = (cx >= 60 && cx <= 130 && cy >= 35 && cy <= 85) ? 8 : 0;
+        const isTerrace = (cx >= 55 && cx <= 130 && cy >= 30 && cy <= 85);
+        const z = topZ + (isTerrace ? 10 : 0);
 
-        const pos = this.isoProject(cx, cy, baseZ, ox, oy);
+        const pos = this.isoProject(cx, cy, z, ox, oy);
 
-        // Pequeño brote/planta verde
         ctx.save();
         ctx.translate(pos.x, pos.y);
-        
+
         // Tallo
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(0, -12 * cropScale);
-        ctx.strokeStyle = "#10b981";
-        ctx.lineWidth = 1.5;
+        ctx.lineTo(0, -11 * growthScale);
+        ctx.strokeStyle = this.state.Psi < 0.38 ? "#eab308" : "#10b981"; // Amarillo si estrés crítico
+        ctx.lineWidth = 1.4;
         ctx.stroke();
 
         // Hojas
         ctx.beginPath();
-        ctx.arc(-4 * cropScale, -10 * cropScale, 3.5 * cropScale, 0, Math.PI * 2);
-        ctx.arc(4 * cropScale, -11 * cropScale, 3.5 * cropScale, 0, Math.PI * 2);
-        ctx.fillStyle = "#34d399";
+        ctx.arc(-3.5 * growthScale, -9 * growthScale, 3 * growthScale, 0, Math.PI * 2);
+        ctx.arc(3.5 * growthScale, -10 * growthScale, 3 * growthScale, 0, Math.PI * 2);
+        ctx.fillStyle = this.state.Psi < 0.38 ? "#ca8a04" : "#34d399";
         ctx.fill();
 
         ctx.restore();
@@ -309,8 +347,31 @@ export class Escudo3DViewer {
     }
   }
 
-  drawShieldPilars(ctx, ox, oy, sw, sl, sh, sz) {
-    // Pilares en las 4 esquinas del terreno conectando al dosel
+  /**
+   * 3.1 Rastrojo / suelo en transición (Suelo desnudo con restos secos)
+   */
+  drawStubbleResidue(ctx, ox, oy, sh, sw, sl, sinkingZ) {
+    const topZ = -sinkingZ;
+    ctx.strokeStyle = "rgba(217, 119, 6, 0.4)";
+    ctx.lineWidth = 1.2;
+
+    for (let i = 0; i < 20; i++) {
+      const rx = 20 + (i * 73) % (sw - 40);
+      const ry = 15 + (i * 47) % (sl - 30);
+      const p = this.isoProject(rx, ry, topZ, ox, oy);
+
+      ctx.beginPath();
+      ctx.moveTo(p.x - 3, p.y + 2);
+      ctx.lineTo(p.x + 3, p.y - 2);
+      ctx.stroke();
+    }
+  }
+
+  /**
+   * 4. Pilares de anclaje (con líneas discontinuas)
+   */
+  drawShieldPilars(ctx, ox, oy, sw, sl, sz, sinkingZ) {
+    const topZ = -sinkingZ;
     const corners = [
       { x: 0, y: 0 },
       { x: sw, y: 0 },
@@ -318,117 +379,172 @@ export class Escudo3DViewer {
       { x: 0, y: sl }
     ];
 
-    ctx.strokeStyle = this.state.shieldColor;
+    const isOff = this.state.shieldState === "desactivado";
+    ctx.strokeStyle = isOff ? "rgba(100, 116, 139, 0.2)" : this.state.shieldColor;
     ctx.lineWidth = 1.2;
     ctx.setLineDash([3, 4]);
 
     corners.forEach(c => {
-      const bottom = this.isoProject(c.x, c.y, 0, ox, oy);
+      const bot = this.isoProject(c.x, c.y, topZ, ox, oy);
       const top = this.isoProject(c.x, c.y, sz, ox, oy);
 
       ctx.beginPath();
-      ctx.moveTo(bottom.x, bottom.y);
+      ctx.moveTo(bot.x, bot.y);
       ctx.lineTo(top.x, top.y);
       ctx.stroke();
 
-      // Punto de anclaje luminoso
+      // Nodo de anclaje
       ctx.beginPath();
-      ctx.arc(bottom.x, bottom.y, 2.5, 0, Math.PI * 2);
-      ctx.fillStyle = this.state.shieldColor;
+      ctx.arc(bot.x, bot.y, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = ctx.strokeStyle;
       ctx.fill();
     });
 
     ctx.setLineDash([]);
   }
 
-  drawShieldGrid(ctx, ox, oy, sw, sl, sz) {
-    const gridCols = 5;
-    const gridRows = 4;
+  /**
+   * 5. ESCUDO PLANO SUSPENDIDO CON ÁREA DE LISSAJOUS Y 4 ESTADOS
+   */
+  drawFlatShield(ctx, ox, oy, sw, sl, sz) {
+    const state = this.state.shieldState; // "azul_cobalto" | "violeta_ambar" | "rojo_intenso" | "desactivado"
 
-    // Vértices del techo del escudo
+    // Vértices del plano de protección
     const g0 = this.isoProject(0, 0, sz, ox, oy);
     const g1 = this.isoProject(sw, 0, sz, ox, oy);
     const g2 = this.isoProject(sw, sl, sz, ox, oy);
     const g3 = this.isoProject(0, sl, sz, ox, oy);
 
-    // Fondo translúcido del escudo protector
+    // =========================================================================
+    // ESTADO 4: ESCUDO DESACTIVADO (q = Transición / Suelo Desnudo)
+    // =========================================================================
+    if (state === "desactivado") {
+      ctx.beginPath();
+      ctx.moveTo(g0.x, g0.y);
+      ctx.lineTo(g1.x, g1.y);
+      ctx.lineTo(g2.x, g2.y);
+      ctx.lineTo(g3.x, g3.y);
+      ctx.closePath();
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      return;
+    }
+
+    // Configuración según el estado activo:
+    // 1. Azul Cobalto (Psi -> 1): #2563eb / #1d4ed8
+    // 2. Violeta / Ámbar (Psi ~ 0.5): #8b5cf6 / #d97706
+    // 3. Rojo Intenso (Psi -> 0): #dc2626 / #ef4444
+    let baseColor = "#2563eb";
+    let glowRgba = "rgba(37, 99, 235, 0.28)";
+    let pulseSpeed = 1.0;
+    let lissajousScale = 1.0;
+
+    if (state === "azul_cobalto") {
+      baseColor = "#2563eb"; // Azul Cobalto
+      glowRgba = "rgba(37, 99, 235, 0.35)";
+      pulseSpeed = 1.0;
+      lissajousScale = 1.0; // Área plena
+    } else if (state === "violeta_ambar") {
+      baseColor = "#8b5cf6"; // Violeta con destellos ámbar
+      glowRgba = "rgba(139, 92, 246, 0.32)";
+      pulseSpeed = 1.8;
+      lissajousScale = 0.78; // Área contraída
+    } else if (state === "rojo_intenso") {
+      baseColor = "#dc2626"; // Rojo Intenso crítico
+      glowRgba = "rgba(220, 38, 38, 0.45)";
+      pulseSpeed = 3.5; // Parpadeo rápido de alarma
+      lissajousScale = 0.55; // Escudo severamente reducido
+    }
+
+    // Pulsación de respiración del escudo
+    const pulseFactor = Math.sin(this.animTime * pulseSpeed * 2);
+    const alphaPulse = Math.max(0.15, Math.min(0.65, 0.30 + pulseFactor * 0.15));
+
+    // Plano translúcido
     ctx.beginPath();
     ctx.moveTo(g0.x, g0.y);
     ctx.lineTo(g1.x, g1.y);
     ctx.lineTo(g2.x, g2.y);
     ctx.lineTo(g3.x, g3.y);
     ctx.closePath();
-    ctx.fillStyle = this.state.glowColor;
+    ctx.fillStyle = glowRgba.replace(/[\d\.]+\)$/, `${alphaPulse})`);
     ctx.fill();
 
-    // Líneas longitudinales de la malla
-    ctx.strokeStyle = this.state.shieldColor;
+    // Malla cuadriculada del escudo plano
+    const cols = 5;
+    const rows = 4;
+    ctx.strokeStyle = baseColor;
     ctx.lineWidth = 1.4;
 
-    for (let c = 0; c <= gridCols; c++) {
-      const gx = c * (sw / gridCols);
-      const pStart = this.isoProject(gx, 0, sz, ox, oy);
-      const pEnd = this.isoProject(gx, sl, sz, ox, oy);
-
+    for (let c = 0; c <= cols; c++) {
+      const gx = c * (sw / cols);
+      const pS = this.isoProject(gx, 0, sz, ox, oy);
+      const pE = this.isoProject(gx, sl, sz, ox, oy);
       ctx.beginPath();
-      ctx.moveTo(pStart.x, pStart.y);
-      ctx.lineTo(pEnd.x, pEnd.y);
+      ctx.moveTo(pS.x, pS.y);
+      ctx.lineTo(pE.x, pE.y);
       ctx.stroke();
     }
 
-    // Líneas transversales de la malla
-    for (let r = 0; r <= gridRows; r++) {
-      const gy = r * (sl / gridRows);
-      const pStart = this.isoProject(0, gy, sz, ox, oy);
-      const pEnd = this.isoProject(sw, gy, sz, ox, oy);
-
+    for (let r = 0; r <= rows; r++) {
+      const gy = r * (sl / rows);
+      const pS = this.isoProject(0, gy, sz, ox, oy);
+      const pE = this.isoProject(sw, gy, sz, ox, oy);
       ctx.beginPath();
-      ctx.moveTo(pStart.x, pStart.y);
-      ctx.lineTo(pEnd.x, pEnd.y);
+      ctx.moveTo(pS.x, pS.y);
+      ctx.lineTo(pE.x, pE.y);
       ctx.stroke();
     }
 
-    // Onda de pulso de escaneo energético
-    const pulseOffset = (this.animTime * 40) % sw;
-    const pulseStart = this.isoProject(pulseOffset, 0, sz, ox, oy);
-    const pulseEnd = this.isoProject(pulseOffset, sl, sz, ox, oy);
-    ctx.beginPath();
-    ctx.moveTo(pulseStart.x, pulseStart.y);
-    ctx.lineTo(pulseEnd.x, pulseEnd.y);
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = this.state.shieldColor;
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
-  drawProtectiveAura(ctx, ox, oy, sw, sl, sz) {
-    // El óvalo verde circundante como en el dibujo del usuario
-    const auraCenter = this.isoProject(sw / 2, sl / 2, sz / 2, ox, oy);
+    // =========================================================================
+    // ÁREA DE LISSAJOUS DE RESPIRACIÓN Y PROTECCIÓN
+    // x(t) = A sin(3t), y(t) = B sin(2t + delta)
+    // =========================================================================
     ctx.save();
     ctx.beginPath();
-    ctx.ellipse(auraCenter.x, auraCenter.y, 140 * this.scale, 75 * this.scale, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(16, 185, 129, 0.4)";
-    ctx.lineWidth = 1.8;
-    ctx.setLineDash([8, 6]);
+    const lissSteps = 60;
+    const lissW = (sw * 0.45) * lissajousScale;
+    const lissL = (sl * 0.45) * lissajousScale;
+    const cx = sw / 2;
+    const cy = sl / 2;
+
+    for (let i = 0; i <= lissSteps; i++) {
+      const theta = (i / lissSteps) * Math.PI * 2;
+      const lx = cx + lissW * Math.sin(3 * theta + this.animTime * pulseSpeed);
+      const ly = cy + lissL * Math.sin(2 * theta);
+      const lp = this.isoProject(lx, ly, sz + 2, ox, oy);
+
+      if (i === 0) ctx.moveTo(lp.x, lp.y);
+      else ctx.lineTo(lp.x, lp.y);
+    }
+
+    ctx.closePath();
+    ctx.strokeStyle = state === "violeta_ambar" ? "#f59e0b" : "#ffffff";
+    ctx.lineWidth = 2.0;
+    ctx.shadowColor = baseColor;
+    ctx.shadowBlur = 12;
     ctx.stroke();
     ctx.restore();
   }
 
+  /**
+   * 6. HUD superior con indicador de Estado y Psi
+   */
   drawHUD(ctx, ox, oy, sw, sl, sz) {
-    const centerTop = this.isoProject(sw / 2, sl / 2, sz + 15, ox, oy);
+    const centerTop = this.isoProject(sw / 2, sl / 2, sz + 18, ox, oy);
 
     ctx.save();
-    // Badge superior flotante
-    ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-    ctx.strokeStyle = this.state.shieldColor;
-    ctx.lineWidth = 1.2;
-
-    const badgeW = 145;
-    const badgeH = 26;
+    const badgeW = 210;
+    const badgeH = 28;
     const bx = centerTop.x - badgeW / 2;
     const by = centerTop.y - 15;
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+    ctx.strokeStyle = this.state.shieldColor;
+    ctx.lineWidth = 1.5;
 
     ctx.beginPath();
     ctx.roundRect(bx, by, badgeW, badgeH, 6);
@@ -438,7 +554,25 @@ export class Escudo3DViewer {
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`🛡️ Escudo: ${this.state.escudoScore}% | ${this.state.temperatura_T}°C`, centerTop.x, by + 17);
+
+    const psiPct = Math.round((this.state.Psi || 0) * 100);
+    let stateLabel = "";
+
+    switch (this.state.shieldState) {
+      case "azul_cobalto":
+        stateLabel = `🔵 Azul Cobalto (Ψ=${this.state.Psi})`;
+        break;
+      case "violeta_ambar":
+        stateLabel = `🟣 Violeta/Ámbar (Ψ=${this.state.Psi})`;
+        break;
+      case "rojo_intenso":
+        stateLabel = `🔴 Rojo Intenso (Ψ=${this.state.Psi})`;
+        break;
+      default:
+        stateLabel = `⚪ Escudo Desactivado (Transición)`;
+    }
+
+    ctx.fillText(`${stateLabel}`, centerTop.x, by + 18);
     ctx.restore();
   }
 

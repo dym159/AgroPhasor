@@ -4,6 +4,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { AgroPhysicsEngine } from './physics.js';
 
 export class UIManager {
   constructor({ lotesManager, mapManager, apiService, escudo3d }) {
@@ -11,11 +12,25 @@ export class UIManager {
     this.mapManager = mapManager;
     this.apiService = apiService;
     this.escudo3d = escudo3d;
+    this.physicsEngine = new AgroPhysicsEngine();
 
     this.activeStep = 1;
     this.activeTab = "map"; // Para móvil: "map" | "panel"
     this.activePeriod = "P1";
     this.activePriorityMode = "balance_optimo"; // "maxima_resiliencia" | "balance_optimo" | "mayor_ganancia"
+
+    // Controles interactivos What-If del modelo físico
+    this.whatIfControls = {
+      deltaP0: 0,
+      deltaText: 0,
+      slopeTheta: 8,
+      irrigationI: 0,
+      fertN: 90,
+      fertP: 35,
+      fertK: 180,
+      rRes: 0.35,
+      stage: "cultivo"
+    };
 
     // Elementos DOM
     this.elements = {};
@@ -28,6 +43,8 @@ export class UIManager {
     this.renderPeriods();
     this.setupLotesSubscription();
     this.checkBackendStatus();
+    this.setupWhatIfControls();
+    this.recalculatePhysicalModel();
 
     // Actualizar iconos Lucide si están presentes
     if (window.lucide) {
@@ -92,6 +109,55 @@ export class UIManager {
       indicatorNPK: document.getElementById('ind-npk'),
       indicatorH: document.getElementById('ind-espesor-h'),
       indicatorShield: document.getElementById('ind-escudo'),
+
+      // Perillas What-If del modelo físico
+      sliderDeltaP: document.getElementById('slider-delta-p'),
+      valDeltaP: document.getElementById('val-delta-p'),
+      sliderDeltaT: document.getElementById('slider-delta-t'),
+      valDeltaT: document.getElementById('val-delta-t'),
+      sliderSlopeTheta: document.getElementById('slider-slope-theta'),
+      valSlopeTheta: document.getElementById('val-slope-theta'),
+      lblErosionRate: document.getElementById('lbl-erosion-rate'),
+      txtSinkingInfo: document.getElementById('txt-sinking-info'),
+
+      sliderIrrigation: document.getElementById('slider-irrigation'),
+      valIrrigation: document.getElementById('val-irrigation'),
+      sliderFertN: document.getElementById('slider-fert-n'),
+      valFertN: document.getElementById('val-fert-n'),
+      sliderFertP: document.getElementById('slider-fert-p'),
+      valFertP: document.getElementById('val-fert-p'),
+      sliderFertK: document.getElementById('slider-fert-k'),
+      valFertK: document.getElementById('val-fert-k'),
+      sliderRRes: document.getElementById('slider-r-res'),
+      valRRes: document.getElementById('val-r-res'),
+
+      btnStageCrop: document.getElementById('btn-stage-crop'),
+      btnStageTrans: document.getElementById('btn-stage-trans'),
+      valStageText: document.getElementById('val-stage-text'),
+      visorStageTag: document.getElementById('visor-stage-tag'),
+
+      // Salud química Liebig
+      valLiebigPct: document.getElementById('val-liebig-pct'),
+      liebigBarFill: document.getElementById('liebig-bar-fill'),
+      liebigLimitingBadge: document.getElementById('liebig-limiting-badge'),
+      pillNpkN: document.getElementById('pill-npk-n'),
+      pillNpkP: document.getElementById('pill-npk-p'),
+      pillNpkK: document.getElementById('pill-npk-k'),
+
+      // Alertas de Riego
+      irrigationAlertCard: document.getElementById('irrigation-alert-card'),
+      badgeIrrigationStatus: document.getElementById('badge-irrigation-status'),
+      valWcrit: document.getElementById('val-wcrit'),
+      valTauAviso: document.getElementById('val-tau-aviso'),
+      valIsugerido: document.getElementById('val-isugerido'),
+      btnApplyIrrigationSuggested: document.getElementById('btn-apply-irrigation-suggested'),
+
+      // Confianza Montecarlo y Estados del Escudo
+      valMontecarloConf: document.getElementById('val-montecarlo-conf'),
+      pillAzul: document.getElementById('pill-azul'),
+      pillVioleta: document.getElementById('pill-violeta'),
+      pillRojo: document.getElementById('pill-rojo'),
+      pillDesactivado: document.getElementById('pill-desactivado'),
 
       // Rotación
       rotationTableBody: document.getElementById('rotation-table-body'),
@@ -298,6 +364,305 @@ export class UIManager {
         this.renderPeriods();
         this.showToast(`Periodo P${newPIndex} agregado al calendario.`, "success");
       });
+    }
+  }
+
+  /**
+   * Configurar escuchas de eventos en las perillas de control What-If
+   */
+  setupWhatIfControls() {
+    const el = this.elements;
+
+    // 1. Clima y Terreno
+    if (el.sliderDeltaP) {
+      el.sliderDeltaP.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.deltaP0 = val;
+        el.valDeltaP.textContent = `${val >= 0 ? '+' : ''}${val}%`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    if (el.sliderDeltaT) {
+      el.sliderDeltaT.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.deltaText = val;
+        el.valDeltaT.textContent = `${val >= 0 ? '+' : ''}${val.toFixed(1)} °C`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    if (el.sliderSlopeTheta) {
+      el.sliderSlopeTheta.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.slopeTheta = val;
+        const desc = val < 5 ? "Plana" : (val < 15 ? "Moderada" : "Fuerte ladera");
+        el.valSlopeTheta.textContent = `${val}° (${desc})`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    // 2. Manejo Agronómico
+    if (el.sliderIrrigation) {
+      el.sliderIrrigation.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.irrigationI = val;
+        el.valIrrigation.textContent = `${val} mm`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    if (el.sliderFertN) {
+      el.sliderFertN.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.fertN = val;
+        el.valFertN.textContent = `${val} kg/ha`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    if (el.sliderFertP) {
+      el.sliderFertP.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.fertP = val;
+        el.valFertP.textContent = `${val} kg/ha`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    if (el.sliderFertK) {
+      el.sliderFertK.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.fertK = val;
+        el.valFertK.textContent = `${val} kg/ha`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    if (el.sliderRRes) {
+      el.sliderRRes.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        this.whatIfControls.rRes = val / 100;
+        el.valRRes.textContent = `${val}%`;
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    // Selector de régimen (Cultivo vs Suelo Desnudo)
+    if (el.btnStageCrop && el.btnStageTrans) {
+      el.btnStageCrop.addEventListener('click', () => {
+        this.whatIfControls.stage = "cultivo";
+        el.btnStageCrop.classList.add('active');
+        el.btnStageTrans.classList.remove('active');
+        if (el.valStageText) el.valStageText.textContent = "Cultivo Activo";
+        if (el.visorStageTag) el.visorStageTag.textContent = "Cultivo Activo";
+        this.recalculatePhysicalModel();
+      });
+
+      el.btnStageTrans.addEventListener('click', () => {
+        this.whatIfControls.stage = "transicion";
+        el.btnStageTrans.classList.add('active');
+        el.btnStageCrop.classList.remove('active');
+        if (el.valStageText) el.valStageText.textContent = "Suelo Desnudo (Transición)";
+        if (el.visorStageTag) el.visorStageTag.textContent = "q = Transición";
+        this.recalculatePhysicalModel();
+      });
+    }
+
+    // Botón de aplicación de riego sugerido
+    if (el.btnApplyIrrigationSuggested) {
+      el.btnApplyIrrigationSuggested.addEventListener('click', () => {
+        const suggested = this.lastSuggestedIrrigation || 25;
+        if (el.sliderIrrigation) {
+          el.sliderIrrigation.value = suggested;
+          this.whatIfControls.irrigationI = suggested;
+          if (el.valIrrigation) el.valIrrigation.textContent = `${suggested} mm`;
+          this.recalculatePhysicalModel();
+          this.showToast(`💧 Riego sugerido de ${suggested} mm aplicado al escenario.`, "success");
+        }
+      });
+    }
+
+    // Clicks en las píldoras de los 4 estados para demostración rápida
+    if (el.pillAzul) {
+      el.pillAzul.addEventListener('click', () => {
+        this.whatIfControls.stage = "cultivo";
+        this.whatIfControls.deltaP0 = 0;
+        this.whatIfControls.deltaText = 0;
+        this.whatIfControls.fertN = 140;
+        this.whatIfControls.fertP = 75;
+        this.whatIfControls.fertK = 210;
+        this.whatIfControls.irrigationI = 20;
+        this.whatIfControls.rRes = 0.50;
+        this.syncSliderInputs();
+        this.recalculatePhysicalModel();
+        this.showToast("Estado activado: 🔵 Azul Cobalto (Óptima Resiliencia, Ψ > 0.70)", "info");
+      });
+    }
+
+    if (el.pillVioleta) {
+      el.pillVioleta.addEventListener('click', () => {
+        this.whatIfControls.stage = "cultivo";
+        this.whatIfControls.deltaP0 = -25;
+        this.whatIfControls.deltaText = 2.5;
+        this.whatIfControls.fertN = 70;
+        this.whatIfControls.irrigationI = 0;
+        this.syncSliderInputs();
+        this.recalculatePhysicalModel();
+        this.showToast("Estado activado: 🟣 Violeta / Ámbar (Estrés Moderado, Ψ ≈ 0.50)", "warning");
+      });
+    }
+
+    if (el.pillRojo) {
+      el.pillRojo.addEventListener('click', () => {
+        this.whatIfControls.stage = "cultivo";
+        this.whatIfControls.deltaP0 = -45;
+        this.whatIfControls.deltaText = 4.5;
+        this.whatIfControls.slopeTheta = 24;
+        this.whatIfControls.fertN = 25;
+        this.whatIfControls.fertP = 15;
+        this.whatIfControls.irrigationI = 0;
+        this.whatIfControls.rRes = 0.05;
+        this.syncSliderInputs();
+        this.recalculatePhysicalModel();
+        this.showToast("Estado activado: 🔴 Rojo Intenso (Estrés Crítico / Colapso, Ψ < 0.38)", "error");
+      });
+    }
+
+    if (el.pillDesactivado) {
+      el.pillDesactivado.addEventListener('click', () => {
+        this.whatIfControls.stage = "transicion";
+        this.syncSliderInputs();
+        this.recalculatePhysicalModel();
+        this.showToast("Estado activado: ⚪ Escudo Desactivado (q = Transición, suelo desnudo)", "info");
+      });
+    }
+  }
+
+  syncSliderInputs() {
+    const el = this.elements;
+    const c = this.whatIfControls;
+    if (el.sliderDeltaP) { el.sliderDeltaP.value = c.deltaP0; el.valDeltaP.textContent = `${c.deltaP0 >= 0 ? '+' : ''}${c.deltaP0}%`; }
+    if (el.sliderDeltaT) { el.sliderDeltaT.value = c.deltaText; el.valDeltaT.textContent = `${c.deltaText >= 0 ? '+' : ''}${c.deltaText} °C`; }
+    if (el.sliderSlopeTheta) { el.sliderSlopeTheta.value = c.slopeTheta; el.valSlopeTheta.textContent = `${c.slopeTheta}°`; }
+    if (el.sliderIrrigation) { el.sliderIrrigation.value = c.irrigationI; el.valIrrigation.textContent = `${c.irrigationI} mm`; }
+    if (el.sliderFertN) { el.sliderFertN.value = c.fertN; el.valFertN.textContent = `${c.fertN} kg/ha`; }
+    if (el.sliderFertP) { el.sliderFertP.value = c.fertP; el.valFertP.textContent = `${c.fertP} kg/ha`; }
+    if (el.sliderFertK) { el.sliderFertK.value = c.fertK; el.valFertK.textContent = `${c.fertK} kg/ha`; }
+    if (el.sliderRRes) { el.sliderRRes.value = c.rRes * 100; el.valRRes.textContent = `${Math.round(c.rRes * 100)}%`; }
+
+    if (c.stage === "cultivo") {
+      el.btnStageCrop?.classList.add('active');
+      el.btnStageTrans?.classList.remove('active');
+      if (el.valStageText) el.valStageText.textContent = "Cultivo Activo";
+    } else {
+      el.btnStageTrans?.classList.add('active');
+      el.btnStageCrop?.classList.remove('active');
+      if (el.valStageText) el.valStageText.textContent = "Suelo Desnudo (Transición)";
+    }
+  }
+
+  /**
+   * Recalcular el modelo físico dinámico y sincronizar interfaz y visor 2.5D
+   */
+  recalculatePhysicalModel() {
+    const el = this.elements;
+    const phys = this.physicsEngine.evaluate(this.whatIfControls);
+
+    // 1. Actualizar visor 2.5D de Cerros en Cuadrado + Escudo Plano
+    if (this.escudo3d) {
+      this.escudo3d.updatePhysicsState(phys);
+    }
+
+    // 2. Información de erosión y hundimiento
+    if (el.lblErosionRate) el.lblErosionRate.textContent = `${phys.erosionRateMmYear} mm/año`;
+    if (el.txtSinkingInfo) el.txtSinkingInfo.innerHTML = `Hundimiento por erosión: <strong>${phys.erosionSinkingMm} mm</strong>`;
+
+    // 3. Salud Química por Ley de Liebig
+    if (el.valLiebigPct) el.valLiebigPct.textContent = `${Math.round(phys.eta_nutrientes * 100)}%`;
+    if (el.liebigBarFill) {
+      el.liebigBarFill.style.width = `${Math.round(phys.eta_nutrientes * 100)}%`;
+      el.liebigBarFill.style.boxShadow = `0 0 12px ${phys.eta_nutrientes > 0.65 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`;
+    }
+
+    if (el.liebigLimitingBadge) {
+      el.liebigLimitingBadge.innerHTML = `<span>⚠️ Crecimiento limitado por <strong>${phys.limitingNutrient}</strong> según Ley de Liebig</span>`;
+    }
+
+    // Actualizar píldoras NPK
+    if (el.pillNpkN) {
+      el.pillNpkN.textContent = `N: ${Math.round(phys.eta_N * 100)}%`;
+      el.pillNpkN.className = `npk-pill ${phys.limitingNutrient.startsWith('N') ? 'limiting' : ''}`;
+    }
+    if (el.pillNpkP) {
+      el.pillNpkP.textContent = `P: ${Math.round(phys.eta_P * 100)}%`;
+      el.pillNpkP.className = `npk-pill ${phys.limitingNutrient.startsWith('P') ? 'limiting' : ''}`;
+    }
+    if (el.pillNpkK) {
+      el.pillNpkK.textContent = `K: ${Math.round(phys.eta_K * 100)}%`;
+      el.pillNpkK.className = `npk-pill ${phys.limitingNutrient.startsWith('K') ? 'limiting' : ''}`;
+    }
+
+    // 4. Alertas de Riego
+    this.lastSuggestedIrrigation = phys.irrigationAlert.Isugerido;
+    if (el.valWcrit) el.valWcrit.textContent = `${phys.irrigationAlert.W_crit} mm`;
+    if (el.valTauAviso) el.valTauAviso.textContent = `${phys.irrigationAlert.tauAviso} días`;
+    if (el.valIsugerido) el.valIsugerido.textContent = `${phys.irrigationAlert.Isugerido} mm`;
+
+    if (el.irrigationAlertCard) {
+      el.irrigationAlertCard.classList.toggle('alert-active', phys.irrigationAlert.active);
+    }
+    if (el.badgeIrrigationStatus) {
+      if (phys.irrigationAlert.active) {
+        el.badgeIrrigationStatus.textContent = "⚠️ Estrés Hídrico Inminente";
+        el.badgeIrrigationStatus.className = "gap-badge gap-gap";
+      } else {
+        el.badgeIrrigationStatus.textContent = "Humedad Adecuada";
+        el.badgeIrrigationStatus.className = "gap-badge gap-obs";
+      }
+    }
+
+    // 5. Confianza Montecarlo
+    if (el.valMontecarloConf) el.valMontecarloConf.textContent = `${phys.montecarloConfidence}%`;
+
+    // 6. Sincronizar Píldoras de los 4 Estados del Escudo
+    const s = phys.shieldState;
+    el.pillAzul?.classList.toggle('active-azul', s === 'azul_cobalto');
+    el.pillVioleta?.classList.toggle('active-violeta', s === 'violeta_ambar');
+    el.pillRojo?.classList.toggle('active-rojo', s === 'rojo_intenso');
+    el.pillDesactivado?.classList.toggle('active-desactivado', s === 'desactivado');
+
+    // 7. Actualizar Indicadores Escalares
+    if (el.indicatorW) {
+      el.indicatorW.innerHTML = `
+        <div class="stat-value" style="color: ${phys.W < 95 ? '#ef4444' : '#10b981'}">${phys.W} <small>mm</small></div>
+        <div class="stat-label">Humedad en raíces (W)</div>
+        <div class="stat-badge ${phys.W < 95 ? 'badge-amber' : 'badge-green'}">${phys.W < 95 ? 'Alerta estrés' : 'Adecuado'}</div>
+      `;
+    }
+
+    if (el.indicatorT) {
+      el.indicatorT.innerHTML = `
+        <div class="stat-value" style="color: ${phys.T > 22 || phys.T < 10 ? '#f59e0b' : '#38bdf8'}">${phys.T} <small>°C</small></div>
+        <div class="stat-label">Temperatura dosel (T)</div>
+        <div class="stat-badge ${phys.T > 22 ? 'badge-amber' : 'badge-blue'}">${phys.T > 22 ? 'Estrés térmico' : 'Óptimo'}</div>
+      `;
+    }
+
+    if (el.indicatorH) {
+      el.indicatorH.innerHTML = `
+        <div class="stat-value">${phys.H} <small>mm</small></div>
+        <div class="stat-label">Capa fértil (H)</div>
+        <div class="stat-badge ${phys.erosionRateMmYear > 2 ? 'badge-amber' : 'badge-green'}">${phys.erosionRateMmYear} mm/año</div>
+      `;
+    }
+
+    if (el.indicatorNPK) {
+      el.indicatorNPK.innerHTML = `
+        <div class="stat-value">N:${this.whatIfControls.fertN} P:${this.whatIfControls.fertP} K:${this.whatIfControls.fertK}</div>
+        <div class="stat-label">Dosis NPK kg/ha</div>
+        <div class="stat-badge badge-amber">${phys.limitingNutrient}</div>
+      `;
     }
   }
 

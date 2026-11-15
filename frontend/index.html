@@ -201,12 +201,12 @@
       </div>
 
       <!-- ------------------------------------------------------------------------
-       * PASO 4: Revisa cómo está tu parcela (Diagnóstico & Balances)
+       * PASO 4: Tablero Principal e Indicadores del Modelo Físico
        * ------------------------------------------------------------------------ -->
       <div class="step-content" data-step="4">
         <div class="step-header">
-          <h2>📊 Diagnóstico del Terreno</h2>
-          <p>Valores integrados según el modelo de columnas acopladas 2.5D.</p>
+          <h2>📊 Tablero Principal & Gemelo Digital</h2>
+          <p>Simulador acoplado 2.5D: Cerros en cuadrado, Escudo plano y controles What-If.</p>
         </div>
 
         <!-- Modos y Prioridades de Simulación -->
@@ -219,22 +219,217 @@
           </div>
         </div>
 
-        <!-- Visor Isométrico 2.5D del Escudo (Boceto Gemelo Digital) -->
+        <!-- Visor Isométrico 2.5D: Cerros en Cuadrado + Escudo Plano de Lissajous -->
         <div class="escudo-visor-card">
           <div class="card-title">
             <span>🛡️ Gemelo Digital: Escudo y Dosel Protector</span>
-            <span class="escudo-tag">Columnas 2.5D</span>
+            <span class="escudo-tag" id="visor-stage-tag">Columnas 2.5D</span>
           </div>
           <div class="escudo-canvas-container">
             <canvas id="escudo-canvas"></canvas>
           </div>
           <div class="escudo-hint">
-            <span>👆 Arrastra con el dedo para rotar la perspectiva</span>
-            <span>Malla activa: <strong>NASA POWER Clima</strong></span>
+            <span>👆 Arrastra con el dedo para rotar la perspectiva 3D</span>
+            <span id="txt-sinking-info">Hundimiento: <strong>0 mm</strong></span>
+          </div>
+
+          <!-- 4 Estados Distinguibles del Escudo -->
+          <div class="shield-states-row">
+            <div id="pill-azul" class="shield-state-pill active-azul" title="Resiliencia alta (Psi >= 0.70)">
+              🔵 Azul Cobalto
+            </div>
+            <div id="pill-violeta" class="shield-state-pill" title="Estrés moderado (0.38 <= Psi < 0.70)">
+              🟣 Violeta/Ámbar
+            </div>
+            <div id="pill-rojo" class="shield-state-pill" title="Estrés crítico (Psi < 0.38)">
+              🔴 Rojo Intenso
+            </div>
+            <div id="pill-desactivado" class="shield-state-pill" title="Suelo desnudo en barbecho (q = Transición)">
+              ⚪ Desactivado
+            </div>
           </div>
         </div>
 
-        <!-- Indicadores Físicos -->
+        <!-- PANEL DE PERILLAS DE IZQUIERDA HACIA ABAJO (What-If Controls) -->
+        <div class="knobs-panel">
+          
+          <!-- Grupo 1: Clima y Erosión del Terreno -->
+          <div class="knob-group">
+            <div class="knob-group-title">
+              <span>🌦️ 1. Clima y Terreno (Erosión)</span>
+              <span id="lbl-erosion-rate" class="gap-badge gap-obs">0.28 mm/año</span>
+            </div>
+
+            <!-- Anomalía de lluvia delta P0 -->
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Anomalía de lluvia (&Delta;P<sub>0</sub>)</span>
+                <span id="val-delta-p" class="knob-value">0%</span>
+              </div>
+              <input type="range" id="slider-delta-p" class="knob-slider knob-slider-blue" min="-50" max="50" step="5" value="0">
+            </div>
+
+            <!-- Anomalía de temperatura delta Text -->
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Anomalía temperatura (&Delta;T<sub>ext</sub>)</span>
+                <span id="val-delta-t" class="knob-value">+0.0 °C</span>
+              </div>
+              <input type="range" id="slider-delta-t" class="knob-slider knob-slider-amber" min="-5" max="5" step="0.5" value="0">
+            </div>
+
+            <!-- Desnivel / Pendiente theta -->
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Desnivel / Pendiente (&theta;)</span>
+                <span id="val-slope-theta" class="knob-value">8° (Moderada)</span>
+              </div>
+              <input type="range" id="slider-slope-theta" class="knob-slider" min="0" max="35" step="1" value="8">
+            </div>
+          </div>
+
+          <!-- Grupo 2: Manejo Agronómico u(t) -->
+          <div class="knob-group">
+            <div class="knob-group-title">
+              <span>🚜 2. Manejo Agronómico u(t)</span>
+              <span class="gap-badge gap-est">Control Activo</span>
+            </div>
+
+            <!-- Lámina de riego I(t) -->
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Lámina de riego I(t)</span>
+                <span id="val-irrigation" class="knob-value">0 mm</span>
+              </div>
+              <input type="range" id="slider-irrigation" class="knob-slider knob-slider-blue" min="0" max="60" step="5" value="0">
+            </div>
+
+            <!-- Dosis de fertilización NPK -->
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Nitrógeno F<sub>N</sub></span>
+                <span id="val-fert-n" class="knob-value">90 kg/ha</span>
+              </div>
+              <input type="range" id="slider-fert-n" class="knob-slider" min="0" max="180" step="5" value="90">
+            </div>
+
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Fósforo F<sub>P</sub></span>
+                <span id="val-fert-p" class="knob-value">35 kg/ha</span>
+              </div>
+              <input type="range" id="slider-fert-p" class="knob-slider" min="0" max="120" step="5" value="35">
+            </div>
+
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Potasio F<sub>K</sub></span>
+                <span id="val-fert-k" class="knob-value">180 kg/ha</span>
+              </div>
+              <input type="range" id="slider-fert-k" class="knob-slider" min="0" max="240" step="10" value="180">
+            </div>
+
+            <!-- Fracción de rastrojo r_res -->
+            <div class="knob-control">
+              <div class="knob-label-row">
+                <span>Fracción de rastrojo (r<sub>res</sub>)</span>
+                <span id="val-r-res" class="knob-value">35%</span>
+              </div>
+              <input type="range" id="slider-r-res" class="knob-slider" min="0" max="100" step="5" value="35">
+            </div>
+
+            <!-- Régimen del ciclo q -->
+            <div class="knob-control" style="margin-top: 4px;">
+              <div class="knob-label-row" style="margin-bottom: 4px;">
+                <span>Régimen del suelo (q)</span>
+                <span id="val-stage-text" class="knob-value">Cultivo Activo</span>
+              </div>
+              <div class="stage-selector">
+                <button id="btn-stage-crop" class="stage-btn active">🌱 Cultivo Activo</button>
+                <button id="btn-stage-trans" class="stage-btn">🍂 Suelo Desnudo (Transición)</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- BARRA ÚNICA DE SALUD QUÍMICA (LEY DEL MÍNIMO DE LIEBIG) -->
+        <div class="liebig-card">
+          <div class="knob-group-title">
+            <span>🧪 Salud Química (&eta;<sub>nutrientes</sub>)</span>
+            <span id="val-liebig-pct" class="knob-value" style="color: #10b981;">78%</span>
+          </div>
+
+          <div class="liebig-bar-wrapper">
+            <div id="liebig-bar-fill" class="liebig-bar-fill" style="width: 78%;"></div>
+          </div>
+
+          <div id="liebig-limiting-badge" class="liebig-limiting-badge">
+            <span>⚠️ Crecimiento limitado por <strong>Nitrógeno (N)</strong> según Ley del Mínimo de Liebig</span>
+          </div>
+
+          <div class="npk-pills-row">
+            <div id="pill-npk-n" class="npk-pill limiting">N: 60%</div>
+            <div id="pill-npk-p" class="npk-pill">P: 44%</div>
+            <div id="pill-npk-k" class="npk-pill">K: 82%</div>
+          </div>
+        </div>
+
+        <!-- ALERTAS DE RIEGO (Ventana Crítica, Tau Aviso, Lámina Sugerida) -->
+        <div id="irrigation-alert-card" class="irrigation-alert-card">
+          <div class="irrigation-header">
+            <span style="font-weight: 700; font-size: 0.88rem;">💧 Alertas y Ventana de Riego</span>
+            <span id="badge-irrigation-status" class="gap-badge gap-obs">Adecuado</span>
+          </div>
+
+          <div class="irrigation-grid">
+            <div class="irrigation-box">
+              <span id="val-wcrit" class="val">90 mm</span>
+              <span class="lbl">Ventana Crítica (W<sub>crit</sub>)</span>
+            </div>
+            <div class="irrigation-box">
+              <span id="val-tau-aviso" class="val">5 días</span>
+              <span class="lbl">Aviso Anticipado (&tau;)</span>
+            </div>
+            <div class="irrigation-box">
+              <span id="val-isugerido" class="val">25 mm</span>
+              <span class="lbl">Lámina Sugerida (I)</span>
+            </div>
+          </div>
+
+          <button id="btn-apply-irrigation-suggested" class="btn-micro-select" style="align-self: flex-start; padding: 6px 12px; margin-top: 4px;">
+            💧 Aplicar Riego Sugerido a la Perilla
+          </button>
+        </div>
+
+        <!-- NIVEL DE CONFIANZA MONTECARLO Y EVIDENCIA / BRECHAS DE DATOS -->
+        <div class="montecarlo-card">
+          <div class="knob-group-title">
+            <span>🎲 Confianza Montecarlo & Evidencia</span>
+            <span id="val-montecarlo-conf" class="knob-value" style="color: #38bdf8;">91%</span>
+          </div>
+
+          <div class="data-gaps-list">
+            <div class="data-gap-item">
+              <span>🛰️ Clima NASA POWER (1991–2023)</span>
+              <span class="gap-badge gap-obs">Observado</span>
+            </div>
+            <div class="data-gap-item">
+              <span>⛰️ Elevación y Pendiente (SRTM 30m)</span>
+              <span class="gap-badge gap-obs">Observado</span>
+            </div>
+            <div class="data-gap-item">
+              <span>🧪 Parámetros de Suelo NPK</span>
+              <span class="gap-badge gap-est">Estimado Local</span>
+            </div>
+            <div class="data-gap-item">
+              <span>💧 Humedad SMAP Desagregada</span>
+              <span class="gap-badge gap-gap">Brecha / Modelo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Indicadores Físicos Escalares -->
         <div class="indicators-grid">
           <div id="ind-humedad-w" class="indicator-card">
             <div class="stat-value" style="color: #10b981;">142.5 <small>mm</small></div>
@@ -247,21 +442,17 @@
             <div class="stat-badge badge-blue">Óptimo</div>
           </div>
           <div id="ind-npk" class="indicator-card">
-            <div class="stat-value">N:88 P:34 K:195</div>
+            <div class="stat-value">N:90 P:35 K:180</div>
             <div class="stat-label">Nutrientes NPK kg/ha</div>
             <div class="stat-badge badge-amber">Equilibrado</div>
           </div>
           <div id="ind-espesor-h" class="indicator-card">
             <div class="stat-value">278 <small>mm</small></div>
             <div class="stat-label">Capa fértil (H)</div>
-            <div class="stat-badge badge-green">0.28 mm/año</div>
-          </div>
-          <div id="ind-escudo" class="indicator-card" style="grid-column: span 2;">
-            <div class="stat-value" style="color: #10b981;">87 <small>/ 100</small></div>
-            <div class="stat-label">Escudo Ambiental Global</div>
-            <div class="stat-badge badge-green">Alta Resiliencia a Sequías y Heladas</div>
+            <div class="stat-badge badge-green">Erosión baja</div>
           </div>
         </div>
+
       </div>
 
       <!-- ------------------------------------------------------------------------

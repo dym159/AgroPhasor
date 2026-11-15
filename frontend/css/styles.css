@@ -275,6 +275,342 @@ body {
 }
 
 /* ------------------------------------------------------------------------------
+ * Tablero Principal: Perillas What-If (Lateral Izquierdo) y Controles Físicos
+ * ------------------------------------------------------------------------------ */
+.dashboard-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.knobs-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.knob-group {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.knob-group-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+
+.knob-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.knob-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.knob-value {
+  font-weight: 700;
+  color: #38bdf8;
+  font-family: monospace;
+}
+
+.knob-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 4px;
+  background: #0f172a;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.knob-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+  transition: transform 0.1s, background-color 0.2s;
+}
+
+.knob-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: #34d399;
+}
+
+.knob-slider-blue::-webkit-slider-thumb {
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+}
+
+.knob-slider-amber::-webkit-slider-thumb {
+  background: #f59e0b;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+}
+
+/* Selector de Régimen / Fase */
+.stage-selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  background-color: #0f172a;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+
+.stage-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.stage-btn.active {
+  background-color: var(--accent-green);
+  color: #ffffff;
+}
+
+/* ------------------------------------------------------------------------------
+ * Barra Única de Salud Química (Ley del Mínimo de Liebig)
+ * ------------------------------------------------------------------------------ */
+.liebig-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.liebig-bar-wrapper {
+  width: 100%;
+  height: 14px;
+  background-color: #0f172a;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #334155;
+}
+
+.liebig-bar-fill {
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #ef4444 0%, #f59e0b 45%, #10b981 100%);
+  width: 78%;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.liebig-limiting-badge {
+  background-color: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.npk-pills-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+
+.npk-pill {
+  background-color: #0f172a;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.npk-pill.limiting {
+  border: 1px solid #f59e0b;
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------------------
+ * Alertas de Riego (Ventana Crítica, Tau Aviso y Lámina Sugerida)
+ * ------------------------------------------------------------------------------ */
+.irrigation-alert-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.irrigation-alert-card.alert-active {
+  border-color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+.irrigation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.irrigation-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.irrigation-box {
+  background-color: #0f172a;
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.irrigation-box .val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.irrigation-box .lbl {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------------------
+ * Estados del Escudo (Pills de 4 Estados)
+ * ------------------------------------------------------------------------------ */
+.shield-states-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.shield-state-pill {
+  padding: 6px 4px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-align: center;
+  border: 1px solid transparent;
+  background-color: #0f172a;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.shield-state-pill.active-azul {
+  background-color: rgba(37, 99, 235, 0.25);
+  border-color: #2563eb;
+  color: #60a5fa;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);
+}
+
+.shield-state-pill.active-violeta {
+  background-color: rgba(139, 92, 246, 0.25);
+  border-color: #8b5cf6;
+  color: #c084fc;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+.shield-state-pill.active-rojo {
+  background-color: rgba(220, 38, 38, 0.25);
+  border-color: #dc2626;
+  color: #f87171;
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.5);
+}
+
+.shield-state-pill.active-desactivado {
+  background-color: rgba(100, 116, 139, 0.25);
+  border-color: #64748b;
+  color: #94a3b8;
+}
+
+/* ------------------------------------------------------------------------------
+ * Nivel de Confianza Montecarlo y Brechas de Datos
+ * ------------------------------------------------------------------------------ */
+.montecarlo-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.montecarlo-gauge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.data-gaps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  background-color: #0f172a;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.data-gap-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gap-badge {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.gap-obs { background-color: rgba(16, 185, 129, 0.2); color: #34d399; }
+.gap-est { background-color: rgba(56, 189, 248, 0.2); color: #38bdf8; }
+.gap-gap { background-color: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+/* ------------------------------------------------------------------------------
  * Efecto de "Escudo Protector" sobre la Parcela (Boceto Gemelo Digital)
  * ------------------------------------------------------------------------------ */
 .agro-shield-polygon {

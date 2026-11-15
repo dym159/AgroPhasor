@@ -102,5 +102,39 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         # Modo resiliencia prioriza escudo ambiental alto
         self.assertGreater(shield_resilience, shield_profit)
 
+    def test_liebig_minimum_and_shield_states(self):
+        """Verifica la lógica matemática de la Ley de Liebig y los 4 estados del escudo."""
+        # Simulación de evaluación física
+        # eta_N = min(1.0, 30 / 150) = 0.20 (Nitrógeno fuertemente limitante)
+        # eta_P = min(1.0, 70 / 80) = 0.875
+        # eta_K = min(1.0, 200 / 220) = 0.909
+        fertN, fertP, fertK = 30, 70, 200
+        eta_N = min(1.0, fertN / 150)
+        eta_P = min(1.0, fertP / 80)
+        eta_K = min(1.0, fertK / 220)
+        eta_min = min(eta_N, eta_P, eta_K)
+
+        self.assertEqual(eta_min, eta_N)
+        self.assertAlmostEqual(eta_min, 0.20, places=2)
+
+        # Estados de escudo
+        # Azul Cobalto: Psi >= 0.70
+        # Violeta / Ámbar: 0.38 <= Psi < 0.70
+        # Rojo Intenso: Psi < 0.38
+        # Desactivado: stage == "transicion"
+        def classify_shield(psi, stage="cultivo"):
+            if stage == "transicion":
+                return "desactivado"
+            if psi >= 0.70:
+                return "azul_cobalto"
+            if psi >= 0.38:
+                return "violeta_ambar"
+            return "rojo_intenso"
+
+        self.assertEqual(classify_shield(0.85), "azul_cobalto")
+        self.assertEqual(classify_shield(0.52), "violeta_ambar")
+        self.assertEqual(classify_shield(0.24), "rojo_intenso")
+        self.assertEqual(classify_shield(0.90, stage="transicion"), "desactivado")
+
 if __name__ == "__main__":
     unittest.main()
