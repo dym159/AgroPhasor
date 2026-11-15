@@ -88,8 +88,14 @@ if [ -d "$REPO_ROOT/backend" ] || [ -f "$REPO_ROOT/requirements.txt" ] || [ -f "
     echo "   Verificando componentes de Python..."
     if command -v pytest >/dev/null 2>&1; then
         pytest
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -m unittest discover tests
+    elif command -v python >/dev/null 2>&1; then
+        python -m unittest discover tests
+    elif command -v py >/dev/null 2>&1; then
+        py -m unittest discover tests
     else
-        echo "   (pytest no esta en el entorno local; omitiendo suite Python)"
+        echo "   (pytest/python no esta en el entorno local; omitiendo suite Python)"
     fi
 fi
 
