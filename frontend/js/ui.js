@@ -32,6 +32,9 @@ export class UIManager {
       stage: "cultivo"
     };
 
+    // Modo de auto-equilibrio interactivo entre perillas
+    this.autoBalance = true;
+
     // Elementos DOM
     this.elements = {};
   }
@@ -111,6 +114,7 @@ export class UIManager {
       indicatorShield: document.getElementById('ind-escudo'),
 
       // Perillas What-If del modelo físico
+      checkAutoBalance: document.getElementById('check-auto-balance'),
       sliderDeltaP: document.getElementById('slider-delta-p'),
       valDeltaP: document.getElementById('val-delta-p'),
       sliderDeltaT: document.getElementById('slider-delta-t'),
@@ -369,81 +373,40 @@ export class UIManager {
 
   /**
    * Configurar escuchas de eventos en las perillas de control What-If
+   * con soporte de Auto-Equilibrio dinámico entre variables acopladas
    */
   setupWhatIfControls() {
     const el = this.elements;
 
-    // 1. Clima y Terreno
-    if (el.sliderDeltaP) {
-      el.sliderDeltaP.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.deltaP0 = val;
-        el.valDeltaP.textContent = `${val >= 0 ? '+' : ''}${val}%`;
-        this.recalculatePhysicalModel();
+    // Checkbox de control de auto-equilibrio
+    if (el.checkAutoBalance) {
+      el.checkAutoBalance.addEventListener('change', (e) => {
+        this.autoBalance = e.target.checked;
+        if (this.autoBalance) {
+          this.balanceWhatIfControls('fertN');
+          this.syncSliderInputs();
+          this.recalculatePhysicalModel();
+        }
+        this.showToast(
+          this.autoBalance
+            ? "⚖️ Auto-Equilibrio ACTIVADO: Las perillas se compensarán mutuamente."
+            : "Modo manual: Ajuste independiente por perilla.",
+          "info"
+        );
       });
     }
 
-    if (el.sliderDeltaT) {
-      el.sliderDeltaT.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.deltaText = val;
-        el.valDeltaT.textContent = `${val >= 0 ? '+' : ''}${val.toFixed(1)} °C`;
-        this.recalculatePhysicalModel();
-      });
-    }
-
-    if (el.sliderSlopeTheta) {
-      el.sliderSlopeTheta.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.slopeTheta = val;
-        const desc = val < 5 ? "Plana" : (val < 15 ? "Moderada" : "Fuerte ladera");
-        el.valSlopeTheta.textContent = `${val}° (${desc})`;
-        this.recalculatePhysicalModel();
-      });
-    }
-
-    // 2. Manejo Agronómico
-    if (el.sliderIrrigation) {
-      el.sliderIrrigation.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.irrigationI = val;
-        el.valIrrigation.textContent = `${val} mm`;
-        this.recalculatePhysicalModel();
-      });
-    }
-
-    if (el.sliderFertN) {
-      el.sliderFertN.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.fertN = val;
-        el.valFertN.textContent = `${val} kg/ha`;
-        this.recalculatePhysicalModel();
-      });
-    }
-
-    if (el.sliderFertP) {
-      el.sliderFertP.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.fertP = val;
-        el.valFertP.textContent = `${val} kg/ha`;
-        this.recalculatePhysicalModel();
-      });
-    }
-
-    if (el.sliderFertK) {
-      el.sliderFertK.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.fertK = val;
-        el.valFertK.textContent = `${val} kg/ha`;
-        this.recalculatePhysicalModel();
-      });
-    }
-
-    if (el.sliderRRes) {
-      el.sliderRRes.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        this.whatIfControls.rRes = val / 100;
-        el.valRRes.textContent = `${val}%`;
+    const controls = [
+      ['sliderDeltaP', 'deltaP0'], ['sliderDeltaT', 'deltaText'],
+      ['sliderSlopeTheta', 'slopeTheta'], ['sliderIrrigation', 'irrigationI'],
+      ['sliderFertN', 'fertN'], ['sliderFertP', 'fertP'],
+      ['sliderFertK', 'fertK'], ['sliderRRes', 'rRes']
+    ];
+    for (const [element, key] of controls) {
+      el[element]?.addEventListener('input', (event) => {
+        this.whatIfControls[key] = Number(event.target.value) / (key === 'rRes' ? 100 : 1);
+        if (this.autoBalance) this.balanceWhatIfControls(key);
+        this.syncSliderInputs();
         this.recalculatePhysicalModel();
       });
     }
@@ -539,6 +502,32 @@ export class UIManager {
     }
   }
 
+  // Compensar con manejo sin modificar el clima ni la pendiente elegidos.
+  balanceWhatIfControls(changed) {
+    const c = this.whatIfControls;
+    const set = (key, value, min, max, step) => {
+      c[key] = Number(Math.max(min, Math.min(max, Math.round(value / step) * step)).toFixed(2));
+    };
+    const nutrients = { fertN: 150, fertP: 80, fertK: 220 };
+    if (changed in nutrients) {
+      const ratio = c[changed] / nutrients[changed];
+      for (const [key, optimal] of Object.entries(nutrients)) {
+        if (key !== changed) set(key, optimal * ratio, 0,
+          { fertN: 180, fertP: 120, fertK: 240 }[key], key === 'fertK' ? 10 : 5);
+      }
+    }
+    const erosionCover = (20 + c.slopeTheta / 35 * 65 + Math.max(0, c.deltaP0) * 0.2) / 100;
+    if (changed !== 'rRes') {
+      const waterCover = changed === 'irrigationI'
+        ? (8 + c.deltaText * 0.4 - c.deltaP0 * 0.35 - c.irrigationI) / 2 : 0;
+      set('rRes', Math.max(erosionCover, waterCover), 0, 1, 0.05);
+    }
+    if (changed !== 'irrigationI') {
+      const evaporation = 8 * (1 + c.deltaText * 0.05 - c.rRes * 0.25);
+      set('irrigationI', evaporation - c.deltaP0 * 0.35, 0, 60, 5);
+    }
+  }
+
   syncSliderInputs() {
     const el = this.elements;
     const c = this.whatIfControls;
@@ -568,6 +557,14 @@ export class UIManager {
   recalculatePhysicalModel() {
     const el = this.elements;
     const phys = this.physicsEngine.evaluate(this.whatIfControls);
+
+    if (this.mapManager.terrain) {
+      this.mapManager.terrain.controls = { ...this.whatIfControls };
+      this.mapManager.terrain.physics = phys;
+      // Agrupar eventos rápidos de las perillas en un único redibujado.
+      clearTimeout(this.terrainRedrawTimer);
+      this.terrainRedrawTimer = setTimeout(() => this.mapManager.gridLayer?.redraw(), 80);
+    }
 
     // 1. Actualizar visor 2.5D de Cerros en Cuadrado + Escudo Plano
     if (this.escudo3d) {

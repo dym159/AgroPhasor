@@ -1,3 +1,5 @@
+import { metersPerWorldPixel } from './terrain.js';
+
 /**
  * AgroPhasor - Integración de Mapa Leaflet y Geoman
  * Manejo de dibujo, edición de vértices, eliminación, capas satelitales y controles táctiles.
@@ -58,7 +60,7 @@ export class MapManager {
     this.setupGeoman();
 
     // 2.1 Configurar patrón de malla de escudo
-    this.setupShieldSvgPattern();
+    this.setupMapGrid();
 
     // 3. Suscribirse a cambios del gestor de lotes
     this.lotesManager.subscribe((lotes, selected) => {
@@ -76,24 +78,66 @@ export class MapManager {
   /**
    * Configurar patrón SVG de malla digital para el efecto de escudo
    */
-  setupShieldSvgPattern() {
-    this.map.whenReady(() => {
-      const svg = this.map.getPanes().overlayPane.querySelector('svg');
-      if (svg) {
-        let defs = svg.querySelector('defs');
-        if (!defs) {
-          defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-          svg.prepend(defs);
-        }
-
-        defs.innerHTML = `
-          <pattern id="shield-grid" width="24" height="24" patternUnits="userSpaceOnUse">
-            <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(56, 189, 248, 0.4)" stroke-width="1.2"/>
-            <circle cx="12" cy="12" r="1.5" fill="rgba(16, 185, 129, 0.7)"/>
-          </pattern>
-        `;
+  setupMapGrid() {
+    const terrain = this.terrain;
+    const Grid = L.GridLayer.extend({
+      createTile(coords, done) {
+        const tile = document.createElement('canvas');
+        const size = this.getTileSize();
+        const dpr = window.devicePixelRatio || 1;
+        tile.width = size.x * dpr; tile.height = size.y * dpr;
+        tile.style.width = size.x + 'px'; tile.style.height = size.y + 'px';
+        const ctx = tile.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const factor = 2 ** coords.z;
+        const left = coords.x * size.x, top = coords.y * size.y;
+        const draw = () => {
+          const sample = (x, y) => terrain.height((left + x) / factor, (top + y) / factor, coords.z);
+          const mpp = metersPerWorldPixel((top + 128) / factor) / factor;
+          const vertex = (x, y) => {
+            const h = sample(x, y);
+            if (h === null) return [x, y];
+            // Relieve local en vista cenital: resaltar curvatura sin desplazar la georreferencia.
+            const neighbors = [sample(x - 64, y), sample(x + 64, y), sample(x, y - 64), sample(x, y + 64)];
+            const reference = neighbors.every(v => v !== null) ? neighbors.reduce((a, b) => a + b, 0) / 4 : h;
+            return [x, y - 18 * Math.tanh((h - reference) / Math.max(1, mpp * 12))];
+          };
+          // Sombreado por normales del mismo DEM que utiliza el visor 3D.
+          for (let x = 0; x < size.x; x += 16) for (let y = 0; y < size.y; y += 16) {
+            const west = sample(x, y + 8), east = sample(x + 16, y + 8);
+            const north = sample(x + 8, y), south = sample(x + 8, y + 16);
+            if ([west, east, north, south].some(h => h === null)) continue;
+            const gradient = (east - west + south - north) / Math.max(1, 32 * mpp);
+            ctx.fillStyle = gradient > 0 ? 'rgba(5, 15, 30, 0.18)' : 'rgba(186, 230, 253, 0.10)';
+            ctx.fillRect(x, y, 16, 16);
+          }
+          ctx.strokeStyle = 'rgba(125, 211, 252, 0.65)'; ctx.lineWidth = 1;
+          ctx.beginPath();
+          // Margen para que las curvas coincidan sin costuras entre teselas.
+          for (let x = -32; x <= size.x + 32; x += 32) {
+            for (let y = -32; y <= size.y + 32; y += 4) {
+              const p = vertex(x, y); if (y === -32) ctx.moveTo(...p); else ctx.lineTo(...p);
+            }
+          }
+          for (let y = -32; y <= size.y + 32; y += 32) {
+            for (let x = -32; x <= size.x + 32; x += 4) {
+              const p = vertex(x, y); if (x === -32) ctx.moveTo(...p); else ctx.lineTo(...p);
+            }
+          }
+          ctx.stroke();
+          done(null, tile);
+        };
+        terrain.loadBounds((left - 100) / factor, (top - 100) / factor,
+          (left + size.x + 100) / factor, (top + size.y + 100) / factor, coords.z)
+          .then(draw).catch(() => { ctx.setLineDash([3, 5]); draw(); });
+        return tile;
       }
     });
+    this.map.createPane('parcelGrid');
+    this.map.getPane('parcelGrid').style.zIndex = 350;
+    this.map.getPane('parcelGrid').style.pointerEvents = 'none';
+    this.gridLayer = new Grid({ pane: 'parcelGrid', tileSize: 256, opacity: 0.8,
+      pmIgnore: true, attribution: 'Relieve: <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen Terrain Tiles</a>' }).addTo(this.map);
   }
 
   /**

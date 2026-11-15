@@ -219,7 +219,7 @@
           </div>
         </div>
 
-        <!-- Visor Isométrico 2.5D: Cerros en Cuadrado + Escudo Plano de Lissajous -->
+        <!-- Visor Isométrico 2.5D: Cerros en Cuadrado + Escudo Plano -->
         <div class="escudo-visor-card">
           <div class="card-title">
             <span>🛡️ Gemelo Digital: Escudo y Dosel Protector</span>
@@ -232,6 +232,8 @@
             <span>👆 Arrastra con el dedo para rotar la perspectiva 3D</span>
             <span id="txt-sinking-info">Hundimiento: <strong>0 mm</strong></span>
           </div>
+
+          <div class="escudo-hint"><span id="terrain-status" role="status" aria-live="polite">Cargando elevación del terreno…</span></div>
 
           <!-- 4 Estados Distinguibles del Escudo -->
           <div class="shield-states-row">
@@ -253,6 +255,15 @@
         <!-- PANEL DE PERILLAS DE IZQUIERDA HACIA ABAJO (What-If Controls) -->
         <div class="knobs-panel">
           
+          <!-- Barra de Modo de Equilibrio Automático -->
+          <div class="auto-balance-bar">
+            <label class="switch-container">
+              <input type="checkbox" id="check-auto-balance" checked>
+              <span><strong>⚖️ Equilibrio Automático de Perillas</strong></span>
+            </label>
+            <span class="auto-balance-desc">Al mover una perilla, las demás se equilibran automáticamente (NPK, Riego y Rastrojo).</span>
+          </div>
+
           <!-- Grupo 1: Clima y Erosión del Terreno -->
           <div class="knob-group">
             <div class="knob-group-title">

@@ -1,10 +1,12 @@
+import { parcelFootprint } from './parcel-geometry.js';
+import { metersPerWorldPixel } from './terrain.js';
+
 /**
- * AgroPhasor - Visor Isométrico 2.5D "Cerros en Cuadrado + Escudo Plano + Curvas"
+ * AgroPhasor - Visor Isométrico 2.5D "Cerros en Cuadrado + Escudo Plano"
  * Sincronizado en tiempo real con el modelo físico:
  * - Hundimiento físico de la tierra por erosión (H)
  * - Transición de color del suelo: Marrón fértil <-> Gris rocoso degradado
  * - Altura del dosel según biomasa aérea (B)
- * - Malla de Lissajous que respira y modula su área de protección
  * - 4 Estados del Escudo:
  *     1. Azul Cobalto (Psi -> 1)
  *     2. Violeta / Ámbar (Psi ~ 0.5)
@@ -112,6 +114,171 @@ export class Escudo3DViewer {
   updatePhysicsState(physData) {
     if (!physData) return;
     Object.assign(this.state, physData);
+    this.heightCache = new Map();
+  }
+
+  setParcelGeometry(geometry, zoom = 17) {
+    this.footprint = parcelFootprint(geometry);
+    this.gridZoom = zoom;
+    this.heightCache = new Map();
+    const f = this.footprint;
+    const generation = this.terrainGeneration = (this.terrainGeneration || 0) + 1;
+    const label = document.getElementById('terrain-status');
+    if (!f || !this.terrain) {
+      if (label) label.textContent = 'Selecciona una parcela para ver el relieve';
+      return;
+    }
+    if (label) label.textContent = 'Cargando elevación del terreno…';
+    const pad = Math.max(f.width, f.height) / 16;
+    this.terrain.loadBounds(f.minX - pad, f.minY - pad, f.minX + f.width + pad, f.minY + f.height + pad)
+      .then(complete => {
+        if (generation !== this.terrainGeneration) return;
+        this.heightCache = new Map();
+        if (label) label.textContent = complete
+          ? 'Relieve DEM · pendiente y erosión simuladas · erosión visual ×250'
+          : 'Elevación no disponible o incompleta · sin inventar relieve';
+      }).catch(() => {
+        if (generation === this.terrainGeneration && label) label.textContent = 'Elevación no disponible';
+      });
+  }
+
+  terrainOffset(x, y) {
+    const f = this.footprint;
+    if (!f || !this.terrain) return 0;
+    this.heightCache ??= new Map();
+    const key = x + ',' + y;
+    if (this.heightCache.has(key)) return this.heightCache.get(key);
+    const wx = f.minX + (x - f.offsetX) / f.scale, wy = f.minY + (y - f.offsetY) / f.scale;
+    const cx = f.minX + f.width / 2, cy = f.minY + f.height / 2;
+    const reference = this.terrain.sample(cx, cy);
+    const height = this.terrain.height(wx, wy, 14, true);
+    const result = reference === null || height === null ? 0
+      : (height - reference) * f.scale / metersPerWorldPixel(cy);
+    this.heightCache.set(key, result);
+    return result;
+  }
+
+  terrainRing(ring) {
+    const points = [];
+    for (let i = 0; i < ring.length - 1; i++) {
+      const a = ring[i], b = ring[i + 1];
+      const segments = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 5));
+      for (let j = 0; j < segments; j++) points.push([
+        a[0] + (b[0] - a[0]) * j / segments, a[1] + (b[1] - a[1]) * j / segments]);
+    }
+    if (points.length) points.push(points[0]);
+    return points;
+  }
+
+  parcelPath(ctx, ox, oy, z) {
+    ctx.beginPath();
+    for (const polygon of this.footprint.polygons) {
+      for (const ring of polygon) {
+        this.terrainRing(ring).forEach(([x, y], i) => {
+          const p = this.isoProject(x, y, z, ox, oy);
+          if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+      }
+    }
+  }
+
+  drawParcelGrid(ctx, ox, oy, z, color) {
+    const f = this.footprint;
+    const step = Math.max(32 / 2 ** this.gridZoom, Math.max(f.width, f.height) / 80);
+    ctx.save();
+    this.parcelPath(ctx, ox, oy, z);
+    ctx.clip('evenodd');
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    // Misma posición y separación que las celdas del mapa, recortadas al contorno.
+    const line = (x1, y1, x2, y2) => {
+      const segments = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 4);
+      for (let i = 0; i <= segments; i++) {
+        const p = this.isoProject(x1 + (x2 - x1) * i / segments, y1 + (y2 - y1) * i / segments, z, ox, oy);
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+    };
+    for (let x = Math.ceil(f.minX / step) * step, n = 0; x <= f.minX + f.width && n < 2048; x += step, n++) {
+      const px = f.offsetX + (x - f.minX) * f.scale;
+      line(px, 0, px, 130);
+    }
+    for (let y = Math.ceil(f.minY / step) * step, n = 0; y <= f.minY + f.height && n < 2048; y += step, n++) {
+      const py = f.offsetY + (y - f.minY) * f.scale;
+      line(0, py, 190, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawParcel(ctx, ox, oy, thickness, sinking, shieldZ) {
+    const top = -sinking, bottom = top - thickness;
+    const sides = [];
+    for (const polygon of this.footprint.polygons) {
+      for (const ring of polygon) {
+        for (let i = 0; i < ring.length - 1; i++) {
+          const a = ring[i], b = ring[i + 1];
+          sides.push({ points: [this.isoProject(...a, top, ox, oy), this.isoProject(...b, top, ox, oy),
+            this.isoProject(...b, bottom, ox, oy), this.isoProject(...a, bottom, ox, oy)] });
+        }
+      }
+    }
+    sides.sort((a, b) => a.points[0].y + a.points[1].y - b.points[0].y - b.points[1].y);
+    for (const side of sides) {
+      ctx.beginPath();
+      side.points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.closePath(); ctx.fillStyle = this.state.soilColor.side;
+      ctx.fill(); ctx.strokeStyle = this.state.soilColor.front; ctx.stroke();
+    }
+    this.parcelPath(ctx, ox, oy, top);
+    ctx.fillStyle = this.state.soilColor.top; ctx.fill('evenodd');
+    this.drawTerrainFacets(ctx, ox, oy, top);
+    this.drawParcelGrid(ctx, ox, oy, top, 'rgba(167, 243, 208, 0.55)');
+    ctx.save();
+    this.parcelPath(ctx, ox, oy, top); ctx.clip('evenodd');
+    if (this.state.stage !== 'transicion') this.drawCrops(ctx, ox, oy, thickness, 190, 130, sinking);
+    else this.drawStubbleResidue(ctx, ox, oy, thickness, 190, 130, sinking);
+    ctx.restore();
+    const active = this.state.shieldState !== 'desactivado';
+    ctx.save();
+    ctx.strokeStyle = this.state.shieldColor;
+    ctx.globalAlpha = active ? 0.35 : 0.15;
+    for (const polygon of this.footprint.polygons) {
+      for (const [x, y] of polygon[0].slice(0, -1)) {
+        const a = this.isoProject(x, y, top, ox, oy), b = this.isoProject(x, y, shieldZ, ox, oy);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    this.parcelPath(ctx, ox, oy, shieldZ);
+    ctx.fillStyle = this.state.shieldColor; ctx.globalAlpha = active ? 0.2 : 0.04;
+    ctx.fill('evenodd'); ctx.globalAlpha = active ? 0.9 : 0.35;
+    ctx.lineWidth = 1.5; if (!active) ctx.setLineDash([4, 4]); ctx.stroke();
+    ctx.restore();
+    if (active) this.drawParcelGrid(ctx, ox, oy, shieldZ, this.state.shieldColor);
+  }
+
+  drawTerrainFacets(ctx, ox, oy, z) {
+    ctx.save();
+    this.parcelPath(ctx, ox, oy, z); ctx.clip('evenodd');
+    const triangles = [];
+    for (let x = 0; x < 190; x += 5) for (let y = 0; y < 130; y += 5) {
+      const a = [x, y], b = [x + 5, y], c = [x + 5, y + 5], d = [x, y + 5];
+      for (const vertices of [[a, b, c], [a, c, d]]) {
+        const points = vertices.map(([vx, vy]) => this.isoProject(vx, vy, z, ox, oy));
+        const dx = this.terrainOffset(x + 5, y) - this.terrainOffset(x, y);
+        const dy = this.terrainOffset(x, y + 5) - this.terrainOffset(x, y);
+        triangles.push({ points, light: Math.max(-0.4, Math.min(0.4, (dx + dy) / 20)) });
+      }
+    }
+    triangles.sort((a, b) => a.points.reduce((v, p) => v + p.y, 0) - b.points.reduce((v, p) => v + p.y, 0));
+    for (const {points, light} of triangles) {
+      ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      ctx.closePath(); ctx.fillStyle = this.state.soilColor.top; ctx.fill();
+      ctx.fillStyle = light < 0 ? 'rgba(226, 232, 240, ' + (-light) + ')' : 'rgba(0, 0, 0, ' + light + ')';
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   // Transformación isométrica 3D -> 2D con rotación interactiva
@@ -145,7 +312,7 @@ export class Escudo3DViewer {
     
     // 1. HUNDIMIENTO DE LA TIERRA POR EROSIÓN
     // A mayor erosión (erosionSinkingMm), el sustrato se hunde en el eje Z
-    const visualSinkingZ = Math.min(22, (this.state.erosionSinkingMm || 0) * 0.5);
+    const visualSinkingZ = 0; // La erosión ya se aplica por vértice en TerrainSurface.
     const baseHeight = 26; // Espesor visual
     const effectiveSlabH = Math.max(8, baseHeight - visualSinkingZ);
 
@@ -159,24 +326,14 @@ export class Escudo3DViewer {
       shieldHeight = 55 + biomassOffset + Math.sin(this.animTime * 1.5) * 2;
     }
 
-    // 1. DIBUJAR LOSA DE SUELO CUADRADA CON COLOR DEGRADADO Y HUNDIMIENTO
-    this.drawSquareSlab(ctx, originX, originY, slabW, slabL, effectiveSlabH, visualSinkingZ);
-
-    // 2. DIBUJAR CERROS Y ANDENES EN CUADRADO (Terrazas agrícolas andinas)
-    this.drawSquareTerraces(ctx, originX, originY, effectiveSlabH, visualSinkingZ);
-
-    // 3. DIBUJAR CULTIVOS (Solo si no está en transición)
-    if (this.state.stage !== "transicion") {
-      this.drawCrops(ctx, originX, originY, effectiveSlabH, slabW, slabL, visualSinkingZ);
-    } else {
-      this.drawStubbleResidue(ctx, originX, originY, effectiveSlabH, slabW, slabL, visualSinkingZ);
+    if (!this.footprint) {
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Selecciona o dibuja una parcela en el mapa', originX, originY);
+      return;
     }
-
-    // 4. PILARES DE CONEXIÓN ENTRE SUELO Y ESCUDO
-    this.drawShieldPilars(ctx, originX, originY, slabW, slabL, shieldHeight, visualSinkingZ);
-
-    // 5. ESCUDO PLANO SUSPENDIDO CON ÁREA DE LISSAJOUS Y LOS 4 ESTADOS
-    this.drawFlatShield(ctx, originX, originY, slabW, slabL, shieldHeight);
+    this.drawParcel(ctx, originX, originY, effectiveSlabH, visualSinkingZ, shieldHeight);
 
     // 6. HUD Y ETIQUETA EN VIVO DEL ESCUDO
     this.drawHUD(ctx, originX, originY, slabW, slabL, shieldHeight);
@@ -404,7 +561,7 @@ export class Escudo3DViewer {
   }
 
   /**
-   * 5. ESCUDO PLANO SUSPENDIDO CON ÁREA DE LISSAJOUS Y 4 ESTADOS
+   * 5. ESCUDO PLANO SUSPENDIDO CON 4 ESTADOS
    */
   drawFlatShield(ctx, ox, oy, sw, sl, sz) {
     const state = this.state.shieldState; // "azul_cobalto" | "violeta_ambar" | "rojo_intenso" | "desactivado"
@@ -440,23 +597,19 @@ export class Escudo3DViewer {
     let baseColor = "#2563eb";
     let glowRgba = "rgba(37, 99, 235, 0.28)";
     let pulseSpeed = 1.0;
-    let lissajousScale = 1.0;
 
     if (state === "azul_cobalto") {
       baseColor = "#2563eb"; // Azul Cobalto
       glowRgba = "rgba(37, 99, 235, 0.35)";
       pulseSpeed = 1.0;
-      lissajousScale = 1.0; // Área plena
     } else if (state === "violeta_ambar") {
       baseColor = "#8b5cf6"; // Violeta con destellos ámbar
       glowRgba = "rgba(139, 92, 246, 0.32)";
       pulseSpeed = 1.8;
-      lissajousScale = 0.78; // Área contraída
     } else if (state === "rojo_intenso") {
       baseColor = "#dc2626"; // Rojo Intenso crítico
       glowRgba = "rgba(220, 38, 38, 0.45)";
       pulseSpeed = 3.5; // Parpadeo rápido de alarma
-      lissajousScale = 0.55; // Escudo severamente reducido
     }
 
     // Pulsación de respiración del escudo
@@ -498,36 +651,6 @@ export class Escudo3DViewer {
       ctx.lineTo(pE.x, pE.y);
       ctx.stroke();
     }
-
-    // =========================================================================
-    // ÁREA DE LISSAJOUS DE RESPIRACIÓN Y PROTECCIÓN
-    // x(t) = A sin(3t), y(t) = B sin(2t + delta)
-    // =========================================================================
-    ctx.save();
-    ctx.beginPath();
-    const lissSteps = 60;
-    const lissW = (sw * 0.45) * lissajousScale;
-    const lissL = (sl * 0.45) * lissajousScale;
-    const cx = sw / 2;
-    const cy = sl / 2;
-
-    for (let i = 0; i <= lissSteps; i++) {
-      const theta = (i / lissSteps) * Math.PI * 2;
-      const lx = cx + lissW * Math.sin(3 * theta + this.animTime * pulseSpeed);
-      const ly = cy + lissL * Math.sin(2 * theta);
-      const lp = this.isoProject(lx, ly, sz + 2, ox, oy);
-
-      if (i === 0) ctx.moveTo(lp.x, lp.y);
-      else ctx.lineTo(lp.x, lp.y);
-    }
-
-    ctx.closePath();
-    ctx.strokeStyle = state === "violeta_ambar" ? "#f59e0b" : "#ffffff";
-    ctx.lineWidth = 2.0;
-    ctx.shadowColor = baseColor;
-    ctx.shadowBlur = 12;
-    ctx.stroke();
-    ctx.restore();
   }
 
   /**
