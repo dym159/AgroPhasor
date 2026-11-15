@@ -743,6 +743,109 @@ body {
   font-size: 0.7rem;
 }
 
+/* Buscador de localidades sobre el mapa */
+.map-place-search {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(390px, calc(100% - 128px));
+  z-index: 1000;
+  background-color: rgba(15, 23, 42, 0.92);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+.place-search-form {
+  display: flex;
+  gap: 6px;
+}
+
+.place-search-form input {
+  flex: 1;
+  min-width: 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 7px 10px;
+  font-size: 0.85rem;
+}
+
+.place-search-form input:focus {
+  outline: none;
+  border-color: var(--accent-green);
+}
+
+.place-search-form button {
+  background-color: var(--accent-green);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.place-search-form button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.place-search-credit {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.place-search-credit a {
+  color: var(--accent-blue);
+  text-decoration: none;
+}
+
+.place-search-status {
+  margin-top: 4px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.place-search-status:empty {
+  display: none;
+}
+
+.place-search-results {
+  list-style: none;
+  margin-top: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.place-search-results button {
+  width: 100%;
+  text-align: left;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.place-search-results button:hover {
+  border-color: var(--accent-green);
+  background-color: var(--bg-surface);
+}
+
 /* Botón flotante para ver Escudo en el Mapa */
 .btn-map-floating-shield {
   position: absolute;
@@ -899,6 +1002,10 @@ body {
 .btn-primary {
   background-color: var(--accent-green);
   color: #ffffff;
+}
+
+#btn-retry-parcel-edo1[hidden] {
+  display: none;
 }
 
 .btn-primary:hover:not(:disabled) {

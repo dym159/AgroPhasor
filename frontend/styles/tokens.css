@@ -1,0 +1,31 @@
+:root {
+  --bg-canvas: #0b0f14;
+  --bg-surface: #121820;
+  --bg-surface-elevated: #18202b;
+  --bg-glass: rgba(18, 24, 32, 0.92);
+
+  --border-subtle: rgba(226, 232, 240, 0.1);
+  --border-strong: rgba(217, 119, 87, 0.55);
+
+  --text-primary: #ece9e2;
+  --text-secondary: #a39e93;
+  --text-muted: #6e6a63;
+
+  --accent-shield: #38bdf8;
+  --accent-shield-glow: rgba(56, 189, 248, 0.2);
+  --accent-crop: #34d399;
+  --accent-crop-soft: rgba(52, 211, 153, 0.12);
+  --accent-claude: #d97757;
+  --accent-claude-soft: rgba(217, 119, 87, 0.14);
+  --accent-danger: #ef4444;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --shadow-panel: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}

@@ -83,6 +83,27 @@ Este script ejecuta:
 
 ---
 
+## Mapa de parcelas (NAS-8)
+
+Desde la raíz del repositorio, sirve el frontend y el backend con Python 3:
+
+```bash
+python -m pip install numpy "shapely>=2.1,<3" "pyproj>=3,<4"
+python server.py
+```
+
+Al seleccionar un terreno, el mapa muestra la temperatura media del dosel por celda de 30 × 30 m. La malla se recorta al contorno. Cada celda usa la elevación, pendiente y orientación de SRTM v3 consultadas mediante Open Topo Data, y un forzamiento horario de NASA POWER consultado en un punto representativo de la parcela. Al tocar una celda se muestran la temperatura mínima, máxima y media del dosel.
+
+La simulación busca el día histórico más reciente con 24 horas válidas de temperatura, radiación y humedad relativa dentro de los últimos 365 días. Usa 50 mm de agua radicular asumida. Si el cultivo elegido carece de calibración, se muestra la simulación de papa como referencia. El servicio limita cada parcela a 500 celdas y requiere conexión a ambas fuentes.
+
+Abre [http://127.0.0.1:5173](http://127.0.0.1:5173). El mismo servidor entrega el frontend y la API bajo `/api/v1/`. La página usa Leaflet en el navegador y necesita conexión a internet para cargar la biblioteca, las imágenes de Esri World Imagery y la capa opcional NASA GIBS (HLS Sentinel-2).
+
+Para servir un frontend ya compilado, define `AGROPHASOR_FRONTEND_DIR` con la ruta de la carpeta que contiene su `index.html` antes de ejecutar `python server.py`. El frontend debe llamar a EDO 1 con la ruta relativa `/api/v1/parcelas/edo1`.
+
+El buscador consulta Nominatim solo al enviar el formulario y admite localidades de cualquier país. El servidor local comparte una caché en memoria y limita las consultas salientes. Para un despliegue compartido, usa un único punto de salida que aplique el límite global o configura otro servidor compatible mediante `AGROPHASOR_GEOCODER`. Revisa la [política de Nominatim](https://operations.osmfoundation.org/policies/nominatim/).
+
+Para comprobar el mapa, navega y cambia el zoom con la atribución visible. Pulsa «Usar mi ubicación» y prueba conceder el permiso. Restablece el permiso del sitio, vuelve a pulsar el botón y deniega la solicitud para verificar que puedas seguir navegando. Repite ambos casos en la URL HTTPS de la demo.
+
 ## 📚 Documentación Técnica y Referencias
 
 Los documentos y especificaciones aprobados por los frentes de Física, Matemática y Ciencias de la Computación se encuentran disponibles en:

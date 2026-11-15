@@ -99,8 +99,16 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         shield_optimo = res_optimo["indicadores"]["escudo_ambiental"]["indice"]
         shield_profit = res_profit["indicadores"]["escudo_ambiental"]["indice"]
 
-        # Modo resiliencia prioriza escudo ambiental alto
+        # Modo resiliencia prioriza escudo ambiental alto y selecciona ruta resiliente
         self.assertGreater(shield_resilience, shield_profit)
+        self.assertNotEqual(
+            res_resilience["rotacion_recomendada"]["ruta_seleccionada"],
+            res_profit["rotacion_recomendada"]["ruta_seleccionada"],
+        )
+        self.assertNotIn(
+            "papa_monocultivo",
+            res_optimo["rotacion_recomendada"]["pareto_frente"],
+        )
 
     def test_liebig_minimum_and_shield_states(self):
         """Verifica la lógica matemática de la Ley de Liebig y los 4 estados del escudo."""
@@ -135,6 +143,38 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertEqual(classify_shield(0.52), "violeta_ambar")
         self.assertEqual(classify_shield(0.24), "rojo_intenso")
         self.assertEqual(classify_shield(0.90, stage="transicion"), "desactivado")
+
+    def test_places_endpoint_validation_and_search(self):
+        """Verifica validación de longitud y respuesta de /api/places con geocoder simulado."""
+        import io
+        from unittest.mock import patch
+        import main as backend_main
+
+        sent = []
+
+        class MockGetHandler(AgroPhasorHandler):
+            def __init__(self, path):
+                self.path = path
+
+            def send_json_response(self, data, status=200):
+                sent.append((status, data))
+
+        MockGetHandler("/api/places?q=a").do_GET()
+        self.assertEqual(sent[-1][0], 400)
+
+        fake_body = io.BytesIO(json.dumps([
+            {"display_name": "Huancayo, Junín, Perú", "lat": "-12.0651", "lon": "-75.2049"}
+        ]).encode("utf-8"))
+        fake_body.__enter__ = lambda s: s
+        fake_body.__exit__ = lambda s, *args: False
+
+        backend_main._places_cache.clear()
+        with patch("urllib.request.urlopen", return_value=fake_body):
+            MockGetHandler("/api/places?q=Huancayo").do_GET()
+
+        status, payload = sent[-1]
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, [{"name": "Huancayo, Junín, Perú", "lat": -12.0651, "lon": -75.2049}])
 
 if __name__ == "__main__":
     unittest.main()

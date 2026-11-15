@@ -20,8 +20,9 @@ export const CONFIG = {
     esriSatellite: {
       name: "Satélite Esri (HD)",
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      attribution: "&copy; Esri &mdash; Fuentes: Esri, Maxar, Earthstar Geographics, y la comunidad GIS",
-      maxZoom: 19
+      attribution: '<a href="https://goto.arcgisonline.com/maps/World_Imagery">Esri World Imagery</a> · Esri, Vantor, Earthstar Geographics y la comunidad GIS',
+      maxNativeZoom: 19,
+      maxZoom: 21
     },
     esriLabels: {
       name: "Etiquetas y Caminos",
@@ -34,17 +35,24 @@ export const CONFIG = {
       url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       attribution: "&copy; Colaboradores de OpenStreetMap",
       maxZoom: 19
+    },
+    nasaHls: {
+      name: "NASA HLS · Sentinel-2",
+      url: "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi",
+      layers: "HLS_S30_Nadir_BRDF_Adjusted_Reflectance",
+      attribution: '<a href="https://www.earthdata.nasa.gov/data/tools/gibs">NASA GIBS</a> · HLS Sentinel-2',
+      maxNativeZoom: 13,
+      maxZoom: 21
     }
   },
 
   // Configuración de API
   API: {
-    BASE_URL: window.location.origin.includes(":8000") 
-      ? window.location.origin 
-      : "http://localhost:8000",
+    BASE_URL: "",
     SIMULATION_ENDPOINT: "/api/v1/simular",
     PARCELAS_ENDPOINT: "/api/v1/parcelas",
     HEALTH_ENDPOINT: "/api/v1/health",
+    PLACES_ENDPOINT: "/api/places",
     TIMEOUT_MS: 15000
   },
 

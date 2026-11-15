@@ -45,6 +45,7 @@ export class UIManager {
     this.renderCropCatalog();
     this.renderPeriods();
     this.setupLotesSubscription();
+    this.setupPlaceSearch();
     this.checkBackendStatus();
     this.setupWhatIfControls();
     this.recalculatePhysicalModel();
@@ -307,10 +308,15 @@ export class UIManager {
     // 6. Botón de geolocalización
     if (this.elements.btnLocateMe) {
       this.elements.btnLocateMe.addEventListener('click', () => {
-        this.showToast("Buscando tu ubicación...", "info");
+        this.showToast("Buscando tu ubicación… Si aparece una solicitud, selecciona «Permitir».", "info");
         this.mapManager.locateUser(
-          () => this.showToast("Ubicación encontrada en el mapa.", "success"),
-          () => this.showToast("No se pudo obtener la señal GPS; manteniéndote en Valle del Mantaro.", "warning")
+          (coords) => {
+            const acc = Number.isFinite(coords?.accuracy) ? ` (±${Math.ceil(coords.accuracy)} m)` : "";
+            this.showToast(`Ubicación encontrada en el mapa${acc}.`, "success");
+          },
+          (err) => {
+            this.showToast(err?.message || "No se pudo obtener la señal GPS; manteniéndote en Valle del Mantaro.", "warning", 6000);
+          }
         );
       });
     }
@@ -369,6 +375,64 @@ export class UIManager {
         this.showToast(`Periodo P${newPIndex} agregado al calendario.`, "success");
       });
     }
+  }
+
+  /**
+   * Configurar el buscador de localidades sobre el mapa (/api/places)
+   */
+  setupPlaceSearch() {
+    const form = document.getElementById('place-search');
+    const input = document.getElementById('place-query');
+    const status = document.getElementById('search-status');
+    const results = document.getElementById('search-results');
+    if (!form || !input || !status || !results) return;
+
+    const button = form.querySelector('button[type="submit"]');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (button.disabled) return;
+      const query = input.value.trim();
+      if (query.length < 2) {
+        status.textContent = "Escribe al menos dos caracteres.";
+        return;
+      }
+
+      button.disabled = true;
+      results.replaceChildren();
+      results.hidden = true;
+      status.textContent = "Buscando localidades…";
+
+      try {
+        const params = new URLSearchParams({ q: query });
+        const response = await fetch(`${this.apiService.baseUrl}${CONFIG.API.PLACES_ENDPOINT}?${params}`);
+        if (!response.ok) throw new Error("Place search failed");
+        const places = await response.json();
+
+        for (const place of places) {
+          const item = document.createElement('li');
+          const choice = document.createElement('button');
+          choice.type = 'button';
+          choice.textContent = place.name;
+          choice.addEventListener('click', () => {
+            this.mapManager.centerOnPlace(place.lat, place.lon, 15);
+            results.hidden = true;
+            status.textContent = place.name;
+            input.focus();
+          });
+          item.append(choice);
+          results.append(item);
+        }
+
+        results.hidden = places.length === 0;
+        status.textContent = places.length
+          ? "Elige una localidad para centrar el mapa."
+          : "No se encontraron localidades. Prueba agregando la región o el país.";
+      } catch {
+        status.textContent = "El buscador no está disponible por ahora. Puedes navegar por el mapa manualmente.";
+      } finally {
+        button.disabled = false;
+      }
+    });
   }
 
   /**
@@ -961,7 +1025,42 @@ export class UIManager {
       this.renderLotesList(lotes, selected);
       this.updateLoteStats(selected);
       this.renderPeriods();
+      this.updateParcelEdo1(selected);
     });
+    document.getElementById('btn-retry-parcel-edo1').addEventListener('click', () => {
+      this.updateParcelEdo1(this.lotesManager.getSelected(), true);
+    });
+  }
+
+  updateParcelEdo1(selected, retry = false) {
+    const key = selected && JSON.stringify([selected.id, selected.geometry, selected.cultivo_asignado]);
+    if (!retry && key === this.parcelEdo1Key) return;
+    this.parcelEdo1Key = key;
+    this.parcelEdo1Request?.abort();
+    clearTimeout(this.parcelEdo1Timer);
+    this.mapManager.showParcelTemperatures([]);
+
+    const status = document.getElementById('parcel-edo1-status');
+    const retryButton = document.getElementById('btn-retry-parcel-edo1');
+    retryButton.hidden = true;
+    status.textContent = selected ? 'Calculando la temperatura del dosel con NASA POWER y SRTM…' : '';
+    if (!selected) return;
+
+    const request = new AbortController();
+    this.parcelEdo1Request = request;
+    this.parcelEdo1Timer = setTimeout(async () => {
+      try {
+        const result = await this.apiService.runParcelEdo1(selected, request.signal);
+        if (request.signal.aborted) return;
+        this.mapManager.showParcelTemperatures(result.cells);
+        const crop = result.reference_crop_used ? `${result.crop} (cultivo de referencia)` : result.crop;
+        status.textContent = `EDO 1 · ${result.cells_count} celdas de 30 m · Media de dosel ${result.lot_mean_temp} °C · ${result.date} (hora solar local) · ${crop} · Agua radicular asumida: ${result.soil_water_mm} mm`;
+      } catch (error) {
+        if (request.signal.aborted) return;
+        status.textContent = `EDO 1: ${error.name === 'TimeoutError' ? 'La consulta tardó demasiado.' : error.message}`;
+        retryButton.hidden = false;
+      }
+    }, 350);
   }
 
   renderLotesList(lotes, selected) {

@@ -9,10 +9,10 @@ Este módulo implementa el motor de balance de energía térmica y temperatura d
 ### Opción 1: Levantar el servidor FastAPI
 Desde la raíz del proyecto, ejecuta:
 ```bash
-uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+uvicorn backend.main:app --host 127.0.0.1 --port 5173 --reload
 ```
 La documentación interactiva Swagger estará disponible de inmediato en:  
-👉 `http://127.0.0.1:8000/docs`
+👉 `http://127.0.0.1:5173/docs`
 
 ### Opción 2: Usarlo directamente como módulo en Python
 ```python

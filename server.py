@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 AgroPhasor - Acceso Directo de Ejecución Local
-Inicia el servidor backend y sirve la aplicación frontend en http://localhost:8000
+Sirve la aplicación frontend y la API en http://127.0.0.1:5173
 """
 import sys
 import os

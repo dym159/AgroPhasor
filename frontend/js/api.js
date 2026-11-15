@@ -99,6 +99,20 @@ export class ApiService {
     }
   }
 
+  async runParcelEdo1(lote, signal) {
+    const response = await fetch(`${this.baseUrl}/api/v1/parcelas/edo1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ geometry: lote.geometry, crop_id: lote.cultivo_asignado }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(120000)])
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data) {
+      throw new Error(data?.error || 'El servidor no pudo calcular la temperatura del dosel.');
+    }
+    return data;
+  }
+
   /**
    * Generar respuesta sintética basada en los parámetros acordados con Física y Matemática
    * (Contrato CC-02 y Plan Maestro)

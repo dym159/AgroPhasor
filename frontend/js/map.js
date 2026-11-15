@@ -7,6 +7,51 @@ import { metersPerWorldPixel } from './terrain.js';
 
 import { CONFIG } from './config.js';
 
+function createImageryTile({ x, y, z }, done) {
+  const tile = document.createElement('canvas');
+  const size = 256;
+  tile.width = size;
+  tile.height = size;
+  const context = tile.getContext('2d');
+  const image = new Image();
+  const lowestZoom = Math.max(0, z - 4);
+  let sourceZoom = z;
+
+  function requestImage() {
+    const scale = 2 ** (z - sourceZoom);
+    const column = Math.floor(x / scale);
+    const row = Math.floor(y / scale);
+    image.onload = () => {
+      const width = image.naturalWidth / scale;
+      const height = image.naturalHeight / scale;
+      context.drawImage(
+        image,
+        (x - column * scale) * width,
+        (y - row * scale) * height,
+        width,
+        height,
+        0,
+        0,
+        size,
+        size
+      );
+      done(null, tile);
+    };
+    image.onerror = () => {
+      if (sourceZoom === lowestZoom) {
+        done(new Error('No se encontró imagen para esta tesela.'), tile);
+        return;
+      }
+      sourceZoom -= 1;
+      requestImage();
+    };
+    image.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${sourceZoom}/${row}/${column}?blankTile=false`;
+  }
+
+  requestImage();
+  return tile;
+}
+
 export class MapManager {
   constructor(containerId, lotesManager) {
     this.containerId = containerId;
@@ -14,6 +59,8 @@ export class MapManager {
     this.map = null;
     this.layersByLoteId = new Map(); // loteId -> L.Polygon
     this.baseLayers = {};
+    this.overlayLayers = {};
+    this.locationLayer = null;
     this.isEditing = false;
     this.activeBaseLayer = "esriSatellite";
   }
@@ -28,6 +75,7 @@ export class MapManager {
     this.map = L.map(this.containerId, {
       center: [loc.latitude, loc.longitude],
       zoom: loc.zoom,
+      maxZoom: 21,
       zoomControl: false, // Reubicaremos el control de zoom para pantallas móviles
       tap: true,
       touchZoom: true
@@ -36,9 +84,11 @@ export class MapManager {
     // Control de zoom en posición cómoda
     L.control.zoom({ position: 'topright' }).addTo(this.map);
 
-    // 1. Capas base
-    this.baseLayers.esriSatellite = L.tileLayer(CONFIG.MAP_LAYERS.esriSatellite.url, {
+    // 1. Capas base y capas NASA GIBS
+    const ImageryLayer = L.GridLayer.extend({ createTile: createImageryTile });
+    this.baseLayers.esriSatellite = new ImageryLayer({
       attribution: CONFIG.MAP_LAYERS.esriSatellite.attribution,
+      maxNativeZoom: CONFIG.MAP_LAYERS.esriSatellite.maxNativeZoom,
       maxZoom: CONFIG.MAP_LAYERS.esriSatellite.maxZoom
     });
 
@@ -52,9 +102,25 @@ export class MapManager {
       maxZoom: CONFIG.MAP_LAYERS.osm.maxZoom
     });
 
+    this.overlayLayers.nasaHls = L.tileLayer.wms(CONFIG.MAP_LAYERS.nasaHls.url, {
+      layers: CONFIG.MAP_LAYERS.nasaHls.layers,
+      format: 'image/png',
+      transparent: true,
+      maxNativeZoom: CONFIG.MAP_LAYERS.nasaHls.maxNativeZoom,
+      maxZoom: CONFIG.MAP_LAYERS.nasaHls.maxZoom,
+      attribution: CONFIG.MAP_LAYERS.nasaHls.attribution
+    });
+
     // Añadir satélite y etiquetas por defecto
     this.baseLayers.esriSatellite.addTo(this.map);
     this.baseLayers.esriLabels.addTo(this.map);
+
+    // Selector para superponer capa satelital NASA GIBS HLS Sentinel-2
+    L.control.layers(null, { [CONFIG.MAP_LAYERS.nasaHls.name]: this.overlayLayers.nasaHls }, {
+      position: 'topright'
+    }).addTo(this.map);
+
+    this.locationLayer = L.layerGroup().addTo(this.map);
 
     // 2. Configurar Geoman (Leaflet-Geoman Free)
     this.setupGeoman();
@@ -310,6 +376,33 @@ export class MapManager {
     });
   }
 
+  showParcelTemperatures(cells) {
+    this.parcelTemperatures?.remove();
+    this.parcelTemperatures = null;
+    if (!cells.length) return;
+    this.parcelTemperatures = L.geoJSON(cells.map(cell => ({
+      type: 'Feature',
+      geometry: cell.geometry,
+      properties: cell
+    })), {
+      pmIgnore: true,
+      style: ({ properties: { mean_canopy_temp: mean } }) => ({
+        pmIgnore: true,
+        color: '#f8fafc',
+        weight: 1,
+        fillColor: `hsl(${Math.max(0, Math.min(220, 220 - mean * 7))}, 85%, 50%)`,
+        fillOpacity: 0.45
+      }),
+      onEachFeature: ({ properties: cell }, layer) => {
+        layer.bindTooltip(
+          `Celda ${cell.cell_id} · ${cell.latitude.toFixed(5)}°, ${cell.longitude.toFixed(5)}°<br>`
+          + `Dosel medio ${cell.mean_canopy_temp} °C · mín. ${cell.min_canopy_temp} °C · máx. ${cell.max_canopy_temp} °C<br>`
+          + `SRTM ${cell.altitude_m.toFixed(0)} m · pendiente ${cell.slope_deg.toFixed(1)}°`
+        );
+      }
+    }).addTo(this.map);
+  }
+
   /**
    * Estilo visual según estado y selección con estética de "Escudo Protector"
    */
@@ -378,36 +471,68 @@ export class MapManager {
   }
 
   /**
+   * Centrar el mapa en una localidad encontrada por el buscador
+   */
+  centerOnPlace(lat, lon, zoom = 15) {
+    this.map.setView([lat, lon], zoom);
+  }
+
+  /**
    * Geolocalización del usuario ("Mi Ubicación") con manejo de permisos
    */
   locateUser(onSuccess, onError) {
-    if (!navigator.geolocation) {
-      if (onError) onError(new Error("Tu navegador no soporta geolocalización."));
+    if (!window.isSecureContext || !navigator.geolocation) {
+      if (onError) {
+        onError(new Error("La ubicación requiere un navegador compatible y una página segura. Puedes navegar por el mapa manualmente."));
+      }
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        this.map.setView([latitude, longitude], 17);
+    const locationErrors = {
+      1: "La ubicación está bloqueada. Permítela en los ajustes de este sitio.",
+      2: "El dispositivo no pudo determinar tu ubicación. Revisa los servicios de ubicación e inténtalo de nuevo.",
+      3: "Se agotó el tiempo para obtener tu ubicación. Revisa si hay una solicitud de permiso pendiente e inténtalo de nuevo."
+    };
 
-        // Marcador discreto de posición del agricultor
-        const userMarker = L.circleMarker([latitude, longitude], {
-          radius: 8,
+    let waiting = true;
+    const finish = () => {
+      waiting = false;
+      window.clearTimeout(timeout);
+    };
+    const handleError = ({ code }) => {
+      if (!waiting) return;
+      finish();
+      const message = locationErrors[code] || "No se pudo obtener tu ubicación.";
+      console.warn("Geolocalización rechazada o inaccesible, manteniendo parcela demo:", message);
+      if (onError) onError(new Error(`${message} Puedes navegar por el mapa manualmente.`));
+    };
+
+    // El plazo del navegador puede excluir el tiempo de espera del permiso.
+    const timeout = window.setTimeout(() => handleError({ code: 3 }), 25000);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        if (!waiting) return;
+        finish();
+        const { latitude, longitude, accuracy } = coords;
+        const position = [latitude, longitude];
+        this.locationLayer.clearLayers();
+        if (Number.isFinite(accuracy) && accuracy > 0) {
+          L.circle(position, { radius: accuracy, weight: 1, color: '#38bdf8' }).addTo(this.locationLayer);
+        }
+        const userMarker = L.circleMarker(position, {
+          radius: 7,
           color: '#ffffff',
-          fillColor: '#3b82f6',
-          fillOpacity: 0.9,
-          weight: 3
-        }).addTo(this.map);
+          fillColor: '#10b981',
+          fillOpacity: 1,
+          weight: 2.5
+        }).addTo(this.locationLayer);
 
         userMarker.bindPopup("📍 Estás aquí").openPopup();
-        if (onSuccess) onSuccess(pos.coords);
+        this.map.setView(position, 15);
+        if (onSuccess) onSuccess(coords);
       },
-      (err) => {
-        console.warn("Geolocalización rechazada o inaccesible, manteniendo parcela demo:", err);
-        if (onError) onError(err);
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
+      handleError,
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
     );
   }
 

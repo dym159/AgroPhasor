@@ -27,7 +27,8 @@ class SimulationService:
         grid_cells: List[Dict[str, Any]],
         crop_id: str,
         soil_water_mm: float = 50.0,
-        ref_altitude_m: Optional[float] = None
+        ref_altitude_m: Optional[float] = None,
+        is_radiation_mj_hr: bool = True,
     ) -> Dict[str, Any]:
         """
         Ejecuta la simulación para todas las celdas de 30x30m del terreno sobre las horas disponibles.
@@ -50,7 +51,8 @@ class SimulationService:
             raise ValueError("No se encontraron series temporales válidas en los datos de NASA POWER.")
             
         t2m_raw = [float(t2m_dict[ts]) for ts in timestamps]
-        rad_raw_wm2 = [convert_nasa_radiation_to_wm2(float(rad_dict.get(ts, 0.0))) for ts in timestamps]
+        rad_raw = [max(0.0, float(rad_dict.get(ts, 0.0))) for ts in timestamps]
+        rad_raw_wm2 = [convert_nasa_radiation_to_wm2(value) for value in rad_raw] if is_radiation_mj_hr else rad_raw
         rh_raw = [float(rh_dict.get(ts, 60.0)) for ts in timestamps]
         
         # Altitud media de referencia si no se especifica
