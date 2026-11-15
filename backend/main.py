@@ -683,6 +683,76 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"error": str(exc)}, status=400)
             return
 
+        if path in ("/api/v1/validate/catalog/edo5", "/validate/edo5"):
+            res = validate_edo5_catalog(payload)
+            status = 200 if res["valid"] else 422
+            self.send_json_response(res, status=status)
+            return
+
+        if path in ("/api/v1/simular/edo5", "/simulate/edo5"):
+            try:
+                res = simulate_edo5_timeseries(
+                    precip_series=payload.get("precip_series", [15.0] * 30),
+                    slope_deg=float(payload.get("slope_deg", 10.0)),
+                    biomass_series=payload.get("biomass_series", [3.0] * 30),
+                    transition_flags=payload.get("transition_flags", [False] * 30),
+                    h0_mm=float(payload.get("h0_mm", 400.0)),
+                    theta_fc=float(payload.get("theta_fc", 0.30)),
+                    theta_wp=float(payload.get("theta_wp", 0.14)),
+                    initial_nutrients_kg_ha=payload.get("initial_nutrients_kg_ha")
+                )
+                self.send_json_response(res, status=200)
+            except Exception as exc:
+                self.send_json_response({"error": str(exc)}, status=400)
+            return
+
+        if path in ("/api/v1/simular/edo5/paso", "/simulate/edo5/step"):
+            try:
+                step = solve_edo5_step(
+                    h_current_mm=float(payload.get("h_current_mm", 400.0)),
+                    precip_mm=float(payload.get("precip_mm", 20.0)),
+                    slope_deg=float(payload.get("slope_deg", 10.0)),
+                    biomass_t_ha=float(payload.get("biomass_t_ha", 3.0)),
+                    is_transition=bool(payload.get("is_transition", False)),
+                    h_initial_mm=float(payload.get("h_initial_mm", 400.0)),
+                    theta_fc=float(payload.get("theta_fc", 0.30)),
+                    theta_wp=float(payload.get("theta_wp", 0.14)),
+                    current_nutrients_kg_ha=payload.get("current_nutrients")
+                )
+                self.send_json_response({
+                    "h_current_mm": step.h_current_mm,
+                    "dh_dt_mm_day": step.dh_dt_mm_day,
+                    "erosion_loss_step_mm": step.erosion_loss_step_mm,
+                    "accumulated_erosion_mm": step.accumulated_erosion_mm,
+                    "soil_retention_ratio": step.soil_retention_ratio,
+                    "vegetation_cover_factor": step.vegetation_cover_factor,
+                    "w_cc_mm": step.w_cc_mm,
+                    "w_pmp_mm": step.w_pmp_mm,
+                    "nutrient_drag_kg_ha": step.nutrient_drag_kg_ha,
+                    "soil_color_rgb": step.soil_color_rgb,
+                    "mesh_subsidence_m": step.mesh_subsidence_m,
+                    "is_bedrock_exposed": step.is_bedrock_exposed
+                }, status=200)
+            except Exception as exc:
+                self.send_json_response({"error": str(exc)}, status=400)
+            return
+
+        if path in ("/api/v1/simular/edo5/malla", "/simulate/edo5/grid"):
+            try:
+                res = ParcelEDO5Service.simulate_parcel_grid(
+                    grid_cells=payload.get("grid_cells", []),
+                    precip_series=payload.get("precip_series", [15.0] * 30),
+                    biomass_series=payload.get("biomass_series", [2.5] * 30),
+                    transition_flags=payload.get("transition_flags", [False] * 30),
+                    default_h0_mm=float(payload.get("h0_mm", 400.0)),
+                    theta_fc=float(payload.get("theta_fc", 0.30)),
+                    theta_wp=float(payload.get("theta_wp", 0.14))
+                )
+                self.send_json_response(res, status=200)
+            except Exception as exc:
+                self.send_json_response({"error": str(exc)}, status=400)
+            return
+
         if path == "/api/v1/parcelas":
             self.send_json_response(build_parcel_saved_payload(payload))
             return
