@@ -1,215 +1,121 @@
-#!/usr/bin/env python3
+=======
 """
-AgroPhasor - Servidor Backend de Simulación y Servicio de Frontend
-NASA Space Apps Challenge 2026 - Field Shift
-
-Provee endpoints REST con validación GeoJSON según el Contrato CC-02 y
-sirve la aplicación web estática para desarrollo local sin requerir dependencias externas.
+API Backend Local de AgroPhasor (FastAPI).
+Permite recibir las coordenadas, datos de NASA POWER y celdas SRTM desde el frontend/mapa,
+y devolver la simulación de EDO 1 con la temperatura del dosel y el Escudo Térmico.
 """
 
-import http.server
-import socketserver
-import json
-import os
-import sys
-import urllib.parse
-from datetime import datetime, timezone
+from typing import Dict, Any, List, Optional
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
-PORT = int(os.environ.get("PORT", 8000))
-HOST = os.environ.get("HOST", "0.0.0.0")
+from backend.models.crop_parameters import CROP_CATALOG, get_crop_parameters
+from backend.services.simulation_service import SimulationService
+from backend.core.edo1_engine import simulate_canopy_diurnal_cycle
+from backend.core.topoclimatic import convert_nasa_radiation_to_wm2
 
-# Rutas de frontend
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+app = FastAPI(
+    title="AgroPhasor Simulation Engine - Backend Local",
+    description="Motor de física y balance térmico (EDO 1) para rotación de cultivos bajo estrés climático",
+    version="1.0.0"
+)
 
-class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
-    """Manejador HTTP con soporte para API REST y servicio de archivos estáticos."""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
+class CellData(BaseModel):
+    cell_id: str
+    altitude_m: float = 3000.0
+    slope_deg: float = 0.0
+    aspect_deg: float = 0.0
 
-    def end_headers(self):
-        # Encabezados CORS para desarrollo
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        super().end_headers()
 
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self.end_headers()
+class FieldSimulationRequest(BaseModel):
+    crop_id: str = Field(default="papa", description="Identificador del cultivo ('papa', 'maiz', 'haba', 'barbecho')")
+    soil_water_mm: float = Field(default=50.0, description="Humedad del suelo en raíces [mm]")
+    ref_altitude_m: Optional[float] = Field(default=None, description="Altitud de referencia del lote [m]")
+    nasa_hourly_data: Dict[str, Dict[str, float]] = Field(
+        ...,
+        description="Respuesta horaria de NASA POWER conteniendo 'T2M', 'ALLSKY_SFC_SW_DWN', 'RH2M'"
+    )
+    grid_cells: List[CellData] = Field(
+        default_factory=lambda: [CellData(cell_id="0_0", altitude_m=3200.0, slope_deg=2.0, aspect_deg=180.0)],
+        description="Lista de celdas de 30x30m de la parcela dibujada"
+    )
 
-    def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
 
-        if path == "/api/v1/health":
-            self.send_json_response({
-                "status": "online",
-                "service": "AgroPhasor Mechanics Simulation Engine",
-                "version": "1.0-alpha",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "default_parcel": {
-                    "name": "Valle del Mantaro, Junín",
-                    "latitude": -12.06,
-                    "longitude": -75.21,
-                    "elevation_m": 3250
-                }
-            })
-            return
+class SinglePointSimulationRequest(BaseModel):
+    crop_id: str = "papa"
+    soil_water_mm: float = 50.0
+    t_air_hourly: List[float]
+    radiation_hourly: List[float] = Field(..., description="Radiación solar en W/m² (o MJ/hr si is_radiation_mj_hr=True)")
+    rh_hourly: List[float]
+    is_radiation_mj_hr: bool = False
 
-        # Para cualquier otra ruta, servir el frontend estático
-        super().do_GET()
 
-    def do_POST(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        query = urllib.parse.parse_qs(parsed.query)
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "AgroPhasor EDO 1 Engine"}
 
-        content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length)
 
-        try:
-            payload = json.loads(body.decode("utf-8")) if body else {}
-        except Exception as e:
-            self.send_json_response({"error": f"JSON inválido: {str(e)}"}, status=400)
-            return
-
-        # Endpoint de simulación
-        if path == "/api/v1/simular":
-            # Si el cliente solicita explícitamente simular un error (para verificar resiliencia)
-            if "simulate_error" in query or payload.get("force_error"):
-                self.send_json_response({
-                    "error": "Error 500: Fallo inducido en el solver físico para pruebas de resiliencia.",
-                    "detail": "El cliente debe conservar la selección de la parcela sin perder los vértices."
-                }, status=500)
-                return
-
-            response = self.process_simulation(payload)
-            self.send_json_response(response)
-            return
-
-        # Endpoint de guardado de parcelas GeoJSON
-        if path == "/api/v1/parcelas":
-            lote_id = payload.get("lote_seleccionado_id", "lote-default")
-            self.send_json_response({
-                "status": "guardado",
-                "lote_id": lote_id,
-                "mensaje": "Coordenadas GeoJSON registradas exitosamente en el servidor.",
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
-            return
-
-        self.send_json_response({"error": "Endpoint no encontrado"}, status=404)
-
-    def process_simulation(self, payload):
-        """Valida el GeoJSON y computa los balances físicos de referencia."""
-        geo_features = payload.get("geo_features", {})
-        lote_id = payload.get("lote_seleccionado_id", "lote-1")
-        modo = payload.get("modo_prioridad", "balance_optimo")
-
-        # Extraer características geométricas
-        features = geo_features.get("features", [])
-        area_ha = 2.45
-        if features:
-            props = features[0].get("properties", {})
-            area_ha = props.get("area_ha", 2.45)
-
-        # Ajuste de métricas según el modo seleccionado
-        shield_idx = 88 if modo == "maxima_resiliencia" else (82 if modo == "balance_optimo" else 76)
-        margen = "+12.4%" if modo == "maxima_resiliencia" else ("+19.8%" if modo == "balance_optimo" else "+28.5%")
-
-        return {
-            "status": "success",
-            "meta": {
-                "engine": "AgroPhasor-FastODE-Mantaro",
-                "nasa_power_source": "NASA POWER / AG Climatology (1991-2023)",
-                "elevation_m": 3250,
-                "lote_id": lote_id,
-                "area_ha": area_ha,
-                "modo_activo": modo,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            },
-            "indicadores": {
-                "humedad_radicular_W": {
-                    "valor": 142.5,
-                    "unidad": "mm",
-                    "estado": "Adecuado",
-                    "color": "#10b981",
-                    "descripcion": "Humedad en zona de raíces suficiente para tubérculos y leguminosas."
-                },
-                "temperatura_dosel_T": {
-                    "valor": 16.8,
-                    "unidad": "°C",
-                    "estado": "Óptimo",
-                    "color": "#38bdf8",
-                    "descripcion": "Sin estrés térmico ni riesgo inmediato de helada severa."
-                },
-                "nutrientes_NPK": {
-                    "N": {"valor": 88, "unidad": "kg/ha", "nivel": "Medio"},
-                    "P": {"valor": 34, "unidad": "kg/ha", "nivel": "Alto"},
-                    "K": {"valor": 195, "unidad": "kg/ha", "nivel": "Óptimo"},
-                    "estado_general": "Fértil"
-                },
-                "biomasa_aerea_B": {
-                    "valor": 11.8,
-                    "unidad": "t/ha",
-                    "estado": "Crecimiento vigoroso"
-                },
-                "espesor_fertil_H": {
-                    "valor": 278,
-                    "unidad": "mm",
-                    "tasa_erosion": "0.28 mm/año (Baja)",
-                    "estado": "Protegido"
-                },
-                "escudo_ambiental": {
-                    "indice": shield_idx,
-                    "max": 100,
-                    "calificacion": "Alta Resiliencia",
-                    "color": "#10b981"
-                }
-            },
-            "rotacion_recomendada": {
-                "plan_actual": [
-                    {"periodo": "P1 (Ene-May)", "cultivo": "Papa Canchán", "rendimiento_est": "13.2 t/ha"},
-                    {"periodo": "P2 (Jun-Dic)", "cultivo": "Papa Canchán (Monocultivo)", "alerta": "Riesgo fitosanitario"}
-                ],
-                "sugerencia_optimizada": [
-                    {"periodo": "P1 (Ene-May)", "cultivo": "Papa Canchán", "ventaja": "14.1 t/ha (+6.8%)"},
-                    {"periodo": "P2 (Jun-Dic)", "cultivo": "Habas Verdes / Serranas", "ventaja": "Fijación biológica +45 kg N/ha"},
-                    {"periodo": "P3 (Futuro)", "cultivo": "Quinua o Cebada", "ventaja": "Rastrojo y cobertura contra heladas"}
-                ],
-                "motivo_agronomico": "La rotación de Papa con Habas Verdes rompe el ciclo biológico de plagas del suelo y fija nitrógeno de forma natural, reduciendo costos de fertilización.",
-                "metricas_comparativas": {
-                    "ahorro_agua_pct": 18,
-                    "aumento_fertilidad_pct": 32,
-                    "reduccion_riesgo_climatico_pct": 27,
-                    "margen_economico_est": margen
-                }
-            }
+@app.get("/crops")
+def list_crops():
+    """Devuelve la lista de cultivos precalibrados en el sistema."""
+    return {
+        crop_id: {
+            "name": crop.name,
+            "family": crop.botanical_family,
+            "T_opt": crop.T_opt,
+            "T_frost": crop.T_frost,
+            "T_lethal": crop.T_lethal,
+            "W_pmp": crop.W_pmp,
+            "W_crit": crop.W_crit
         }
+        for crop_id, crop in CROP_CATALOG.items()
+    }
 
-    def send_json_response(self, data, status=200):
-        body = json.dumps(data, indent=2).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
 
-def run():
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer((HOST, PORT), AgroPhasorHandler) as httpd:
-        print("==================================================================")
-        print(f" 🚀 AgroPhasor Servidor Activo")
-        print(f" 🌐 Aplicación Web Frontend:  http://localhost:{PORT}")
-        print(f" 📡 Endpoint de Simulación:   http://localhost:{PORT}/api/v1/simular")
-        print(f" 🩺 Health Check:             http://localhost:{PORT}/api/v1/health")
-        print("==================================================================")
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nDeteniendo servidor AgroPhasor...")
+@app.post("/simulate/edo1")
+def simulate_field(request: FieldSimulationRequest):
+    """
+    Simulación completa de la parcela:
+    Recibe la respuesta cruda de NASA POWER y las celdas 30x30m de SRTM,
+    y devuelve la temperatura del dosel y métricas de confort para cada celda.
+    """
+    try:
+        cells_dict = [cell.model_dump() for cell in request.grid_cells]
+        result = SimulationService.run_field_simulation(
+            nasa_hourly_data=request.nasa_hourly_data,
+            grid_cells=cells_dict,
+            crop_id=request.crop_id,
+            soil_water_mm=request.soil_water_mm,
+            ref_altitude_m=request.ref_altitude_m
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/simulate/edo1/point")
+def simulate_point(request: SinglePointSimulationRequest):
+    """
+    Simulación para un punto / celda individual en una serie de horas.
+    """
+    crop = get_crop_parameters(request.crop_id)
+    rad_wm2 = (
+        [convert_nasa_radiation_to_wm2(r) for r in request.radiation_hourly]
+        if request.is_radiation_mj_hr
+        else request.radiation_hourly
+    )
+    result = simulate_canopy_diurnal_cycle(
+        t_ext_hourly=request.t_air_hourly,
+        f_rad_wm2_hourly=rad_wm2,
+        rh_pct_hourly=request.rh_hourly,
+        soil_water_mm=request.soil_water_mm,
+        crop=crop
+    )
+    return result
+
 
 if __name__ == "__main__":
-    run()
+    import uvicorn
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)
+>>>>>>> Stashed changes

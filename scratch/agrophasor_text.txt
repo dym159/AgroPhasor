@@ -1,0 +1,1929 @@
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+Tabla de contenidos
+1
+
+Espacio de Estados
+
+3
+
+1.1
+
+Componentes del espacio de estado y calibración . . . . . . . . . . . . . . . .
+
+3
+
+1.2
+
+Ventajas de Unificar los Nutrientes en el Eje Vectorial Ni,j (t) . . . . . . . . . .
+
+5
+
+1.3
+
+Fronteras Matemáticas del Dominio (Ωfísico ) . . . . . . . . . . . . . . . . . . .
+
+5
+
+1.4
+
+Límites Estructurales y Alcance Técnico del Proyecto . . . . . . . . . . . . . .
+
+6
+
+1.5
+
+Relación entre las variables de estado y los puntos a considerar por la Nasa . .
+
+7
+
+1.5.1
+
+Matriz de Trazabilidad: Variables de Estado vs. Objetivos NASA . . .
+
+7
+
+1.5.2
+
+Cumplimiento de los 5 Pilares de Consideraciones de la NASA . . . .
+
+8
+
+1.6
+
+¿Cómo se cubren los requerimientos que NO son ecuaciones físicas? . . . . . . 10
+1.6.1
+
+Interrupción de Ciclos de Plagas (Pest-cycle disruption): . . . . . . . . 10
+
+1.6.2
+
+Riesgo de Erosión (Erosion risk): . . . . . . . . . . . . . . . . . . . .
+
+1.6.3
+
+Armonización de Datos (Harmonizing spatial and temporal resolutions): 11
+
+1.6.4
+
+Prioridades del Agricultor e Ingresos (Farmer priorities & Market suitability): . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+1.6.5
+2
+
+11
+
+11
+
+Vacíos de Información e Incertidumbre (Uncertainty & Information Gaps): 12
+
+Componentes Externos al espacio de estados
+
+12
+
+2.1
+
+Modo Operativo Discreto — q(t) ∈ Q . . . . . . . . . . . . . . . . . . . . . . 13
+
+2.2
+
+Vector de Entradas de Control — u(t) ∈ U . . . . . . . . . . . . . . . . . . . . 13
+
+2.3
+
+Vector de Perturbaciones Exógenas (Forzamiento Climático) — d(t) ∈ R3 . . . 14
+
+2.4
+
+Tensor de Parámetros Estáticos del Terreno — Θcampo,i,j
+
+2.5
+
+Vector de Parámetros Fisiológicos del Cultivo — Θck . . . . . . . . . . . . . . 15
+
+2.6
+
+Salidas Observables, Alertas de Riego y Métricas de Pareto . . . . . . . . . . . 16
+
+. . . . . . . . . . . . 15
+
+2.6.1
+
+Salidas Visuales por Celda yi,j (t) (Interfaz WebGL / 3D) . . . . . . . . 16
+
+2.6.2
+
+Capa de Diagnóstico y Alertas de Riego (Posprocesamiento Algebraico) 17
+
+2.6.3
+
+Vector de Evaluación Global F(π) ∈ R4 y Selección Dual: Rutas Rápidas vs. Perillas (Frente de Pareto / A∗ ) . . . . . . . . . . . . . . . . . 18
+
+3
+
+Ecuaciones diferenciales
+
+19
+
+3.1
+
+Consideraciones para el Planteamiento de las EDOs . . . . . . . . . . . . . . . 20
+
+3.2
+
+Las 5 Ecuaciones Diferenciales del Motor Dinámico . . . . . . . . . . . . . . 20
+3.2.1
+
+EDO 1: Balance Energético y Temperatura del Dosel — Ti,j (t) (◦ C) . . 20
+
+3.2.2
+
+EDO 2: Balance Hidrológico Radicular — Wi,j (t) (mm) . . . . . . . . 21
+
+3.2.3
+
+EDO 3: Dinámica Vectorial de Macronutrientes — Ni,j (t) = [Ni,j , Pi,j , Ki,j ]T
+(kg/ha) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 21
+
+3.2.4
+
+EDO 4: Crecimiento de Biomasa y Descomposición de Rastrojo —
+Bi,j (t) (t/ha) . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 22
+
+1
+
+Universidad Nacional de Ingeniería - Qillawasi
+3.2.5
+
+4
+
+Agrophasor
+
+EDO 5: Erosión Hídrica de la Capa Fértil — Hi,j (t) (mm) . . . . . . . 22
+
+3.3
+
+Ecuaciones Constitutivas de Cierre (Relaciones Algebraicas) . . . . . . . . . . 23
+
+3.4
+
+Ecuaciones de Salto Discreto (Cosecha y Siembra) . . . . . . . . . . . . . . . 24
+
+3.5
+
+Conexión con el Frente de Pareto y Perillas Deslizables (w ∈ ∆3 ) . . . . . . . 25
+
+Solución de las ecuaciones diferenciales
+4.1
+
+25
+
+EDO 1: Solución . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 25
+
+Lista de tablas
+Lista de figuras
+
+2
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+1
+
+Agrophasor
+
+Espacio de Estados
+
+Sobre una malla espacial discretizada 2.5D de M × L celdas (i, j) —donde la topografía de
+SRTM (zi,j , θi,j , ψi,j ) y la química basal del suelo de SSURGO/WSS/GAEZ (OMi,j , CICi,j , pHi,j , ECi,j )
+conforman un tensor de parámetros espaciales estáticos—, el estado completo de AgroPhasor
+en el instante t queda definido por un Espacio de Estados Híbrido:
+
+
+
+Si,j (t) = xi,j (t), q(t) ∈ Ωfísico × Q ⊂ R4 × R3 × Q
+Donde el estado físico continuo xi,j (t) se estructura en 5 componentes fundamentales, integrando los macronutrientes principales en un único eje vectorial tridimensional Ni,j (t):
+
+
+Ti,j (t)
+
+
+
+
+
+Wi,j (t)
+
+
+,
+xi,j (t) = 
+N
+(t)
+i,j
+
+
+
+
+ Bi,j (t) 
+Hi,j (t)
+
+
+
+Ni,j (t)
+
+
+
+
+
+con Ni,j (t) =  Pi,j (t)  ∈ R3
+Ki,j (t)
+
+Mientras que q(t) ∈ Q representa el estado operativo discreto sincronizado para todo el lote (o
+segmentado en máximo 2 macro-zonas contiguas en la ruta zonificada).
+
+1.1
+
+Componentes del espacio de estado y calibración
+
+Componente
+
+Símbolo
+
+Unidades
+
+Dominio
+
+Calibración de Datos y Rol en la
+Simulación
+
+Temperatura
+
+Ti,j (t)
+
+◦C
+
+(Thelada,c , Tletal,c ) Forzada por NASA POWER + SRTM
+(gradiente vertical Γ∆z) y validada con
+
+del Dosel
+
+ECOSTRESS. Define el área de Lissajous
+(Escudo Térmico) y, mediante un filtro
+pasa-bajos de 7 días, genera la temperatura
+radicular Tsoil,i,j (t).
+Humedad
+
+Wi,j (t)
+
+mm
+
+[0, Wcc,i,j (H)]
+
+Inicializada con SMAP y alimentada por
+GPM/IMERG. Regula el cierre estomático
+
+Radicular
+
+γc (W ), habilita el transporte de nutrientes
+solubles y activa la mineralización
+microbiana.
+Continúa en la página siguiente...
+
+3
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Componente
+
+Símbolo
+
+Unidades
+
+Dominio
+
+Agrophasor
+
+Calibración de Datos y Rol en la
+Simulación
+
+Eje Vectorial
+
+Ni,j (t)
+
+de Nutrientes
+
+[N, P, K]T
+
+kg/ha
+
+R3≥0
+
+Calibrado con Sentinel-2 (Red-Edge/NDRE
+y antocianinas) + ECOSTRESS/SMAP
+(hambre vs. sed), SSURGO/GAEZ
+(OM, CIC, pH, EC), CDL, USGS NWIS y
+NASS QuickStats:
+– N (Nitrógeno): Fijación por leguminosas
+(Ffix ), mineralización (OM), lixiviación
+(∝ 1/CIC) y extracción.
+– P (Fósforo): Solubilización radicular
+(Fsol ), extracción y arrastre mecánico por
+erosión ( dH
+dt ).
+– K (Potasio): Retención electrostática
+(CIC), reciclaje de rastrojos (rres ) y consumo
+por cosecha.
+
+Biomasa
+
+Bi,j (t)
+
+t/ha
+
+[0, Bmax,c ]
+
+Contrastada con Landsat / Sentinel-2
+(NDVI/EVI). Determina el rendimiento
+
+Vegetal Aérea
+
+económico (Yk ), gobierna el crecimiento
+bajo la Ley del Mínimo de Liebig aplicada
+sobre Ni,j y actúa como escudo mecánico
+(exp(−λB B)) contra la lluvia.
+Espesor de
+
+Hi,j (t)
+
+mm
+
+[0, Hi,j (0)]
+
+Profundidad de suelo orgánico activo.
+Registra la erosión por lluvias de
+
+Capa Fértil
+
+GPM/IMERG en pendientes desnudas
+(θi,j ), deforma la geometría y color del
+bloque 3D en tiempo real y reduce Wcc (H)
+y P en ciclos siguientes.
+Modo de
+
+q(t)
+
+Discreto
+
+Q
+
+Indica qué especie ck está sembrada (con
+duración variable ∆tck ) o si el lote atraviesa
+
+Rotación
+
+cosecha y labranza (∆ttrans ). Sincroniza todo
+el lote y ejecuta los saltos de cosecha
+(B → rres B) y remoción (ker,labranza ).
+
+4
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+1.2
+
+Agrophasor
+
+Ventajas de Unificar los Nutrientes en el Eje Vectorial Ni,j (t)
+
+1. Preservación de la Física Sin Ambigüedad (Propiedad de Markov): A diferencia de
+colapsar N, P y K en un único escalar (lo cual mezclaría elementos con dinámicas opuestas y haría creer al sistema que fijar nitrógeno compensa la falta de potasio), mantener
+Ni,j (t) ∈ R3 conserva intacta la independencia química de cada nutriente dentro de un
+único bloque conceptual.
+2. Integración Matricial en Una Sola Operación: Al compartir la misma estructura lineal
+por paso diario, las tres coordenadas evolucionan simultáneamente mediante una única
+ecuación diferencial vectorial con matriz diagonal de tasas de pérdida ΛN,i,j ∈ R3×3 :
+dNi,j
+= SN,i,j − ΛN,i,j Ni,j
+dt
+3. Proyección Escalar Limpia para la Interfaz (Ley del Mínimo de Liebig): Aunque el
+motor evoluciona los tres ejes internos por separado, para graficar un solo indicador de
+fertilidad en pantalla o alimentar la ecuación de biomasa se proyecta el vector Ni,j (t) a
+un índice único de eficiencia química:
+
+ηnutrientes,i,j (t) = min
+
+1.3
+
+Ni,j
+Pi,j
+Ki,j
+,
+,
+Ni,j + KN Pi,j + KP Ki,j + KK
+
+
+∈ [0, 1]
+
+Fronteras Matemáticas del Dominio (Ωfísico )
+
+El subespacio viable Ωfísico ⊂ R4 × R3 está acotado por cinco fronteras físicas que el algoritmo
+A∗ evalúa en cada paso temporal para validar o descartar secuencias de rotación:
+• Frontera Térmica (Supervivencia): Thelada,c < Ti,j (t) < Tletal,c . Cruzar cualquiera
+de los dos umbrales provoca daño irreversible por helada (en cotas altas zi,j ) o colapso
+térmico por cierre estomático, invalidando la ruta.
+• Frontera Hídrica (Capacidad de Campo y Marchitez): 0 ≤ Wi,j (t) ≤ Wcc,i,j (Hi,j ).
+Todo aporte hídrico que supere Wcc se descarta como escorrentía superficial; al caer por
+debajo del punto de marchitez (Wpmp ), la transpiración se anula (γc → 0) y el Escudo
+Térmico colapsa.
+• Frontera Biogeoquímica (No-Negatividad Vectorial): Ni,j (t) ⪰ 0 (es decir, Ni,j ≥
+0, Pi,j ≥ 0, Ki,j ≥ 0). Garantizada analíticamente en todo paso ∆t mediante el integrador exponencial matricial, modulada por el factor estático de acidez y salinidad
+(ϕpH,EC,i,j ∈ [0, 1]).
+• Frontera Biológica (Techo Genético y Salto de Cosecha): 0 ≤ Bi,j (t) ≤ Bmax,c . Acotada por el potencial agroecológico regional (FAO GAEZ / NASS QuickStats) y reini5
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+ciada discretamente en cada evento de cosecha según la fracción de rastrojo conservado
+(rres ).
+• Frontera Geomorfológica (Erosión Acumulativa): 0 ≤ Hi,j (t) ≤ Hi,j (0). En la escala
+temporal de la simulación, el desgaste de suelo es monótonamente no creciente ( dH
+≤ 0);
+dt
+al llegar a 0, se expone la roca madre (Wcc → 0) y se visualiza el hundimiento y cambio
+de color en la malla 3D.
+
+1.4
+
+Límites Estructurales y Alcance Técnico del Proyecto
+
+Para conservar tiempos de cómputo en milisegundos dentro de una aplicación web interactiva
+y mantener rigor científico sobre la resolución de las bases satelitales, AgroPhasor opera bajo
+cinco límites explícitos:
+∂
+∂
+= ∂y
+= 0): Cada celda (i, j) se resuelve como
+1. Desacoplamiento Espacial Lateral ( ∂x
+
+una columna 2.5D independiente sin ecuaciones en derivadas parciales de flujo superficial. En consecuencia, el agua de escorrentía, el sedimento erosionado (H) y el fósforo
+arrastrado (P ) abandonan la celda en lugar de depositarse físicamente en las parcelas
+situadas aguas abajo.
+2. Síntesis Química en el Vector Primario Ni,j = [N, P, K]T : La dinámica edáfica evoluciona explícitamente los tres macronutrientes principales, mientras que los nutrientes secundarios (Ca, Mg, S), micronutrientes (Fe, Zn, Mn, B), toxicidad por aluminio y salinidad (EC/SAR) se condensan en factores de eficiencia estáticos (ϕpH,EC,i,j ) extraídos de
+SSURGO/GAEZ, sin ecuaciones diferenciales propias.
+3. Inferencia Orbital frente a Muestreo de Laboratorio In-Situ: El estado inicial Ni,j (0)
+se estima mediante fusión multisensor (Sentinel-2 Red-Edge/SWIR, ECOSTRESS,
+SMAP) y cartografía edáfica (SSURGO/GAEZ). Ofrece precisión operativa a escala
+de parcela (10–30 m), pero no sustituye un análisis químico de suelo en laboratorio ante
+contaminaciones puntuales o anomalías subsuperficiales profundas.
+4. Control Fitosanitario Combinatorio (Sin Dinámica Continua de Plagas): El modelo
+no integra ecuaciones diferenciales para poblaciones de insectos, nematodos u hongos;
+la ruptura de ciclos biológicos de plagas y enfermedades se garantiza mediante una restricción combinatoria discreta (Pplagas = ∞) que prohíbe encadenar cultivos de la misma
+familia botánica.
+5. Sincronización Operativa por Lote (q(t) Uniforme): El sistema asume manejo agronómico
+sincronizado para toda la parcela (o máximo en 2 macro-zonas topográficas), excluyendo
+agricultura de precisión intra-parcela a nivel de planta individual o riego diferenciado por
+surco.
+
+6
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+1.5
+
+Agrophasor
+
+Relación entre las variables de estado y los puntos a considerar por la
+Nasa
+
+
+Cada componente del espacio de estados híbrido Si,j (t) = xi,j (t), q(t) , con
+xi,j (t) = [Ti,j (t), Wi,j (t), Ni,j (t), Bi,j (t), Hi,j (t)]T y Ni,j (t) = [N, P, K]T ∈ R3 , responde
+directamente a los objetivos físicos, agronómicos y de diseño centrados en el agricultor establecidos por la NASA:
+1.5.1
+
+Matriz de Trazabilidad: Variables de Estado vs. Objetivos NASA
+
+Variable de Estado
+
+Datasets NASA /
+
+Objetivo NASA
+
+Traducción Visual y
+
+Socios
+
+Cubierto
+
+Operativa en AgroPhasor
+
+Ti,j (t)
+
+NASA POWER,
+
+Análisis de riesgo de
+
+Define el Escudo Térmico
+
+(Temperatura del
+
+SRTM (zi,j ),
+
+heladas, olas de calor,
+
+(elipse de Lissajous) y alerta
+
+Dosel)
+
+ECOSTRESS,
+
+estrés térmico y
+
+en rojo sobre zonas altas
+
+PRISM
+
+microclimas por relieve.
+
+propensas a heladas
+nocturnas.
+
+Wi,j (t)
+
+SMAP,
+
+Anomalías de humedad,
+
+Controla el cierre estomático
+
+(Humedad
+
+GPM/IMERG,
+
+sequía,
+
+γc (W ), identifica focos de
+
+Radicular)
+
+GRACE/GRACE-
+
+evapotranspiración (ET),
+
+estrés hídrico y habilita la
+
+FO, OpenET,
+
+infiltración y balance
+
+ruta de Austeridad Hídrica
+
+NLDAS
+
+hídrico.
+
+(I = 0).
+
+Ni,j (t) =
+
+Sentinel-2
+
+Ciclo de nutrientes,
+
+Separa hambre vs. sed
+
+[N, P, K]T
+
+(Red-Edge),
+
+potencial fijador de N,
+
+(Sentinel-2 + SMAP),
+
+(Vector de
+
+SSURGO/WSS,
+
+mejora de materia
+
+proyecta una barra única de
+
+Nutrientes)
+
+FAO GAEZ, CDL,
+
+orgánica y diagnóstico de
+
+salud química (Ley de
+
+NWIS
+
+estrés.
+
+Liebig) y sugiere dosis
+mínimas.
+
+Bi,j (t)
+
+Landsat, Sentinel-2
+
+Vigor del cultivo, valor
+
+Anima el crecimiento 3D del
+
+(Biomasa Vegetal)
+
+(NDVI/EVI), GEDI,
+
+forrajero, cobertura
+
+cultivo, calcula ingresos
+
+NASS QuickStats
+
+protectora y potencial de
+
+cosechables (Yk ) y cuantifica
+
+rendimiento.
+
+el crédito de rastrojo (rres ).
+Continúa en la página siguiente...
+
+7
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Variable de Estado
+
+Agrophasor
+
+Datasets NASA /
+
+Objetivo NASA
+
+Traducción Visual y
+
+Socios
+
+Cubierto
+
+Operativa en AgroPhasor
+
+Hi,j (t)
+
+SRTM (θi,j ),
+
+Reducción de erosión,
+
+Esculpe surcos de
+
+(Espesor Capa
+
+GPM/IMERG,
+
+estabilidad en pendientes
+
+hundimiento y cambia el
+
+Fértil)
+
+SSURGO/WSS
+
+y degradación del suelo a
+
+color de la tierra (marrón →
+
+largo plazo.
+
+gris) en las laderas del
+bloque topográfico 3D.
+
+q(t) ∈ Q
+
+CDL (CropScape),
+
+Detección de periodos
+
+Sincroniza la
+
+(Modo de Rotación)
+
+USDA AMS
+
+desnudos, ruptura de
+
+siembra/cosecha de todo el
+
+Market News, Ag
+
+plagas, idoneidad de
+
+lote, resalta ventanas de suelo
+
+Data Commons
+
+mercado y comparación
+
+desnudo (∆ttrans ) y alimenta
+
+de ≥ 3 rutas.
+
+el menú de Pareto.
+
+1.5.2
+
+Cumplimiento de los 5 Pilares de Consideraciones de la NASA
+
+Pilar 1: Comprensión de Condiciones y Datos (Understanding Conditions & Data)
+• Relación clima-vulnerabilidad-suelo: El acoplamiento de las EDOs demuestra físicamente cómo una caída en Wi,j (t) cierra los estomas (γc → 0), dispara Ti,j (t) y colapsa la
+producción de biomasa Bi,j (t), dejando el suelo expuesto al desgaste de Hi,j (t) cuando
+llegan las lluvias de GPM.
+• Traducción de términos científicos: En lugar de abrumar al agricultor con términos
+como evapotranspiración latente, inercia térmica o anomalías de humedad, el sistema
+traduce la dinámica acoplada de (T, W ) en el Escudo Térmico (una forma visual intuitiva
+que se encoge o se rompe cuando el cultivo pierde capacidad de autorregularse).
+• Sinergia satélite–terreno: El modelo explicita que las observaciones orbitales (SMAP,
+Sentinel-2, ECOSTRESS) aportan cobertura continua y detección temprana de estrés
+superficial, mientras que las bases edáficas de campo (SSURGO/WSS) aportan la física
+interna del subsuelo (CIC, pH, OM), logrando una calibración imposible con una sola
+fuente.
+Pilar 2: Inteligencia del Sistema, Modelado y Fusión de Datos (SI, Modeling, and Data
+Fusion)
+• Armonización espacial y temporal: Todos los datasets heterogéneos —desde los 10–20 m
+de Sentinel-2 y 30 m de SRTM/Landsat/CDL, hasta las grillas kilométricas de SMAP,
+GPM y NASA POWER— se remuestrean y proyectan sobre una malla común 2.5D
+
+8
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+(i, j), integrándose temporalmente mediante soluciones exponenciales exactas sin pérdida de estabilidad.
+• Detección de transiciones y suelo desnudo: El estado discreto q(t) modela explícitamente las ventanas de cosecha y labranza (q = Transición, donde B ≈ 0 y ker →
+ker,labranza ), alertando al agricultor cuando su calendario actual deja la tierra removida y
+desprotegida justo antes de los picos históricos de lluvia.
+• Gestión de incertidumbre y brechas de información: Cada recomendación generada
+por el algoritmo A∗ incluye un panel de Evidencia y Brechas de Datos, advirtiendo
+explícitamente qué variables fueron inferidas desde órbita (como [N0 , P0 , K0 ] vía RedEdge y materia orgánica) y señalando dónde se requiere inspección local (análisis químico
+de laboratorio, plagas subterráneas o escorrentía lateral no modelada).
+Pilar 3: Exploración de Estrategias de Rotación (Rotation Strategy Exploration)
+• Comparación estructurada (≥ 3 escenarios): AgroPhasor toma la Rotación Actual
+del agricultor (extraída de CropScape/CDL o ingresada manualmente) como línea base
+y la contrasta frente al Frente de Pareto dividido en 3 categorías principales (Resiliencia
+Máxima, Óptimo Balanceado, Alto Rendimiento) y sus 6 sub-rutas (Austeridad Hídrica, Hospital de Suelo, Zonificada 2.5D, Forrajera/Mixta, Ágil/Ciclo Corto, Comercial Intensiva).
+• Explicación agronómica integrada en las EDOs:
+– Fijadoras de Nitrógeno (leguminosas): Activan Ffix,c > 0, recargando el eje N del
+vector Ni,j para el cultivo siguiente.
+– Cultivos de cobertura y forrajeros: Mantienen Bi,j (t) elevado, llevando el factor
+de erosión exp(−λB B) a cero en pendientes y aportando materia orgánica mediante
+rastrojo (rres ).
+– Raíces profundas y tolerantes a sequía: Amplían la lámina útil Wcc y reducen el
+umbral de marchitez Wpmp , sosteniendo la transpiración en escenarios secos.
+– Ruptura de ciclos de plagas: Impuesta como restricción dura (Pplagas = ∞) en el
+algoritmo A∗ al prohibir secuencias consecutivas de la misma familia botánica.
+Pilar 4: Mapeo Geoespacial y Visualización (Geospatial Mapping & Visualization)
+• Bloque topográfico 3D interactivo: Construido con SRTM (zi,j ), permite visualizar en
+tiempo real las zonas críticas de la parcela: laderas que se hunden y cambian de color por
+erosión (Hi,j ), cotas altas vulnerables a heladas (Ti,j ) y zonas bajas con acumulación o
+déficit hídrico (Wi,j ).
+9
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+• Línea de tiempo y simulador de escenarios (What-If ): El usuario puede recorrer mes a
+mes la evolución de la parcela, superponer capas satelitales (humedad SMAP, temperatura
+ECOSTRESS, vigor NDVI) y mover deslizadores de anomalía climática (∆Text , ∆P0 )
+para comprobar cómo resiste cada rotación ante sequías o lluvias extremas.
+Pilar 5: Diseño Centrado en el Agricultor (Farmer-Centered Design)
+• Realismo operativo sin micro-gestión inviable: Al mantener el estado discreto q(t) sincronizado para todo el lote (o dividido en máximo 2 macro-zonas en la ruta zonificada),
+el sistema evita proponer un “tablero de ajedrez” imposible de sembrar o cosechar con
+maquinaria real.
+• Personalización de restricciones locales: Antes de ejecutar el optimizador A∗ , el agricultor define sus condiciones reales: disponibilidad de riego (I = 0 o riego asistido), intensidad de labranza/rastrojo (rres ), necesidad de forraje pecuario y prioridad financiera
+(liquidez rápida vs. margen bruto).
+• Herramienta de apoyo, no de reemplazo: La interfaz acompaña cada ruta sugerida con
+los riesgos locales que requieren revisión humana (disponibilidad real de semillas en la
+zona, estado de canales de riego y validación agronómica en campo), posicionando el
+motor matemático como un copiloto de decisión y no como un sustituto del criterio del
+productor.
+
+1.6
+
+¿Cómo se cubren los requerimientos que NO son ecuaciones físicas?
+
+El reto menciona algunas cosas que no son variables termodinámicas (como economía, pestes,
+topografía). Estas NO deben ser nuevas ecuaciones diferenciales, sino reglas que se manejan
+en las otras capas de tu arquitectura (el Algoritmo A*, la Malla y la Interfaz). Así se resuelven:
+1.6.1
+
+Interrupción de Ciclos de Plagas (Pest-cycle disruption):
+
+• NASA pide: ”Opportunities for rotations that could interrupt pest cycles”.
+• Cómo lo cubrimos: En la función de costo del Algoritmo A*. Si el algoritmo intenta
+sembrar la misma familia botánica dos veces seguidas (ej. Papa seguida de Tomate, ambas
+solanáceas), el algoritmo A* le suma una ”penalidad matemática infinita”, bloqueando
+esa ruta para asegurar la interrupción de la plaga.
+• Razón de la solución: La mayoría de las plagas agrícolas (insectos, hongos, nemátodos)
+son ”huésped-específicas”. Por ejemplo al primer año los pocos insectos que lleguen a
+comer el cultivo hecharon huevos en la tierra los cuales al salir de ellas, la población de
+dichos insectos crecerán y tendrán mucho alimento para seguir creciendo su población,
+
+10
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+por lo que se evita completamente repetir la misma familia botánica colocandole un peso
+infinito. Esto vendría a ser parte del problema de gráfos.
+1.6.2
+
+Riesgo de Erosión (Erosion risk):
+
+• NASA pide: Minimizar erosión.
+• Cómo lo cubrimos: La erosión ocurre cuando hay lluvias fuertes (P (t) alto en tu EDO
+de Humedad) y el campo está desnudo (B = 0 en tu EDO de Biomasa). Al estar la tierra
+desnuda (B=0) se encuentra a la interperie de la erosión generada por el impacto de las
+gotas de lluvia.
+• El sistema simplemente alerta al agricultor si programa una rotación que deja el suelo en
+B = 0 durante los meses de lluvia intensa.
+• La diferencia de nivel entre los terrenos también serán considerados por lo que las ecuaciones diferenciales serán planteados bajo esta idea.
+1.6.3
+
+Armonización de Datos (Harmonizing spatial and temporal resolutions):
+
+• NASA pide: ”Harmonizing datasets... to a common analysis grid”.
+• Cómo lo cubrimos: Con la Discretización Topográfica. Resolvemos el no usar ecuaciones
+continuas (EDP) complejas, sino una malla (grid) donde cada celda procesa tus 4 EDOs
+de forma paralela.
+1.6.4
+
+Prioridades del Agricultor e Ingresos (Farmer priorities & Market suitability):
+
+• NASA pide: ”Allow farmers to input their own priorities... supplemental income... does
+not replace farmer judgment”.
+• Cómo lo cubrimos: Con el Frente de Pareto y la interfaz de Arenero Interactivo (Drag
+& Drop).
+El Frente de Pareto es un concepto económico y matemático que define el conjunto de
+”soluciones óptimas” donde no puedes mejorar un objetivo sin empeorar el otro. Según
+las necesidades del agricultor presentamos las siguientes opciones:
+– Ruta A (Máxima Resiliencia):
+
+* Austeridad Hídrica (Secano)
+* Equilibrio
+* Hospital de Suelo (Regeneración)
+– Ruta B (El Balance / El Óptimo de Pareto):
+11
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+– Ruta C (Alto Rendimiento / Alto Riesgo):
+
+* Ágil / Ciclo Corto (Liquidez Rápida)
+* Equilibrio
+* Comercial Intensiva (Máximo Margen de ganancia)
+El agricultor puede ignorar la ruta matemática más resiliente si necesita sembrar un cultivo específico por demanda del mercado local, y el modelo solo le indicará mediante el
+”Escudo Térmico” cuánto riesgo asume, sin prohibirle la acción. Estas rutas serán mejor
+definidas en la sección ??.
+Por otro lado, el Arenero interactivo es definido como el entorno donde el usuario tendrá
+control completo sin romperse el programa en el proceso. Su finalidad es darle control al
+usuario y evitar que sea reemplazado por el software. Este también será mejor definido
+en la sección ??
+1.6.5
+
+Vacíos de Información e Incertidumbre (Uncertainty & Information Gaps):
+
+• NASA pide: ”Explain how the model interprets uncertainty... where information gaps
+exist”.
+• Cómo lo cubrimos: Mediante el forzamiento climático con el Método de Montecarlo.
+Esto se encuentra fuermente enlazado con la predicción de las condiciones climáticas
+a futuro y las transformadas de Fouries. Proyectamos el clima futuro generando ruido
+estocástico y se muestra al usuario el ”Nivel de Confianza”, alertando si se requiere validación humana.
+• Ejemplo: Si corremos el EDO asumiendo que lloverá exactamente 10 mm en octubre,
+nos estamos mintiendo. Al correr la simulación 100 veces inyectándole ”ruido” aleatorio
+(9 mm, 12 mm, 5 mm, 11 mm), estamos obligando al Gemelo Digital a experimentar la
+incertidumbre real de la naturaleza. Si de esos 100 universos paralelos, la planta sobrevive
+en 85, el ”85% de Nivel de Confianza” se le dice al agricultor: ”La matemática física es
+sólida, pero el clima es caótico; tienes un 15% de probabilidad de fracaso por pura mala
+suerte atmosférica”. y el programa buscará una rotación el cual sobreviva el peor de los
+escenarios posibles dentro del error.
+
+2
+
+Componentes Externos al espacio de estados
+
+Alrededor de los cinco ejes continuos del estado interno xi,j (t) = [Ti,j (t), Wi,j (t), Ni,j (t), Bi,j (t), Hi,j (t)]T
+(con Ni,j (t) = [Ni,j (t), Pi,j (t), Ki,j (t)]T ∈ R3 ), la arquitectura completa de AgroPhasor
+se articula mediante seis bloques externos que gobiernan la evolución temporal del sistema,
+12
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+su calibración geoespacial, su representación visual en 3D y la emisión posterior de alertas
+agronómicas:
+
+
+
+dxi,j
+= f xi,j (t), q(t) , u(t) , d(t) ; Θcampo,i,j , Θck ,
+|{z} |{z} |{z} | {z } |{z}
+dt
+Modo
+
+2.1
+
+Control
+
+Clima
+
+Terreno
+
+
+
+yi,j (t) = g xi,j (t), q(t); Θcampo,i,j , Θck
+| {z }
+
+Especie
+
+Salidas
+
+Modo Operativo Discreto — q(t) ∈ Q
+
+Aunque forma parte del espacio de estados híbrido Si,j (t) = (xi,j (t), q(t)), opera fuera de los
+cinco ejes continuos porque no se integra mediante ecuaciones diferenciales, sino que actúa
+como un conmutador lógico sincronizado para todo el lote (o segmentado en máximo 2 macrozonas contiguas en la ruta zonificada):
+
+m
+• Dominio: Q = Cultivo(ck ), Transición/Labranza k=1 , donde m ∈ Z≥2 es el número
+de fases configuradas por el agricultor.
+• Rol dinámico: Indica qué especie ck (k ∈ {1, . . . , m}) está sembrada en el instante t con
+su duración propia ∆tck , o si el lote atraviesa una ventana de cosecha y labranza (∆ttrans ).
+Ejecuta los saltos de cosecha (B → rres B), activa el coeficiente de erosión por suelo
+removido (ker,labranza ) y enciende o apaga los escudos vegetales en pantalla.
+
+2.2
+
+Vector de Entradas de Control — u(t) ∈ U
+
+Son las variables manipulables que representan tanto las decisiones agronómicas operativas
+como las preferencias estratégicas ajustadas por el agricultor en el panel interactivo:
+Variable de Control
+Secuencia de
+Rotación
+
+Símbolo
+
+Unidades
+
+Significado y Rol Operativo
+
+π=
+
+Discreto
+
+Orden cronológico de cultivos
+
+{(ck , ∆tck )}m
+k=1
+
+evaluado para los escenarios del
+Frente de Pareto.
+
+Lámina de Riego
+
+I(t)
+
+mm/día
+
+Agua suplementaria inyectada
+al balance hídrico (I(t) ≡ 0 en
+
+Aplicada
+
+secano o diagnóstico natural).
+Dosis de
+Fertilización
+
+kg/(ha · día)
+
+Ffert (t) =
+[FN , FP , FK ]
+
+T
+
+Aporte externo de
+macronutrientes calculado para
+cubrir la brecha química
+mínima del cultivo.
+Continúa en la página siguiente...
+
+13
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+Variable de Control
+
+Símbolo
+
+Unidades
+
+Significado y Rol Operativo
+
+Fracción de
+
+rres ∈ [0, 1]
+
+Adimensional Porcentaje de biomasa residual
+dejada tras la cosecha para
+
+Rastrojo
+
+proteger el suelo y reciclar K y
+OM .
+Longitud de
+
+m ∈ Z≥2
+
+Cultivos
+
+Número de campañas
+consecutivas definidas por el
+
+Rotación
+
+agricultor; fija la profundidad
+de búsqueda del algoritmo A∗ y
+el horizonte
+P
+Tsim (π) = m
+k=1 (∆tck +∆ttrans ).
+Vector de Perillas
+(Preferencias)
+
+w=
+
+Adimensional Pesos interactivos ajustados por
+P
+( wm = 1) el agricultor para balancear
+
+[w1 , w2 , w3 , w4 ]T ∈
+∆3
+
+resiliencia hídrica/edáfica frente
+a ganancia y rapidez de ciclo.
+
+Acoplamiento de las Perillas en el Panel (∆3 ): Las cuatro perillas del tablero pertenecen al
+P
+simplex unitario ∆3 = {w ∈ R4≥0 | 4m=1 wm = 1}, organizadas en dos bloques estratégicos:
+• Máxima Resiliencia: Soporte a escasez hídrica y estrés climático (w1 ) y conservación/regeneración
+de suelo al final de la rotación (w2 ).
+• Máxima Optimización: Maximización de ganancia económica neta (w3 ) y mayor rapidez de rotación o liquidez (w4 ).
+Cuando el agricultor incrementa o reduce una perilla wi sin bloquear las restantes, el sistema reescala proporcionalmente los demás pesos para evidenciar el compromiso (trade-off ) en tiempo
+
+
+real:
+wjnuevo = wj
+
+2.3
+
+1 − winuevo
+1 − wianterior
+
+
+,
+
+∀j ̸= i
+
+(1)
+
+Vector de Perturbaciones Exógenas (Forzamiento Climático) — d(t) ∈
+R3
+
+Son las series temporales meteorológicas extraídas de misiones satelitales de la NASA que
+impulsan la evolución diaria del sistema sin verse afectadas por el estado interno de la parcela:
+
+
+TNASA (t)
+
+
+
+
+
+d(t) =  frad,0 (t) 
+P0 (t)
+14
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+• Temperatura del Aire Regional (TNASA (t), ◦ C): Extraída de NASA POWER (y refinada con PRISM), sirve de referencia para calcular la temperatura exterior local en cada
+celda mediante el gradiente altitudinal Γ∆zi,j y, mediante un filtro pasa-bajos de 7 días,
+la temperatura radicular Tsoil,i,j (t).
+• Radiación Solar Incidente (frad,0 (t), W/m2 ): Proveniente de NASA POWER, aporta
+el flujo energético para la fotosíntesis (dB/dt) y el calentamiento radiativo del dosel
+(dT /dt).
+• Precipitación Total (P0 (t), mm/día): Proveniente de GPM/IMERG, constituye el ingreso hídrico natural y el agente erosivo principal sobre las pendientes desprotegidas.
+
+2.4
+
+Tensor de Parámetros Estáticos del Terreno — Θcampo,i,j
+
+Es la huella física y química fija de cada celda (i, j), precalculada una sola vez al cargar el
+polígono de la parcela a partir de los modelos digitales de elevación y bases edáficas:
+• Métrica Topográfica 2.5D (SRTM):
+– zi,j (m): Altitud sobre el nivel del mar (gobierna el enfriamiento por cota y la exposición a heladas).
+– θi,j (rad): Ángulo de pendiente (modula la infiltración cos θi,j , el drenaje sin θi,j y
+la pérdida de suelo dH
+).
+dt
+– ψi,j (rad): Orientación o aspect de la ladera (define el factor de proyección solar
+Gi,j (θ, ψ)).
+• Firma Química Basal del Suelo (SSURGO / WSS / FAO GAEZ):
+– OMi,j (%): Materia orgánica inicial (alimenta la mineralización microbiana natural
+del nitrógeno).
+– CICi,j (cmolc /kg): Capacidad de Intercambio Catiónico (controla la retención electrostática de N y K frente a la lixiviación).
+– pHi,j y ECi,j (dS/m): Acidez y salinidad superficial (definen el modulador de disponibilidad química ϕpH,EC,i,j ∈ [0, 1]).
+
+2.5
+
+Vector de Parámetros Fisiológicos del Cultivo — Θck
+
+Es la ficha técnica biológica, hídrica y económica de cada especie ck almacenada en el catálogo del sistema (calibrada con USDA Ag Data Commons, NASS QuickStats, FAO GAEZ y
+USDA AMS), cuyos coeficientes se cargan al conmutar q(t):
+
+15
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+• Parámetros Termodinámicos e Hídricos: Capacidad calorífica del dosel (Cp,c ), absortividad solar (αc ), conductancia estomática máxima (γmax,c ), profundidad radicular
+efectiva (Zr,c ), umbral de marchitez (Wpmp,c ), fracción de agotamiento permisible (pc ∈
+[0, 1], que define el umbral hídrico crítico Wcrit,i,j (ck )), temperatura óptima (Topt,c ), amplitud de tolerancia térmica (∆Ttol,c ) y umbrales letales (Thelada,c , Tletal,c ).
+• Parámetros de Crecimiento y Biogeoquímica: Eficiencia fotosintética (kp,c ), tasas de
+fijación de nitrógeno (Ffix,c ) y solubilización de fósforo (Fsol,c ), constantes de saturación
+media [KN , KP , KK ], coeficientes de extracción estequiométrica de N-P-K por tonelada
+cosechada y duración del ciclo (∆tck ).
+• Parámetros Económicos y Taxonómicos: Precio de venta en mercado (Pmercado,ck ), costo
+base de insumos (Cinsumos,ck ) y familia botánica (para aplicar la restricción fitosanitaria
+Pplagas = ∞).
+
+2.6
+
+Salidas Observables, Alertas de Riego y Métricas de Pareto
+
+Son las variables derivadas algebraicamente una vez resueltas las trayectorias de los cinco
+ejes de estado, sin necesidad de añadir ecuaciones diferenciales adicionales al núcleo físico:
+2.6.1
+
+Salidas Visuales por Celda yi,j (t) (Interfaz WebGL / 3D)
+
+1. Escudo Ambiental y Térmico de la Planta (AL,i,j (t), Cescudo,i,j (t)): Representa en
+tiempo real el estado de bienestar fisiológico del cultivo en cada celda (i, j) mediante
+dos canales acoplados (y se desactiva cuando q(t) = Transición):
+• Geometría (Área de Lissajous AL,i,j (t)): Área de la trayectoria cerrada formada
+por (Text,i,j (t), Ti,j (t)), que mide la capacidad amortiguadora del dosel frente a las
+oscilaciones diarias del clima.
+• Espectro Cromático Continuo (Azul ↔ Rojo): El color del escudo se interpola
+continuamente entre Azul (condición ambiental óptima, Ψi,j → 1) y Rojo (condición crítica u hostil, Ψi,j → 0) según el Índice de Condición Ambiental (Ψi,j (t) ∈
+[0, 1]):
+Ψi,j (t) = A′ · B ′ · C ′
+2 !
+
+T
+−
+T
+i,j
+opt,c
+A′ = max 0, 1 −
+∆Ttol,c
+|
+{z
+}
+ηT,i,j (Confort Térmico)
+
+γc (Wi,j )
+γ
+| max,c
+{z }
+
+B′ =
+
+ηW,i,j (Estado Hídrico)
+
+16
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+′
+
+C = min
+|
+
+Agrophasor
+
+
+Ni,j
+Pi,j
+Ki,j
+,
+,
+Ni,j + KN Pi,j + KP Ki,j + KK
+{z
+}
+ηN,i,j (Suficiencia N-P-K)
+
+
+
+Cescudo,i,j (t) = Lerp CRojo (0), CAzul (1), Ψi,j (t)
+
+Rango de
+
+Color del
+
+Geometría
+
+Ψi,j (t)
+
+Escudo
+
+(Lissajous)
+
+Azul Cobalto /
+
+Elipse amplia
+
+Condición Óptima: Temperatura ideal,
+
+Cian
+
+(AL máxima)
+
+humedad suficiente en raíces y equilibrio de
+
+Ψi,j (t) → 1.0
+
+Diagnóstico Físico en Pantalla
+
+nutrientes; máxima amortiguación.
+Ψi,j (t) ≈ 0.5
+
+Violeta / Ámbar
+
+Elipse estrecha
+
+Estrés Moderado: Enfriamiento por altitud,
+inicio de déficit hídrico en ladera o
+deficiencia temprana de N-P-K.
+
+Ψi,j (t) → 0.0
+
+Rojo Intenso
+
+Línea colapsada
+
+Condición Crítica: Riesgo inminente de
+
+(AL → 0)
+
+necrosis por helada, golpe de calor, cierre
+estomático por sequía o suelo agotado.
+
+q(t) =
+Transición
+
+Escudo
+
+Sin figura vegetal
+
+Suelo Desnudo (B ≈ 0): Durante cosecha y
+labranza desaparece el escudo de la planta y
+
+Desactivado
+
+se activa la alerta de exposición a la lluvia.
+
+2. Índice de Salud Química (ηN,i,j (t) ∈ [0, 1]): Proyección escalar del vector Ni,j (t) mediante la Ley del Mínimo de Liebig para desplegar una barra única de fertilidad en la
+interfaz e identificar qué nutriente específico limita el crecimiento.
+3. Deformación Geométrica y Color del Suelo (zvisual,i,j (t), Csuelo,i,j (t)): Diagnostica el
+daño físico acumulativo del terreno independientemente de la salud instantánea de la
+planta: hunde los vértices de la malla 3D proporcionalmente a la erosión acumulada
+(zvisual,i,j = κz zi,j − κer [Hi,j (0) − Hi,j (t)]) y degrada el color de la superficie de marrón
+fértil a gris rocoso según la fracción restante Hi,j (t)/Hi,j (0).
+2.6.2
+
+Capa de Diagnóstico y Alertas de Riego (Posprocesamiento Algebraico)
+
+A partir de las trayectorias de humedad ya calculadas por las ecuaciones diferenciales y del
+umbral crítico propio de cada especie, definido mediante su fracción de agotamiento permisible
+p ck :
+
+
+Wcrit,i,j (ck ) = Wcc,i,j − pck Wcc,i,j − Wpmp,i,j
+17
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+el módulo de alertas evalúa al final de la simulación tres indicadores operativos sin modificar
+ni re-integrar el sistema dinámico:
+• Detección de ventana de riego: Emite un aviso en cada instante t∗ en el que la humedad
+promedio del lote cruza por debajo del umbral de confort de la especie (W̄ (t∗ ) ≤ Wcrit (ck )).
+W̄
+• Alerta anticipada por tasa de secado: Utiliza la derivada temporal ya evaluada ( ddt
+)
+
+para notificar con τaviso días de antelación antes de que el escudo vire hacia el rojo:
+W̄ (t) + τaviso
+
+dW̄
+≤ Wcrit (ck )
+dt
+
+• Cálculo de la lámina sugerida: Determina el volumen exacto de agua requerido para
+reponer la capacidad de campo considerando la eficiencia del sistema de riego (ηriego ∈
+(0, 1]):
+
+Wcc − W̄ (t∗ )
+ηriego
+
+Isugerido (t∗ ) =
+2.6.3
+
+[mm]
+
+Vector de Evaluación Global F(π) ∈ R4 y Selección Dual: Rutas Rápidas vs. Perillas (Frente de Pareto / A∗ )
+
+Integra la trayectoria espacio-temporal completa de los cinco ejes para evaluar cada secuencia
+candidata π mediante cuatro métricas normalizadas F̂(π) = [fˆ1 (π), fˆ2 (π), fˆ3 (π), fˆ4 (π)]T ∈
+[0, 1]4 , vinculadas directamente a las cuatro perillas del panel:
+• f1 (π) (Perilla w1 — Austeridad Hídrica / Clima): Inestabilidad térmica y estrés hídrico
+acumulado (inverso del área de Lissajous AL,i,j y del índice cromático Ψi,j ).
+• f2 (π) (Perilla w2 — Mejor Tierra al Final): Degradación neta de suelo y nutrientes
+(pérdida acumulada de espesor fértil ∆H y déficit final del vector Ni,j ).
+• f3 (π) (Perilla w3 — Mayor Ganancia): Déficit económico neto (costos operativos de
+riego, fertilización y semillas menos ingresos por cosecha Yk · Pmercado,ck ).
+• f4 (π) (Perilla w4 — Rotación Más Rápida): Tiempo promedio de ciclo (duración media
+de retorno de capital de la secuencia π).
+Mecanismo Dual de Decisión sobre el Frente de Pareto (P ∗ ): Una vez que el algoritmo A∗
+explora el grafo de rotaciones hasta la profundidad m elegida por el agricultor y precalcula el
+conjunto de secuencias óptimas no dominadas P ∗ , la interfaz ofrece dos formas complementarias de seleccionar su estrategia π ∗ (w) mediante escalarización lineal:
+
+∗
+
+π (w) = arg min∗ J(π; w) = arg min∗
+π∈P
+
+π∈P
+
+18
+
+4
+X
+m=1
+
+wm fˆm (π)
+
+(2)
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+1. Opciones Rápidas (Rutas Predefinidas / Presets): Para una decisión inmediata con un
+solo clic, el panel organiza el Frente de Pareto en 3 categorías principales y 7 rutas
+precalibradas, donde cada botón carga automáticamente un vector base wpreset ∈ ∆3 y
+posiciona las perillas en ese punto:
+• Ruta A — Máxima Resiliencia (prioriza el bloque {w1 , w2 }):
+(a) Austeridad hídrica (w1 dominante): minimiza la dependencia de riego y el
+estrés térmico/hídrico.
+(b) Equilibrio entre austeridad y estado de la tierra (w1 ≈ w2 ): balancea el ahorro
+de agua con la conservación del suelo.
+(c) Mejor tierra al final (w2 dominante): maximiza la regeneración de nutrientes
+Ni,j y frena la erosión ∆H.
+• Ruta B — Equilibrio entre Máxima Resiliencia y Alto Rendimiento (w1 ≈ w2 ≈
+w3 ≈ w4 ): punto central de compromiso global del Frente de Pareto que balancea
+sostenibilidad física y rentabilidad económica.
+• Ruta C — Alto Rendimiento (prioriza el bloque {w3 , w4 }):
+(a) Rotación más rápida (w4 dominante): prioriza especies de ciclo corto para
+acelerar la liquidez y el retorno de capital.
+(b) Equilibrio entre rotación más rápida y mayor ganancia (w3 ≈ w4 ): combina
+ciclos ágiles con alto margen comercial.
+(c) Mayor ganancia (w3 dominante): maximiza el beneficio económico neto por
+cosecha.
+2. Modificación Manual mediante Perillas (w ∈ ∆3 ): Si el agricultor desea explorar puntos intermedios o ajustar cualquiera de las rutas anteriores a sus condiciones particulares,
+puede girar libremente las cuatro perillas (w1 , w2 , w3 , w4 ). Al variar una perilla, las demás
+se reajustan proporcionalmente en el simplex ∆3 , recalculando π ∗ (w) sobre P ∗ en menos
+de 1 ms (sin re-ejecutar las EDOs) y mostrando en tiempo real el compromiso (trade-off )
+entre los cuatro indicadores del tablero y el bloque topográfico 3D.
+
+3
+
+Ecuaciones diferenciales
+
+El motor agrofísico de AgroPhasor queda completamente determinado por 5 ecuaciones diferenciales ordinarias (EDOs) acopladas —que se despliegan en 7 ecuaciones escalares al expandir el eje vectorial de macronutrientes Ni,j (t) = [Ni,j (t), Pi,j (t), Ki,j (t)]T ∈ R3 —, cerradas mediante 11 relaciones algebraicas constitutivas y 2 condiciones de salto discreto gob-
+
+19
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+ernadas por el modo operativo q(t) ∈ Q.
+
+3.1
+
+Consideraciones para el Planteamiento de las EDOs
+
+1. Sincronización operativa por lote (q(t) uniforme): Se mantiene un único cultivo ck
+sembrado y cosechado simultáneamente a lo largo de toda la parcela (o segmentado en
+máximo 2 macro-zonas topográficas contiguas), evitando la explosión combinatoria y la
+inviabilidad logística de gestionar especies distintas por celda.
+∂
+∂
+2. Desacoplamiento espacial lateral ( ∂x
+= ∂y
+= 0): Cada celda (i, j) se modela como
+
+una columna agrofísica 2.5D independiente; la topografía de SRTM (zi,j , θi,j , ψi,j ) actúa
+como un campo geométrico estático que modula el microclima, la infiltración y la erosión
+local sin ecuaciones en derivadas parciales de flujo superficial.
+3. Separación de escalas temporales e integración exponencial exacta: Dentro de un
+paso de integración ∆t (1 día en visualización 3D o macro-pasos de 10 días en la búsqueda
+A∗ ), las variables de evolución lenta (Bi,j , Hi,j ) se congelan al inicio del intervalo. Esto
+linealiza las ecuaciones rápidas y permite resolverlas mediante soluciones analíticas cerradas incondicionalmente estables y no negativas.
+4. Independencia entre núcleo físico, alertas de riego y perillas deslizables (w ∈ ∆3 ): El
+sistema dinámico evoluciona la física pura del cultivo y del suelo con la lámina de riego
+I(t) como entrada externa (I(t) ≡ 0 en diagnóstico natural/secano), delegando tanto las
+alertas de riego como la ponderación de prioridades mediante perillas deslizables a una
+capa algebraica posterior.
+5. Horizonte temporal dinámico por cantidad variable de fases (m): Dado que el agricultor puede modificar el número de fases m y cada especie posee su propia duración fenológica ∆tck , el intervalo de integración [0, Tsim (π)] no es fijo, sino que se construye dinámiP
+camente para cada secuencia candidata como Tsim (π) = m
+k=1 (∆tck + ∆ttrans ).
+
+3.2
+
+Las 5 Ecuaciones Diferenciales del Motor Dinámico
+
+Para cada celda (i, j) de la malla 2.5D, el estado continuo xi,j (t) = [Ti,j , Wi,j , Ni,j , Bi,j , Hi,j ]T
+evoluciona según las siguientes ecuaciones:
+3.2.1
+
+EDO 1: Balance Energético y Temperatura del Dosel — Ti,j (t) (◦ C)
+
+Gobierna la inercia térmica de la planta equilibrando la radiación solar absorbida, la convección
+con el aire local y el enfriamiento evaporativo por transpiración estomática:
+
+20
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Cp,c
+
+Agrophasor
+
+
+dTi,j
+= αc frad,i,j (t) − hc Ti,j − Text,i,j (t)
+dt
+− λev γc (Wi,j ) VPDi,j (t)
+
+Cuando q(t) = Transición, los parámetros conmutan a los del suelo desnudo (γc → 0 y Cp,c →
+Cp,suelo ).
+3.2.2
+
+EDO 2: Balance Hidrológico Radicular — Wi,j (t) (mm)
+
+Controla el almacenamiento de agua útil en la zona de raíces, modulando la infiltración y el
+drenaje gravitacional según la pendiente local θi,j :
+
+dWi,j
+= P0 (t) cos(θi,j ) + ηriego I(t)
+dt
+− ETc,i,j (Ti,j , Wi,j ) − kd,i,j sin(θi,j ) Wi,j
+Sujeta a la frontera superior de saturación 0 ≤ Wi,j (t) ≤ Wcc,i,j (Hi,j ); todo excedente hídrico
+sobre la capacidad de campo Wcc se descarta instantáneamente como escorrentía superficial.
+3.2.3
+
+EDO 3: Dinámica Vectorial de Macronutrientes — Ni,j (t) = [Ni,j , Pi,j , Ki,j ]T (kg/ha)
+
+En forma compacta matricial, los tres macronutrientes principales evolucionan simultáneamente mediante una única ecuación diferencial lineal por paso temporal con matriz diagonal
+de tasas de pérdida ΛN,i,j = diag(ΛN,i,j , ΛP,i,j , ΛK,i,j ) ∈ R3×3 :
+dNi,j
+= SN,i,j (t) − ΛN,i,j (t) Ni,j
+dt
+
+Al expandir sus 3 componentes escalares (denotando Ic (q) = I q(t) = Cultivo(ck ) para
+activar la absorción radicular únicamente cuando existe un cultivo vivo), cada nutriente obedece
+su propia cinética edáfica:
+• 3a. Nitrógeno (Ni,j ):
+
+
+dNi,j
+Wi,j
+= FN,fert (t) + Ffix,c Bi,j + kmin,0 OMi,j
+fT (Tsoil,i,j )
+dt
+Wcc,i,j
+
+
+
+
+dHi,j
+kl,N
+− Wi,j
++ Ic (q) ϕpH,EC,i,j ka,N fT (Tsoil,i,j ) + ξN
+Ni,j
+CICi,j
+dt
+• 3b. Fósforo (Pi,j ) (sin lixiviación vertical; su pérdida física dominante ocurre por ex21
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+tracción y arrastre superficial de suelo erosionado):
+dPi,j
+= FP,fert (t) + Fsol,c Bi,j
+dt
+
+− Ic (q) ϕpH,EC,i,j ka,P fT (Tsoil,i,j ) Wi,j + ξP
+
+dHi,j
+dt
+
+
+Pi,j
+
+• 3c. Potasio (Ki,j ) (retenido electrostáticamente por CICi,j y reciclado durante la descomposición de rastrojos):
+dKi,j
+= FK,fert (t) + SK,res (q, Bi,j )
+dt
+
+
+
+
+kl,K
+dHi,j
+− Wi,j
++ Ic (q) ϕpH,EC,i,j ka,K fT (Tsoil,i,j ) + ξK
+Ki,j
+CICi,j
+dt
+Aplicando el factor integrante matricial sobre el paso ∆t mediante la función auxiliar ϕ1 (z) =
+1−e−z
+z
+
+(con ϕ1 (0) = 1, libre de singularidades cuando Λm → 0), se obtiene la actualización
+
+analítica exacta e incondicionalmente no negativa:
+
+Ni,j (t + ∆t) = exp(−ΛN,i,j ∆t) Ni,j (t)
++ ∆t ϕ1 (ΛN,i,j ∆t) SN,i,j
+3.2.4
+
+EDO 4: Crecimiento de Biomasa y Descomposición de Rastrojo — Bi,j (t) (t/ha)
+
+Cambia de régimen dinámico según el modo operativo discreto q(t):
+• Si q(t) = Cultivo(ck ) (fotosíntesis neta bajo la Ley del Mínimo de Liebig):
+dBi,j
+= kp,c frad,i,j (t) ηT,i,j (Ti,j )
+dt
+
+
+
+Wi,j
+Wi,j + KW,c
+
+
+
+
+
+Bi,j
+ηN,i,j (Ni,j ) 1 −
+Bmax,c
+
+
+
+− km,c (Ti,j ) Bi,j
+• Si q(t) = Transición (descomposición microbiana del rastrojo residual):
+dBi,j
+= −kdec Bi,j
+dt
+3.2.5
+
+EDO 5: Erosión Hídrica de la Capa Fértil — Hi,j (t) (mm)
+
+Registra el desgaste irreversible del horizonte orgánico provocado por la lluvia en laderas desprotegidas:
+
+22
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+dHi,j
+= −ker (q) P0 (t) sin(θi,j ) e−λB Bi,j (t)
+dt
+Donde ker (q) alcanza su valor máximo (ker,labranza ) durante las ventanas de suelo removido (q =
+Transición). Al congelar Bi,j (t) dentro del paso ∆t, su actualización cerrada es:
+Hi,j (t + ∆t) = max 0, Hi,j (t) − ker (q) P0 (t) sin(θi,j ) e−λB Bi,j (t) ∆t
+
+3.3
+
+
+
+Ecuaciones Constitutivas de Cierre (Relaciones Algebraicas)
+
+Para cerrar el sistema sin añadir ecuaciones diferenciales adicionales, el motor evalúa en cada
+paso temporal las siguientes 11 relaciones algebraicas:
+Función Auxiliar
+
+Expresión Matemática
+
+Significado Físico
+
+Temperatura del
+
+Text,i,j (t) = TNASA (t) − Γ(zi,j − zref )
+
+Enfriamiento adiabático
+por altitud SRTM (zi,j ).
+
+Aire Local
+Temperatura del
+Suelo
+Radiación
+
+Tsoil,i,j (t) =
+
+1 P6
+Text,i,j (t − m)
+7 m=0
+
+frad,i,j (t) = frad,0 (t) Gi,j (θi,j , ψi,j )
+
+Amortiguamiento térmico
+subsuperficial radicular.
+Corrección geométrica por
+pendiente y orientación
+
+Proyectada
+
+(aspect).
+
+Déficit de Presión de
+Vapor
+
+Límites Hídricos del
+Suelo
+
+
+
+17.27 Ti,j
+VPDi,j (Ti,j , t) = max 0, 0.6108 exp
+Ti,j + 237.3
+!
+Demanda evaporativa no
+− ea (t)
+Wcc,i,j (Hi,j ) = θf c,i,j Hi,j (t),
+Wpmp,i,j (Hi,j ) = θwp,i,j Hi,j (t)
+
+negativa del dosel (Tetens).
+
+Capacidad de campo y
+marchitez escalados por
+Hi,j .
+
+γc (Wi,j ) = γmax,c · min 1,
+Conductancia
+Estomática
+
+
+max 0,
+
+Cierre
+estomático acotado y
+!
+Wi,j − Wpmp,i,j
+libre de singularidad.
+max(ϵ, Wcrit,i,j (ck ) − Wpmp,i,j )
+Continúa en la página siguiente...
+
+23
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Función Auxiliar
+
+Evapotranspiración
+Total
+
+Agrophasor
+
+Expresión Matemática
+
+Significado Físico
+
+ETc,i,j = γc (Wi,j ) VPDi,j (Ti,j , t)
+
+
+Transpiración del dosel más
+Wi,j
++ Esuelo,0
+e−λB Bi,j
+evaporación directa
+max(ϵ, Wcc,i,j )
+(mm/día).
+
+Factor Térmico
+
+ηT,i,j (Ti,j ) =
+
+Fotosintético
+
+max 0, 1 −
+
+
+
+Ti,j − Topt,c
+∆Ttol,c
+
+ηN,i,j (Ni,j ) = min
+
+Campana de eficiencia
+
+2 !
+
+térmica alrededor de Topt,c .
+
+Ni,j
+,
+Ni,j + KN
+
+Factor Químico
+Ki,j
+Pi,j
+,
+Pi,j + KP Ki,j + KK
+
+(Liebig)
+
+Cinética Enzimática
+
+(T
+
+fT (Tsoil,i,j ) = Q10soil,i,j
+
+!
+
+−20)/10
+
+Limitación del crecimiento
+por el macronutriente más
+escaso.
+Aceleración microbiana y
+radicular con el calor del
+
+(Q10 )
+
+suelo.
+Aporte de K por
+
+SK,res (q, Bi,j ) = I(q =
+
+Liberación de potasio
+
+Rastrojo
+
+Transición) · βK kdec Bi,j
+
+mientras el rastrojo se
+descompone.
+
+3.4
+
+Ecuaciones de Salto Discreto (Cosecha y Siembra)
+
+Como AgroPhasor es un sistema dinámico híbrido, en los instantes ts en que conmuta el modo
+discreto q(t) se aplican dos reglas instantáneas de transición:
+1. Evento de Cosecha (q : Cultivo(ck ) → Transición):
+• Se registra el rendimiento comercial cosechado (siendo HIck el índice de cosecha
+de la especie):
+Yk,i,j = HIck · (1 − rres ) Bi,j (t−
+s)
+• La biomasa en campo cae discontinuamente a la fracción de rastrojo conservado y
+se activa el coeficiente de erosión por labranza:
+−
+Bi,j (t+
+s ) = rres Bi,j (ts ),
+
+ker (q) ← ker,labranza
+
+2. Evento de Siembra (q : Transición → Cultivo(ck+1 )):
+
+24
+
+Universidad Nacional de Ingeniería - Qillawasi
+
+Agrophasor
+
+• El carbono del rastrojo remanente se incorpora a la materia orgánica del suelo (OMi,j ),
+se inicializa la biomasa germinativa de la nueva especie y se restaura la protección
+basal del cultivo:
+Bi,j (t+
+s ) = B0,ck+1 ,
+
+3.5
+
+ker (q) ← ker,cultivo
+
+Conexión con el Frente de Pareto y Perillas Deslizables (w ∈ ∆3 )
+
+Al integrar el sistema sobre el horizonte dinámico de planificación [0, Tsim (π)], con Tsim (π) =
+Pm
+k=1 (∆tck + ∆ttrans ), las trayectorias obtenidas determinan directamente las cuatro métricas
+normalizadas F̂(π) = [fˆ1 (π), fˆ2 (π), fˆ3 (π), fˆ4 (π)]T ∈ [0, 1]4 que ponderan las cuatro perillas
+deslizables del panel:
+1
+f1 (π) =
+M L Tsim (π)
+
+Z Tsim (π) X
+M X
+L
+0
+
+
+1 − Ψi,j (t) dt,
+
+i=1 j=1
+
+"
+#
+
+M
+L
+
+
+Hi,j (0) − Hi,j Tsim (π)
+1 XX
+f2 (π) =
+ωH
++ ωN 1 − ηN,i,j Tsim (π)
+,
+M L i=1 j=1
+Hi,j (0)
+m
+X
+
+
+
+f3 (π) =
+
+365
+Cinsumos,ck + Criego,k − Ȳk · Pmercado,ck ,
+Tsim (π) k=1
+
+f4 (π) =
+
+
+1 X
+∆tck + ∆ttrans
+m k=1
+
+(3)
+
+m
+
+De este modo, cada vez que el agricultor fija el número de fases m, el motor resuelve la
+física diferencial sobre el horizonte correspondiente para construir el conjunto de secuencias
+no dominadas P ∗ mediante A∗ , mientras que deslizar cualquiera de las cuatro perillas w =
+[w1 , w2 , w3 , w4 ]T ∈ ∆3 selecciona instantáneamente la estrategia óptima
+P
+π ∗ (w) = arg minπ∈P ∗ 4 ′ wm′ fˆm′ (π) sin re-ejecutar las ecuaciones diferenciales.
+m =1
+
+4
+
+Solución de las ecuaciones diferenciales
+
+4.1
+
+EDO 1: Solución
+
+25
+
+
