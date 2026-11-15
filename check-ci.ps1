@@ -29,13 +29,21 @@ $commitsCount = (git rev-list --count "$targetBase..HEAD" 2>$null)
 if (-not $commitsCount) { $commitsCount = 0 }
 
 $gitleaksCmd = Get-Command gitleaks -ErrorAction SilentlyContinue
+$wingetGitleaks = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe\gitleaks.exe"
 
+$gitleaksExe = $null
 if ($gitleaksCmd) {
-    Write-Host "   Ejecutando Gitleaks..." -ForegroundColor Gray
+    $gitleaksExe = "gitleaks"
+} elseif (Test-Path $wingetGitleaks) {
+    $gitleaksExe = $wingetGitleaks
+}
+
+if ($gitleaksExe) {
+    Write-Host "   Ejecutando Gitleaks ($gitleaksExe)..." -ForegroundColor Gray
     if ($commitsCount -gt 0) {
-        gitleaks detect --source $repoRoot -v --redact --log-opts="$targetBase..HEAD"
+        & $gitleaksExe detect --source $repoRoot -v --redact --log-opts="$targetBase..HEAD"
     } else {
-        gitleaks detect --source $repoRoot -v --redact --log-opts="HEAD~3..HEAD"
+        & $gitleaksExe detect --source $repoRoot -v --redact --log-opts="HEAD~3..HEAD"
     }
     Write-Host "[OK] Gitleaks: Cero secretos detectados." -ForegroundColor Green
 } else {

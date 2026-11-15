@@ -41,9 +41,18 @@ else
     echo "   Repositorio inicial ($TOTAL_COMMITS commit(s)): Escaneando historial completo..."
 fi
 
+GITLEAKS_BIN=""
 if command -v gitleaks >/dev/null 2>&1; then
+    GITLEAKS_BIN="gitleaks"
+elif [ -f "$LOCALAPPDATA/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe/gitleaks.exe" ]; then
+    GITLEAKS_BIN="$LOCALAPPDATA/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe/gitleaks.exe"
+elif [ -f "/c/Users/Krishna/AppData/Local/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe/gitleaks.exe" ]; then
+    GITLEAKS_BIN="/c/Users/Krishna/AppData/Local/Microsoft/WinGet/Packages/Gitleaks.Gitleaks_Microsoft.Winget.Source_8wekyb3d8bbwe/gitleaks.exe"
+fi
+
+if [ -n "$GITLEAKS_BIN" ]; then
     # shellcheck disable=SC2086
-    gitleaks detect $GITLEAKS_ARGS
+    "$GITLEAKS_BIN" detect $GITLEAKS_ARGS
 elif command -v docker >/dev/null 2>&1; then
     # shellcheck disable=SC2086
     docker run --rm -v "$REPO_ROOT:/repo" zricethezav/gitleaks:latest \
