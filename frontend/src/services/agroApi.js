@@ -91,14 +91,14 @@ export async function searchPlaces(query) {
 }
 
 export async function fetchRotation(payload, signal) {
-  const response = await fetch('/api/v1/rotaciones', {
+  const response = await fetch('/api/v1/parcelas/rotaciones', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     signal,
   });
   const data = await response.json().catch(() => null);
-  if (!response.ok || !Array.isArray(data?.routes)) {
+  if (!response.ok || !Array.isArray(data?.pareto)) {
     throw new Error(data?.error || 'No se pudo calcular la rotación.');
   }
   return data;
