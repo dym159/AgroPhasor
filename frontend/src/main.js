@@ -5,7 +5,7 @@ import { renderParcelBar } from './components/parcelBar.js';
 import { renderRotationsPanel } from './components/rotationsPanel.js';
 import { renderStrategyPanel } from './components/strategyPanel.js';
 import { createTimelineBar } from './components/timelineBar.js';
-import { ROTATION_TYPES, STRATEGY_MODES } from './data/mockVisualData.js';
+import { STRATEGY_MODES } from './data/mockVisualData.js';
 import { fetchParcelEdo1, fetchSimulation } from './services/agroApi.js';
 import { createUiState } from './state/uiState.js';
 
@@ -16,24 +16,17 @@ function rebalanceKnobs(currentKnobs, changedId, nextValue) {
   const otherSum = otherKeys.reduce((acc, k) => acc + (currentKnobs[k] ?? 0), 0);
 
   const nextKnobs = { ...currentKnobs, [changedId]: clamped };
-  if (otherSum <= 0) {
-    const share = Math.floor(remainder / otherKeys.length);
-    otherKeys.forEach((k, idx) => {
-      nextKnobs[k] = idx === 0 ? remainder - share * (otherKeys.length - 1) : share;
-    });
-    return nextKnobs;
-  }
-
-  let assigned = 0;
-  otherKeys.forEach((k, idx) => {
-    if (idx === otherKeys.length - 1) {
-      nextKnobs[k] = Math.max(0, remainder - assigned);
-    } else {
-      const scaled = Math.round(((currentKnobs[k] ?? 0) / otherSum) * remainder);
-      nextKnobs[k] = scaled;
-      assigned += scaled;
-    }
+  let unassigned = remainder;
+  const fractions = otherKeys.map((key) => {
+    const share = otherSum > 0
+      ? remainder * currentKnobs[key] / otherSum
+      : remainder / otherKeys.length;
+    nextKnobs[key] = Math.floor(share);
+    unassigned -= nextKnobs[key];
+    return { key, fraction: share - nextKnobs[key] };
   });
+  fractions.sort((a, b) => b.fraction - a.fraction);
+  for (const { key } of fractions.slice(0, unassigned)) nextKnobs[key]++;
   return nextKnobs;
 }
 
@@ -50,6 +43,8 @@ function bootstrapApp() {
   let edo1Controller = null;
   let edo1Timer = null;
   let lastEdo1Signature = '';
+  let recommendationController = null;
+  let recommendationTimer = null;
 
   function scheduleEdo1Simulation() {
     const state = store.getState();
@@ -102,22 +97,34 @@ function bootstrapApp() {
     }, 250);
   }
 
-  async function syncCc09Simulation() {
+  function refreshRecommendation(patch = {}, delay = 0) {
+    recommendationController?.abort();
+    clearTimeout(recommendationTimer);
+    store.setState({ ...patch, simulationResult: null, recommendationStatus: 'loading' });
+
     const state = store.getState();
     if (!state.hasActiveTerrain) return;
-    const sim = await fetchSimulation(
-      state.selectedParcel,
-      state.selectedStrategyId,
-      state.knobs
-    );
-    if (!sim) return;
+    const strategy = STRATEGY_MODES.find((mode) => mode.id === state.selectedStrategyId);
+    const subRoute = strategy?.subRoutes.find((route) => route.id === state.selectedSubRouteId);
+    const weights = state.recommendationSource === 'knobs' ? state.knobs : subRoute?.weights;
+    const controller = new AbortController();
+    recommendationController = controller;
 
-    const backendRoute = sim.rotacion_recomendada?.ruta_seleccionada;
-    const matchedRotation = ROTATION_TYPES.find((r) => r.backendRoute === backendRoute);
-    store.setState({
-      simulationResult: sim,
-      ...(matchedRotation ? { selectedRotationId: matchedRotation.id } : {}),
-    });
+    recommendationTimer = setTimeout(async () => {
+      try {
+        const sim = await fetchSimulation(
+          state.selectedParcel, state.selectedStrategyId, weights, controller.signal
+        );
+        if (controller.signal.aborted) return;
+        if (!sim?.rotacion_recomendada?.sugerencia_optimizada?.length) {
+          store.setState({ recommendationStatus: 'error' });
+          return;
+        }
+        store.setState({ simulationResult: sim, recommendationStatus: 'ready' });
+      } catch {
+        if (!controller.signal.aborted) store.setState({ recommendationStatus: 'error' });
+      }
+    }, delay);
   }
 
   const knobsPanel = createKnobsPanel(
@@ -125,10 +132,11 @@ function bootstrapApp() {
     store.getState().knobs,
     (knobId, value) => {
       const current = store.getState();
+      if (current.knobsLocked || current.knobs[knobId] === value) return;
       const nextKnobs = rebalanceKnobs(current.knobs, knobId, value);
-      store.setState({ knobs: nextKnobs });
-      syncCc09Simulation();
-    }
+      refreshRecommendation({ knobs: nextKnobs, recommendationSource: 'knobs' }, 140);
+    },
+    () => store.setState({ knobsLocked: !store.getState().knobsLocked })
   );
 
   const cropsPanel = createCropsPanel(cropsEl, store.getState(), {
@@ -171,23 +179,25 @@ function bootstrapApp() {
   const handleDeleteTerrain = () => {
     lastEdo1Signature = '';
     edo1Controller?.abort();
+    recommendationController?.abort();
+    clearTimeout(recommendationTimer);
     store.setState({
       hasActiveTerrain: false,
       centerMode: 'select',
       edo1Result: null,
+      simulationResult: null,
       edo1StatusText: 'Terreno eliminado. Selecciona o dibuja otro lote.',
     });
   };
 
   const centerStage = createCenterStage(centerEl, {
     onSelectPresetParcel: (parcel) => {
-      store.setState({
+      refreshRecommendation({
         selectedParcel: parcel,
         hasActiveTerrain: true,
         edo1Result: null,
       });
       scheduleEdo1Simulation();
-      syncCc09Simulation();
     },
     onCustomPolygonDrawn: (polygonCoords) => {
       if (!polygonCoords?.length) return;
@@ -196,7 +206,7 @@ function bootstrapApp() {
       const centerLng =
         polygonCoords.reduce((acc, pt) => acc + pt[1], 0) / polygonCoords.length;
 
-      store.setState({
+      refreshRecommendation({
         selectedParcel: {
           id: `custom-${Date.now()}`,
           name: 'Terreno Satelital Dibujado',
@@ -207,7 +217,6 @@ function bootstrapApp() {
         edo1Result: null,
       });
       scheduleEdo1Simulation();
-      syncCc09Simulation();
     },
     onConfirmTerrain: () => {
       store.setState({ centerMode: 'terrain' });
@@ -226,23 +235,15 @@ function bootstrapApp() {
 
     renderStrategyPanel(strategyEl, state, {
       onSelectStrategy: (strategyId, subRouteId) => {
-        const modeSpec = STRATEGY_MODES.find((m) => m.id === strategyId);
-        const subSpec = modeSpec?.subRoutes.find((s) => s.id === subRouteId);
-        store.setState({
+        refreshRecommendation({
           selectedStrategyId: strategyId,
           selectedSubRouteId: subRouteId,
-          ...(subSpec?.knobs
-            ? { knobs: { ...subSpec.knobs } }
-            : modeSpec?.defaultKnobs
-              ? { knobs: { ...modeSpec.defaultKnobs } }
-              : {}),
-          ...(subSpec?.rotationId ? { selectedRotationId: subSpec.rotationId } : {}),
+          recommendationSource: 'strategy',
         });
-        syncCc09Simulation();
       },
     });
 
-    knobsPanel.update(state.knobs);
+    knobsPanel.update(state.knobs, state.knobsLocked);
     cropsPanel.update(state);
 
     renderRotationsPanel(rotationsEl, state, (rotationId) => {
@@ -256,7 +257,7 @@ function bootstrapApp() {
   store.subscribe(renderAll);
   renderAll(store.getState());
   scheduleEdo1Simulation();
-  syncCc09Simulation();
+  refreshRecommendation();
 }
 
 document.addEventListener('DOMContentLoaded', bootstrapApp);

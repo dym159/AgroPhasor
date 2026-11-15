@@ -60,7 +60,8 @@ def rank_rotations(
         if not isfinite(low) or not isfinite(high) or low > high:
             raise ValueError(f"Invalid normalization bounds for {key}.")
 
-    for mode in MODES:
+    modes = dict.fromkeys((*MODES, *weights))
+    for mode in modes:
         mode_weights = weights[mode]
         if (
             set(mode_weights) != set(METRICS)
@@ -85,7 +86,7 @@ def rank_rotations(
     }
 
     by_mode = {}
-    for mode in MODES:
+    for mode in modes:
         active_weight = sum(weights[mode][key] for key in compared_metrics)
         if (mode == "profit" and not has_economics) or active_weight == 0:
             by_mode[mode] = None

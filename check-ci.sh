@@ -93,16 +93,23 @@ echo ""
 echo "[3/3] Verificacion de codigo y pruebas del proyecto..."
 
 # Si existe un backend con Python
+find_python() {
+    for candidate in py python3 python; do
+        if command -v "$candidate" >/dev/null 2>&1 && "$candidate" --version >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
 if [ -d "$REPO_ROOT/backend" ] || [ -f "$REPO_ROOT/requirements.txt" ] || [ -f "$REPO_ROOT/pyproject.toml" ]; then
     echo "   Verificando componentes de Python..."
-    if command -v pytest >/dev/null 2>&1; then
-        pytest
-    elif command -v python3 >/dev/null 2>&1; then
-        python3 -m unittest discover tests
-    elif command -v python >/dev/null 2>&1; then
-        python -m unittest discover tests
-    elif command -v py >/dev/null 2>&1; then
-        py -m unittest discover tests
+    PYTHON_CMD="$(find_python || true)"
+    if [ -n "$PYTHON_CMD" ] && "$PYTHON_CMD" -m pytest --version >/dev/null 2>&1; then
+        "$PYTHON_CMD" -m pytest
+    elif [ -n "$PYTHON_CMD" ]; then
+        "$PYTHON_CMD" -m unittest discover tests
     else
         echo "   (pytest/python no esta en el entorno local; omitiendo suite Python)"
     fi

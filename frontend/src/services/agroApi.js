@@ -38,14 +38,14 @@ export async function fetchParcelEdo1(parcel, cropId = 'papa', signal) {
   return data;
 }
 
-export async function fetchSimulation(parcel, strategyId, knobs) {
+export async function fetchSimulation(parcel, strategyId, weights, signal) {
   const geometry = parcelToGeoJsonGeometry(parcel);
   const modeSpec = STRATEGY_MODES.find((m) => m.id === strategyId) ?? STRATEGY_MODES[1];
 
   const payload = {
     lote_seleccionado_id: parcel?.id ?? 'lote-1',
     modo_prioridad: modeSpec.backendMode,
-    perillas: knobs,
+    perillas: weights,
     geo_features: geometry
       ? {
           type: 'FeatureCollection',
@@ -64,10 +64,11 @@ export async function fetchSimulation(parcel, strategyId, knobs) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal,
   });
 
-  if (!response.ok) return null;
-  return response.json().catch(() => null);
+  if (!response.ok) throw new Error('No se pudo calcular la rotación recomendada.');
+  return response.json();
 }
 
 export async function searchPlaces(query) {

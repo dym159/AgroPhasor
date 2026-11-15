@@ -355,6 +355,11 @@ body {
   cursor: pointer;
 }
 
+.knob-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 /* Top-Right: Dynamic Crops Catalog */
 .crop-search-input {
   width: 100%;
@@ -432,6 +437,40 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.rotation-recommendation {
+  padding: 9px 12px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(56, 189, 248, 0.07);
+  font-size: 0.8rem;
+}
+
+.rotation-recommendation h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.rotation-recommendation p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+}
+
+.rotation-recommendation ol {
+  margin: 7px 0 0;
+  padding-left: 1.1rem;
+}
+
+.rotation-recommendation li + li {
+  margin-top: 4px;
+}
+
+.rotation-recommendation li span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
 }
 
 .rotation-card {
@@ -628,10 +667,33 @@ body {
   height: 100%;
   display: block;
   cursor: grab;
+  touch-action: none;
 }
 
 .terrain-canvas:active {
   cursor: grabbing;
+}
+
+.terrain-canvas:focus-visible {
+  outline: 2px solid #7dd3fc;
+  outline-offset: -2px;
+}
+
+.terrain-view-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.terrain-view-controls .btn {
+  background: var(--bg-surface);
+}
+
+.terrain-view-controls .btn-active {
+  border-color: #7dd3fc;
+  color: #7dd3fc;
 }
 
 /* Compact Timeline Elements */

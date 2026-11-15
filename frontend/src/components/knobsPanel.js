@@ -1,13 +1,21 @@
 import { PDF_KNOBS } from '../data/mockVisualData.js';
 import { clearChildren, createElement } from '../utils/dom.js';
 
-export function createKnobsPanel(container, initialKnobs, onKnobChange) {
+export function createKnobsPanel(container, initialKnobs, onKnobChange, onToggleLock) {
   if (!container) return { update: () => {} };
 
   clearChildren(container);
 
+  const lockButton = createElement('button', {
+    type: 'button',
+    className: 'btn',
+    text: 'Bloquear',
+    attrs: { 'aria-label': 'Bloquear perillas', 'aria-pressed': false },
+    onClick: onToggleLock,
+  });
   const header = createElement('div', { className: 'panel-header' }, [
     createElement('h2', { className: 'panel-title', text: 'Perillas' }),
+    lockButton,
   ]);
 
   const list = createElement('div', { className: 'knobs-list panel-scroll' });
@@ -42,9 +50,7 @@ export function createKnobsPanel(container, initialKnobs, onKnobChange) {
     });
 
     slider.addEventListener('input', (event) => {
-      const nextValue = Number(event.target.value);
-      valueEl.textContent = `${nextValue}%`;
-      onKnobChange(knob.id, nextValue);
+      onKnobChange(knob.id, Number(event.target.value));
     });
 
     const row = createElement('div', { className: 'knob-row' }, [rowHeader, slider]);
@@ -55,10 +61,14 @@ export function createKnobsPanel(container, initialKnobs, onKnobChange) {
 
   container.append(header, list);
 
-  function update(knobsState) {
+  function update(knobsState, locked) {
+    lockButton.textContent = locked ? 'Desbloquear' : 'Bloquear';
+    lockButton.classList.toggle('btn-active', locked);
+    lockButton.setAttribute('aria-pressed', String(locked));
     for (const [id, controls] of controlsById.entries()) {
       const val = knobsState[id];
       if (val == null) continue;
+      controls.slider.disabled = locked;
       if (Number(controls.slider.value) !== val) {
         controls.slider.value = String(val);
       }

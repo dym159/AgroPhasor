@@ -1,22 +1,31 @@
 import { VISUAL_CROPS } from '../data/mockVisualData.js';
-import { buildTerrainFromSatellite } from '../services/satelliteTerrainBuilder.js';
+import { buildTerrainFromSatellite, normalizeParcelBoundary } from '../services/satelliteTerrainBuilder.js';
 import { clearChildren, createElement } from '../utils/dom.js';
 
 const GRID_ROWS = 6;
 const GRID_COLS = 8;
+const HALF_WIDTH = 0.9;
+const HALF_DEPTH = 0.65;
+const INITIAL_YAW = -0.58;
+const INITIAL_TILT = 0.5;
 
 export function mountTerrainVisualizer(container, state, callbacks) {
   if (!container) return { update: () => {}, destroy: () => {} };
 
   clearChildren(container);
 
+  const boundary = splitBoundaryByCell(normalizeParcelBoundary(state.selectedParcel.polygon));
   let currentCrop = findCrop(state.previewCropId);
-  let yawAngle = -0.58;
-  let isDragging = false;
-  let lastPointerX = 0;
+  let yawAngle = INITIAL_YAW;
+  let tiltAngle = INITIAL_TILT;
+  let offsetX = 0;
+  let offsetY = 0;
+  let panEnabled = false;
+  let drag = null;
   let isDisposed = false;
   let terrainModel = null;
-  let lastEdo1Count = state.edo1Result?.cells?.length ?? 0;
+  let lastEdo1Result = state.edo1Result;
+  let terrainLoadId = 0;
 
   const variationBadge = createElement('span', {
     className: 'panel-tag',
@@ -51,9 +60,39 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     ]),
   ]);
 
-  const canvas = createElement('canvas', { className: 'terrain-canvas' });
+  const canvas = createElement('canvas', {
+    className: 'terrain-canvas',
+    attrs: { tabindex: 0, 'aria-label': 'Vista 3D del terreno. Usa las flechas para girar o desplazar.' },
+  });
+
+  const panButton = createElement('button', {
+    type: 'button',
+    className: 'btn',
+    text: 'Desplazar',
+    attrs: { 'aria-pressed': false },
+    onClick: () => {
+      panEnabled = !panEnabled;
+      panButton.setAttribute('aria-pressed', String(panEnabled));
+      panButton.classList.toggle('btn-active', panEnabled);
+    },
+  });
+  const resetButton = createElement('button', {
+    type: 'button',
+    className: 'btn',
+    text: 'Restablecer vista',
+    onClick: () => {
+      yawAngle = INITIAL_YAW;
+      tiltAngle = INITIAL_TILT;
+      offsetX = 0;
+      offsetY = 0;
+      drawScene();
+    },
+  });
+  const viewControls = createElement('div', { className: 'terrain-view-controls' }, [
+    panButton, resetButton,
+  ]);
   const canvasWrap = createElement('div', { className: 'terrain-canvas-wrap' }, [
-    canvas,
+    canvas, viewControls,
   ]);
 
   const body = createElement('div', { className: 'stage-body' }, [canvasWrap]);
@@ -69,36 +108,62 @@ export function mountTerrainVisualizer(container, state, callbacks) {
   resizeObserver.observe(canvasWrap);
 
   canvas.addEventListener('pointerdown', (event) => {
-    isDragging = true;
-    lastPointerX = event.clientX;
+    if (drag || event.button !== 0) return;
+    drag = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      pan: panEnabled || event.shiftKey,
+    };
     canvas.setPointerCapture(event.pointerId);
   });
 
   canvas.addEventListener('pointermove', (event) => {
-    if (!isDragging) return;
-    const deltaX = event.clientX - lastPointerX;
-    lastPointerX = event.clientX;
-    yawAngle = clamp(yawAngle + deltaX * 0.008, -1.25, -0.15);
-    drawScene();
+    if (drag?.id !== event.pointerId) return;
+    moveView(event.clientX - drag.x, event.clientY - drag.y, drag.pan);
+    drag.x = event.clientX;
+    drag.y = event.clientY;
   });
 
-  const stopDragging = () => {
-    isDragging = false;
+  const stopDragging = (event) => {
+    if (drag?.id === event.pointerId) drag = null;
   };
   canvas.addEventListener('pointerup', stopDragging);
   canvas.addEventListener('pointercancel', stopDragging);
+  canvas.addEventListener('lostpointercapture', stopDragging);
+  canvas.addEventListener('keydown', (event) => {
+    const step = {
+      ArrowLeft: [-24, 0], ArrowRight: [24, 0], ArrowUp: [0, -24], ArrowDown: [0, 24],
+    }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    moveView(step[0], step[1], panEnabled || event.shiftKey);
+  });
+
+  function moveView(dx, dy, pan) {
+    if (pan) {
+      offsetX += dx;
+      offsetY += dy;
+    } else {
+      yawAngle = (yawAngle + dx * 0.008) % (2 * Math.PI);
+      tiltAngle = clamp(tiltAngle - dy * 0.006, 0.18, Math.PI / 2);
+    }
+    drawScene();
+  }
 
   syncCanvasSize(canvas, canvasWrap);
+  drawScene();
   loadSatelliteTerrain(state.selectedParcel, state.edo1Result);
 
   async function loadSatelliteTerrain(parcel, edo1Result) {
+    const loadId = ++terrainLoadId;
     const built = await buildTerrainFromSatellite(
       parcel,
       GRID_ROWS,
       GRID_COLS,
       edo1Result
     );
-    if (isDisposed) return;
+    if (isDisposed || loadId !== terrainLoadId) return;
 
     terrainModel = built;
     const tempSuffix =
@@ -119,26 +184,28 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.clearRect(0, 0, width, height);
 
-    const centerX = width * 0.5;
-    const centerY = height * 0.57;
+    const centerX = width * 0.5 + offsetX;
+    const centerY = height * 0.57 + offsetY;
     const scale = Math.min(width, height) * 0.42;
+    const cosYaw = Math.cos(yawAngle);
+    const sinYaw = Math.sin(yawAngle);
+    const sinTilt = Math.sin(tiltAngle);
+    const cosTilt = Math.cos(tiltAngle);
 
     const project = (nx, ny, nz) => {
-      const cosA = Math.cos(yawAngle);
-      const sinA = Math.sin(yawAngle);
-      const rx = nx * cosA - ny * sinA;
-      const ry = nx * sinA + ny * cosA;
+      const rx = nx * cosYaw - ny * sinYaw;
+      const ry = nx * sinYaw + ny * cosYaw;
       return {
         x: centerX + rx * scale,
-        y: centerY + ry * scale * 0.48 - nz * scale * 0.65,
+        y: centerY + (ry * sinTilt - nz * cosTilt) * scale,
       };
     };
 
     drawExtrudedBox(context, project, {
-      x1: -0.9,
-      y1: -0.65,
-      x2: 0.9,
-      y2: 0.65,
+      x1: -HALF_WIDTH,
+      y1: -HALF_DEPTH,
+      x2: HALF_WIDTH,
+      y2: HALF_DEPTH,
       zBottom: -0.2,
       zTop: 0,
       topColor: '#2c4730',
@@ -151,17 +218,16 @@ export function mountTerrainVisualizer(container, state, callbacks) {
       drawSatelliteCells(context, project, terrainModel);
     }
 
-    drawCrops(context, project, currentCrop.tint, terrainModel);
+    if (terrainModel) drawCrops(context, project, currentCrop.tint, terrainModel);
     drawSpatialGrid(context, project);
+    drawParcelBoundary(context, project, boundary, terrainModel);
   }
 
   function update(nextState) {
     currentCrop = findCrop(nextState.previewCropId);
-    const nextEdo1Count = nextState.edo1Result?.cells?.length ?? 0;
-    if (nextEdo1Count !== lastEdo1Count) {
-      lastEdo1Count = nextEdo1Count;
+    if (nextState.edo1Result !== lastEdo1Result) {
+      lastEdo1Result = nextState.edo1Result;
       loadSatelliteTerrain(nextState.selectedParcel, nextState.edo1Result);
-      return;
     }
     drawScene();
   }
@@ -177,8 +243,8 @@ export function mountTerrainVisualizer(container, state, callbacks) {
 
 function drawSatelliteCells(ctx, project, model) {
   const { rows, cols, normalizedHeights, cellColors, gridPoints } = model;
-  const dx = 1.8 / cols;
-  const dy = 1.3 / rows;
+  const dx = (2 * HALF_WIDTH) / cols;
+  const dy = (2 * HALF_DEPTH) / rows;
 
   const cellsToDraw = [];
   for (let r = 0; r < rows; r++) {
@@ -186,12 +252,12 @@ function drawSatelliteCells(ctx, project, model) {
       const idx = r * cols + c;
       if (gridPoints[idx] && !gridPoints[idx].insidePolygon) continue;
 
-      const x1 = -0.9 + c * dx;
-      const y1 = -0.65 + r * dy;
+      const x1 = -HALF_WIDTH + c * dx;
+      const y1 = -HALF_DEPTH + r * dy;
       const x2 = x1 + dx;
       const y2 = y1 + dy;
       const zTop = normalizedHeights[idx] || 0;
-      const centerScreen = project((x1 + x2) * 0.5, (y1 + y2) * 0.5, zTop);
+      const centerScreen = project((x1 + x2) * 0.5, (y1 + y2) * 0.5, 0);
 
       cellsToDraw.push({
         x1,
@@ -267,8 +333,8 @@ function averageY(points) {
 }
 
 function drawCrops(ctx, project, tint, model) {
-  const dx = 1.8 / GRID_COLS;
-  const dy = 1.3 / GRID_ROWS;
+  const dx = (2 * HALF_WIDTH) / GRID_COLS;
+  const dy = (2 * HALF_DEPTH) / GRID_ROWS;
 
   for (let r = 0; r < GRID_ROWS; r++) {
     for (let c = 0; c < GRID_COLS; c++) {
@@ -277,8 +343,8 @@ function drawCrops(ctx, project, tint, model) {
         continue;
       }
 
-      const nx = -0.9 + (c + 0.5) * dx;
-      const ny = -0.65 + (r + 0.5) * dy;
+      const nx = -HALF_WIDTH + (c + 0.5) * dx;
+      const ny = -HALF_DEPTH + (r + 0.5) * dy;
       const baseZ = model?.normalizedHeights?.[idx] || 0.01;
       const root = project(nx, ny, baseZ);
       const tip = project(nx, ny, baseZ + 0.14);
@@ -301,13 +367,13 @@ function drawCrops(ctx, project, tint, model) {
 
 function drawSpatialGrid(ctx, project) {
   const gridZ = 0.4;
-  ctx.strokeStyle = 'rgba(56, 189, 248, 0.52)';
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.26)';
   ctx.lineWidth = 1;
 
   for (let c = 0; c <= GRID_COLS; c++) {
-    const nx = -0.9 + (c / GRID_COLS) * 1.8;
-    const start = project(nx, -0.65, gridZ);
-    const end = project(nx, 0.65, gridZ);
+    const nx = -HALF_WIDTH + (c / GRID_COLS) * (2 * HALF_WIDTH);
+    const start = project(nx, -HALF_DEPTH, gridZ);
+    const end = project(nx, HALF_DEPTH, gridZ);
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
@@ -315,14 +381,73 @@ function drawSpatialGrid(ctx, project) {
   }
 
   for (let r = 0; r <= GRID_ROWS; r++) {
-    const ny = -0.65 + (r / GRID_ROWS) * 1.3;
-    const start = project(-0.9, ny, gridZ);
-    const end = project(0.9, ny, gridZ);
+    const ny = -HALF_DEPTH + (r / GRID_ROWS) * (2 * HALF_DEPTH);
+    const start = project(-HALF_WIDTH, ny, gridZ);
+    const end = project(HALF_WIDTH, ny, gridZ);
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
     ctx.stroke();
   }
+}
+
+function splitBoundaryByCell(points) {
+  const segments = [];
+  for (let i = 0; i < points.length; i++) {
+    const start = points[i];
+    const end = points[(i + 1) % points.length];
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    if (dx === 0 && dy === 0) continue;
+
+    const crossings = new Set([0, 1]);
+    for (const [origin, delta, cells] of [[start.x, dx, GRID_COLS], [start.y, dy, GRID_ROWS]]) {
+      if (!delta) continue;
+      for (let line = 1; line < cells; line++) {
+        const t = (line / cells - origin) / delta;
+        if (t > 0 && t < 1) crossings.add(t);
+      }
+    }
+    const stops = [...crossings].sort((a, b) => a - b);
+    for (let j = 1; j < stops.length; j++) {
+      const from = stops[j - 1];
+      const to = stops[j];
+      const midpoint = (from + to) / 2;
+      const col = clamp(Math.floor((start.x + dx * midpoint) * GRID_COLS), 0, GRID_COLS - 1);
+      const row = clamp(Math.floor((start.y + dy * midpoint) * GRID_ROWS), 0, GRID_ROWS - 1);
+      segments.push({
+        cell: row * GRID_COLS + col,
+        x1: (2 * (start.x + dx * from) - 1) * HALF_WIDTH,
+        y1: (2 * (start.y + dy * from) - 1) * HALF_DEPTH,
+        x2: (2 * (start.x + dx * to) - 1) * HALF_WIDTH,
+        y2: (2 * (start.y + dy * to) - 1) * HALF_DEPTH,
+      });
+    }
+  }
+  return segments;
+}
+
+function drawParcelBoundary(ctx, project, segments, model) {
+  if (!segments.length) return;
+  ctx.save();
+  ctx.beginPath();
+  for (const [index, { cell, x1, y1, x2, y2 }] of segments.entries()) {
+    const height = model?.gridPoints[cell]?.insidePolygon ? model.normalizedHeights[cell] : 0;
+    const start = project(x1, y1, height);
+    const end = project(x2, y2, height);
+    if (index === 0) ctx.moveTo(start.x, start.y);
+    else ctx.lineTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+  }
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#11283a';
+  ctx.lineWidth = 5;
+  ctx.stroke();
+  ctx.strokeStyle = '#7dd3fc';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.restore();
 }
 
 function fillPolygon(ctx, points, fillColor, strokeColor) {

@@ -9,6 +9,7 @@ búsqueda de localidades Nominatim (/api/places) y servicio de archivos estátic
 """
 
 from datetime import datetime, timezone
+from math import isfinite
 import http.server
 import json
 import os
@@ -193,7 +194,18 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         Candidate(route_id, dict(zip(ROTATION_METRICS, spec["metrics"])))
         for route_id, spec in ROTATION_ROUTES.items()
     ]
-    ranking = rank_rotations(candidates, ROTATION_BOUNDS, ROTATION_WEIGHTS)
+    weights = ROTATION_WEIGHTS
+    sliders = payload.get("perillas")
+    if isinstance(sliders, dict):
+        values = [sliders.get(f"w{i}") for i in range(1, len(ROTATION_METRICS) + 1)]
+        if all(type(value) in (int, float) and 0 <= value <= 100 and isfinite(value) for value in values):
+            total = sum(values)
+            if total > 0:
+                weights = {**ROTATION_WEIGHTS, "custom": dict(zip(
+                    ROTATION_METRICS, (value / total for value in values)
+                ))}
+                ranking_mode = "custom"
+    ranking = rank_rotations(candidates, ROTATION_BOUNDS, weights)
     ordered_routes = ranking.by_mode.get(ranking_mode) or ranking.pareto
     selected_route_id = ordered_routes[0] if ordered_routes else "papa_habas_quinua"
     selected_route = ROTATION_ROUTES[selected_route_id]

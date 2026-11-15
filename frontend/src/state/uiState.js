@@ -17,8 +17,9 @@ export function createUiState() {
     selectedParcel: DEMO_PARCELS[0],
     hasActiveTerrain: true,
     selectedStrategyId: STRATEGY_MODES[1].id,
-    selectedSubRouteId: STRATEGY_MODES[1].subRoutes[0].id,
+    selectedSubRouteId: null,
     knobs: initialKnobs,
+    knobsLocked: false,
     activeCropGroup: CROP_GROUPS[0],
     cropSearchQuery: '',
     selectedCropIds: [VISUAL_CROPS[0].id, VISUAL_CROPS[1].id, VISUAL_CROPS[3].id],
@@ -29,6 +30,8 @@ export function createUiState() {
     edo1Result: null,
     edo1StatusText: '',
     simulationResult: null,
+    recommendationSource: 'strategy',
+    recommendationStatus: 'loading',
   };
 
   const listeners = new Set();

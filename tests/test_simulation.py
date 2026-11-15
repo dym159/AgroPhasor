@@ -110,6 +110,19 @@ class TestAgroPhasorSimulation(unittest.TestCase):
             res_optimo["rotacion_recomendada"]["pareto_frente"],
         )
 
+    def test_knobs_rerank_the_same_pareto_candidates(self):
+        payload = {"modo_prioridad": "balance_optimo"}
+        water = self.handler.process_simulation({
+            **payload, "perillas": {"w1": 100, "w2": 0, "w3": 0, "w4": 0},
+        })["rotacion_recomendada"]
+        profit = self.handler.process_simulation({
+            **payload, "perillas": {"w1": 0, "w2": 0, "w3": 100, "w4": 0},
+        })["rotacion_recomendada"]
+
+        self.assertEqual(water["ruta_seleccionada"], "avena_habas_quinua")
+        self.assertEqual(profit["ruta_seleccionada"], "papa_maiz_habas")
+        self.assertEqual(water["pareto_frente"], profit["pareto_frente"])
+
     def test_liebig_minimum_and_shield_states(self):
         """Verifica la lógica matemática de la Ley de Liebig y los 4 estados del escudo."""
         # Simulación de evaluación física

@@ -32,7 +32,7 @@ export function renderStrategyPanel(container, state, callbacks) {
       {
         type: 'button',
         className: `strategy-card ${isSelected ? 'is-selected' : ''}`,
-        onClick: () => callbacks.onSelectStrategy(mode.id, mode.subRoutes[0].id),
+        onClick: () => callbacks.onSelectStrategy(mode.id, null),
       },
       [dot, createElement('span', { className: 'strategy-name', text: mode.label })]
     );

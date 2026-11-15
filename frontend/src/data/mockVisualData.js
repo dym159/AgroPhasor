@@ -72,11 +72,10 @@ export const STRATEGY_MODES = [
     backendMode: 'mayor_ganancia',
     label: 'Máximo Rendimiento',
     accentColor: '#f59e0b',
-    defaultKnobs: { w1: 15, w2: 15, w3: 45, w4: 25 },
     subRoutes: [
-      { id: 'fast-cycle', label: 'Rotación rápida', knobs: { w1: 15, w2: 15, w3: 30, w4: 40 }, rotationId: 'agil-ciclo-corto' },
-      { id: 'yield-balance', label: 'Equilibrio', knobs: { w1: 20, w2: 20, w3: 35, w4: 25 }, rotationId: 'forrajera-mixta' },
-      { id: 'max-profit', label: 'Mayor ganancia', knobs: { w1: 10, w2: 15, w3: 50, w4: 25 }, rotationId: 'comercial-intensiva' },
+      { id: 'fast-cycle', label: 'Rotación rápida', weights: { w1: 15, w2: 15, w3: 30, w4: 40 } },
+      { id: 'yield-balance', label: 'Equilibrio', weights: { w1: 20, w2: 20, w3: 35, w4: 25 } },
+      { id: 'max-profit', label: 'Mayor ganancia', weights: { w1: 10, w2: 15, w3: 50, w4: 25 } },
     ],
   },
   {
@@ -84,9 +83,8 @@ export const STRATEGY_MODES = [
     backendMode: 'balance_optimo',
     label: 'Balance Óptimo',
     accentColor: '#38bdf8',
-    defaultKnobs: { w1: 25, w2: 25, w3: 25, w4: 25 },
     subRoutes: [
-      { id: 'global-pareto', label: 'Compromiso global', knobs: { w1: 25, w2: 25, w3: 25, w4: 25 }, rotationId: 'zonificada-25d' },
+      { id: 'global-pareto', label: 'Compromiso global', weights: { w1: 25, w2: 25, w3: 25, w4: 25 } },
     ],
   },
   {
@@ -94,11 +92,10 @@ export const STRATEGY_MODES = [
     backendMode: 'maxima_resiliencia',
     label: 'Máxima Resiliencia',
     accentColor: '#22c55e',
-    defaultKnobs: { w1: 40, w2: 35, w3: 10, w4: 15 },
     subRoutes: [
-      { id: 'water-austerity', label: 'Austeridad hídrica', knobs: { w1: 50, w2: 25, w3: 10, w4: 15 }, rotationId: 'austeridad-hidrica' },
-      { id: 'resilience-balance', label: 'Equilibrio', knobs: { w1: 35, w2: 35, w3: 15, w4: 15 }, rotationId: 'zonificada-25d' },
-      { id: 'best-soil', label: 'Mejor tierra', knobs: { w1: 25, w2: 50, w3: 10, w4: 15 }, rotationId: 'hospital-suelo' },
+      { id: 'water-austerity', label: 'Austeridad hídrica', weights: { w1: 50, w2: 25, w3: 10, w4: 15 } },
+      { id: 'resilience-balance', label: 'Equilibrio', weights: { w1: 35, w2: 35, w3: 15, w4: 15 } },
+      { id: 'best-soil', label: 'Mejor tierra', weights: { w1: 25, w2: 50, w3: 10, w4: 15 } },
     ],
   },
 ];
@@ -111,12 +108,12 @@ export const PDF_KNOBS = [
 ];
 
 export const ROTATION_TYPES = [
-  { id: 'austeridad-hidrica', name: 'Austeridad Hídrica', backendRoute: 'quinua_habas_avena' },
-  { id: 'hospital-suelo', name: 'Hospital de Suelo', backendRoute: 'papa_habas_quinua' },
-  { id: 'zonificada-25d', name: 'Zonificada 2.5D', backendRoute: 'papa_habas_quinua' },
-  { id: 'forrajera-mixta', name: 'Forrajera / Mixta', backendRoute: 'maiz_habas_papa' },
-  { id: 'agil-ciclo-corto', name: 'Ágil / Ciclo Corto', backendRoute: 'quinua_habas_avena' },
-  { id: 'comercial-intensiva', name: 'Comercial Intensiva', backendRoute: 'maiz_habas_papa' },
+  { id: 'austeridad-hidrica', name: 'Austeridad Hídrica' },
+  { id: 'hospital-suelo', name: 'Hospital de Suelo' },
+  { id: 'zonificada-25d', name: 'Zonificada 2.5D' },
+  { id: 'forrajera-mixta', name: 'Forrajera / Mixta' },
+  { id: 'agil-ciclo-corto', name: 'Ágil / Ciclo Corto' },
+  { id: 'comercial-intensiva', name: 'Comercial Intensiva' },
 ];
 
 export const TIMELINE_MONTHS = [

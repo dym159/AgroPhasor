@@ -55,13 +55,27 @@ function interpolateFromSrtmCells(gridPoints, srtmCells) {
   });
 }
 
-function buildGridCoordinates(polygon, rows, cols) {
+function getParcelBounds(polygon) {
   const lats = polygon.map((pt) => pt[0]);
   const lngs = polygon.map((pt) => pt[1]);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
+  return {
+    minLat: Math.min(...lats),
+    maxLat: Math.max(...lats),
+    minLng: Math.min(...lngs),
+    maxLng: Math.max(...lngs),
+  };
+}
+
+export function normalizeParcelBoundary(polygon) {
+  const { minLat, maxLat, minLng, maxLng } = getParcelBounds(polygon);
+  return polygon.map(([lat, lng]) => ({
+    x: (lng - minLng) / (maxLng - minLng || 1),
+    y: (maxLat - lat) / (maxLat - minLat || 1),
+  }));
+}
+
+function buildGridCoordinates(polygon, rows, cols) {
+  const { minLat, maxLat, minLng, maxLng } = getParcelBounds(polygon);
 
   const points = [];
   for (let r = 0; r < rows; r++) {
