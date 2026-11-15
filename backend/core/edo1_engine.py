@@ -13,7 +13,6 @@ T(t + dt) = T_eq + (T(t) - T_eq) * exp(-dt / tau_eff)
 import math
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
-import numpy as np
 
 from backend.models.crop_parameters import CropParameters
 from backend.core.physics import (
@@ -99,16 +98,19 @@ def solve_edo1_step(
     )
 
 
-def compute_lissajous_area(t_air_series: np.ndarray, t_canopy_series: np.ndarray) -> float:
+def compute_lissajous_area(t_air_series: List[float], t_canopy_series: List[float]) -> float:
     """
     Calcula el área de la trayectoria cerrada en el plano de fase (T_air(t), T_dosel(t)).
-    Fórmula de agrimensura / Gauss para el área del polígono (Sección 2.6.1).
+    Fórmula de Gauss / Shoelace para el área del polígono (Sección 2.6.1).
     """
-    x = np.asarray(t_air_series, dtype=float)
-    y = np.asarray(t_canopy_series, dtype=float)
-    if len(x) < 3 or len(y) < 3:
+    n = len(t_air_series)
+    if n < 3 or len(t_canopy_series) < 3:
         return 0.0
-    return float(0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1))))
+    area = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        area += t_air_series[i] * t_canopy_series[j] - t_air_series[j] * t_canopy_series[i]
+    return float(abs(area) * 0.5)
 
 
 def simulate_canopy_diurnal_cycle(
@@ -150,10 +152,11 @@ def simulate_canopy_diurnal_cycle(
         fever_alerts.append(step_res.is_fever)
         frost_alerts.append(step_res.is_frost_risk)
         
-    al_area = compute_lissajous_area(
-        np.array(t_ext_hourly),
-        np.array(canopy_temps)
-    )
+    al_area = compute_lissajous_area(t_ext_hourly, canopy_temps)
+    
+    mean_temp = sum(canopy_temps) / float(len(canopy_temps))
+    max_temp = max(canopy_temps)
+    min_temp = min(canopy_temps)
     
     return {
         "t_canopy_hourly": canopy_temps,
@@ -162,7 +165,7 @@ def simulate_canopy_diurnal_cycle(
         "fever_alerts": fever_alerts,
         "frost_alerts": frost_alerts,
         "lissajous_area": round(al_area, 2),
-        "mean_canopy_temp": round(float(np.mean(canopy_temps)), 2),
-        "max_canopy_temp": round(float(np.max(canopy_temps)), 2),
-        "min_canopy_temp": round(float(np.min(canopy_temps)), 2)
+        "mean_canopy_temp": round(mean_temp, 2),
+        "max_canopy_temp": round(max_temp, 2),
+        "min_canopy_temp": round(min_temp, 2)
     }
