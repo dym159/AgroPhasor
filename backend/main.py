@@ -13,7 +13,7 @@ import json
 import os
 import sys
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timezone
 
 PORT = int(os.environ.get("PORT", 8000))
 HOST = os.environ.get("HOST", "0.0.0.0")
@@ -48,7 +48,7 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
                 "status": "online",
                 "service": "AgroPhasor Mechanics Simulation Engine",
                 "version": "1.0-alpha",
-                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "default_parcel": {
                     "name": "Valle del Mantaro, Junín",
                     "latitude": -12.06,
@@ -96,7 +96,7 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
                 "status": "guardado",
                 "lote_id": lote_id,
                 "mensaje": "Coordenadas GeoJSON registradas exitosamente en el servidor.",
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
             return
 
@@ -128,7 +128,7 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
                 "lote_id": lote_id,
                 "area_ha": area_ha,
                 "modo_activo": modo,
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+                "timestamp": datetime.now(timezone.utc).isoformat()
             },
             "indicadores": {
                 "humedad_radicular_W": {
