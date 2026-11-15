@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AgroPhasor · Gemelo Digital Agrícola</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet-Geoman CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css" />
+  
+  <!-- Estilos del Proyecto AgroPhasor -->
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/geoman-custom.css">
+</head>
+<body>
+
+  <!-- ==============================================================================
+   * 1. Cabecera Principal
+   * ============================================================================== -->
+  <header class="app-header">
+    <div class="brand">
+      <span class="brand-icon">🌱</span>
+      <div>
+        <div class="brand-title">AgroPhasor</div>
+        <span class="brand-tag">NASA Space Apps 2026</span>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Estado de conexión con el backend -->
+      <div id="backend-status-badge" class="badge-server badge-offline">
+        <span class="dot-offline"></span> Verificando...
+      </div>
+      <!-- Alternador de Capa Satelital / Mapa Callejero -->
+      <button id="btn-layer-toggle" class="btn-header-tool" title="Cambiar vista de mapa">
+        🛰️ Satélite
+      </button>
+      <!-- Botón de Geolocalización -->
+      <button id="btn-locate-me" class="btn-header-tool" title="Enfocar en mi ubicación actual">
+        📍 Mi Ubicación
+      </button>
+    </div>
+  </header>
+
+  <!-- ==============================================================================
+   * 2. Navegación de Pasos (Recorrido del agricultor)
+   * ============================================================================== -->
+  <nav class="steps-nav">
+    <button class="step-tab active" data-step="1">
+      <span>📍 1. Dibuja tu Parcela</span>
+    </button>
+    <button class="step-tab" data-step="2">
+      <span>📅 2. Calendario</span>
+    </button>
+    <button class="step-tab" data-step="3">
+      <span>🌾 3. Cultivos</span>
+    </button>
+    <button class="step-tab" data-step="4">
+      <span>📊 4. Diagnóstico</span>
+    </button>
+    <button class="step-tab" data-step="5">
+      <span>🔄 5. Rotación</span>
+    </button>
+  </nav>
+
+  <!-- ==============================================================================
+   * 3. Contenedor Principal (Mapa + Panel Lateral)
+   * ============================================================================== -->
+  <main class="app-main">
+    
+    <!-- Contenedor del Mapa Leaflet + Geoman -->
+    <section id="map-wrapper" class="map-wrapper">
+      <div id="map"></div>
+    </section>
+
+    <!-- Contenedor del Panel Lateral / Drawer Móvil -->
+    <section id="panel-wrapper" class="panel-wrapper mobile-hidden">
+      
+      <!-- ------------------------------------------------------------------------
+       * PASO 1: Dibuja tu Parcela (Geoman, Lotes y Confirmación)
+       * ------------------------------------------------------------------------ -->
+      <div class="step-content active" data-step="1">
+        <div class="step-header">
+          <h2>📍 Dibuja y Confirma tu Lote</h2>
+          <p>Usa la barra de Geoman para trazar el contorno. Confirma su forma para conservarla.</p>
+        </div>
+
+        <!-- Tarjeta de Estadísticas del Lote Activo -->
+        <div class="card">
+          <div class="card-title">
+            <span id="stat-lote-name">Lote 1: Parcela El Mantaro</span>
+            <span id="stat-lote-status-badge" class="status-badge badge-green">Confirmado</span>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-box">
+              <span id="stat-lote-area-ha" class="stat-value">2.45 ha</span>
+              <span class="stat-label">Área del Lote</span>
+            </div>
+            <div class="stat-box">
+              <span id="stat-lote-area-m2" class="stat-value">24,500 m²</span>
+              <span class="stat-label">Superficie Terreno</span>
+            </div>
+            <div class="stat-box">
+              <span id="stat-lote-perimeter" class="stat-value">632 m</span>
+              <span class="stat-label">Perímetro Total</span>
+            </div>
+            <div class="stat-box">
+              <span id="stat-lote-centroid" class="stat-value">-12.06°, -75.21°</span>
+              <span class="stat-label">Centroide (Junín)</span>
+            </div>
+          </div>
+
+          <!-- Acciones Rápidas sobre el Lote -->
+          <div class="btn-action-group">
+            <button id="btn-confirm-lote" class="btn-touch btn-primary" title="Confirmar el contorno actual">
+              ✅ Confirmar Contorno
+            </button>
+            <button id="btn-edit-lote" class="btn-touch btn-secondary" title="Editar vértices en el mapa">
+              ✏️ Editar Vértices
+            </button>
+            <button id="btn-zoom-lote" class="btn-touch btn-secondary" title="Centrar cámara en el lote">
+              🔍 Enfocar en Mapa
+            </button>
+            <button id="btn-delete-lote" class="btn-touch btn-danger" title="Eliminar este lote">
+              🗑️ Eliminar Lote
+            </button>
+          </div>
+        </div>
+
+        <!-- Botón de Simulación y Enlace a Servidor -->
+        <div class="card">
+          <div class="card-title">
+            <span>Simulación del Terreno</span>
+            <button id="btn-view-geojson" class="btn-micro-select">Ver GeoJSON</button>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">
+            Envía las coordenadas GeoJSON confirmadas al motor mecanicista.
+          </p>
+
+          <button id="btn-simulate" class="btn-touch btn-primary" style="font-size: 1.05rem;">
+            🚀 Simular Terreno
+          </button>
+
+          <!-- Toggle de verificación de resiliencia ante fallo -->
+          <div class="test-toggle-container">
+            <input type="checkbox" id="check-simulate-error">
+            <label for="check-simulate-error">
+              <strong>Probar fallo de simulación:</strong> Fuerza un error del servidor para verificar que el lote y su selección se conservan intactos.
+            </label>
+          </div>
+        </div>
+
+        <!-- Lista de Zonas / Lotes creados -->
+        <div class="card">
+          <div class="card-title">
+            <span>Tus Lotes Habilitados</span>
+            <button id="btn-add-lote" class="btn-micro-select">+ Nuevo Lote</button>
+          </div>
+          <div id="lotes-list" class="lotes-list"></div>
+        </div>
+      </div>
+
+      <!-- ------------------------------------------------------------------------
+       * PASO 2: Arma tu Calendario
+       * ------------------------------------------------------------------------ -->
+      <div class="step-content" data-step="2">
+        <div class="step-header">
+          <h2>📅 Calendario de Campañas</h2>
+          <p>Organiza los periodos de siembra y rotación para tu parcela activa.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>Escala de Meses</span>
+            <button id="btn-add-period" class="btn-micro-select">+ Agregar periodo</button>
+          </div>
+          <div id="periods-container"></div>
+        </div>
+      </div>
+
+      <!-- ------------------------------------------------------------------------
+       * PASO 3: Elige tus Cultivos
+       * ------------------------------------------------------------------------ -->
+      <div class="step-content" data-step="3">
+        <div class="step-header">
+          <h2>🌾 Catálogo de Cultivos Andinos</h2>
+          <p>Toca un cultivo para asignarlo a la campaña activa.</p>
+        </div>
+
+        <div id="crop-catalog-container" class="crop-catalog-container"></div>
+      </div>
+
+      <!-- ------------------------------------------------------------------------
+       * PASO 4: Revisa cómo está tu parcela (Diagnóstico & Balances)
+       * ------------------------------------------------------------------------ -->
+      <div class="step-content" data-step="4">
+        <div class="step-header">
+          <h2>📊 Diagnóstico del Terreno</h2>
+          <p>Valores integrados según el modelo de columnas acopladas 2.5D.</p>
+        </div>
+
+        <!-- Modos y Prioridades de Simulación -->
+        <div class="card">
+          <div class="card-title">Prioridad Agronómica</div>
+          <div class="priority-modes-group">
+            <button class="priority-btn" data-mode="maxima_resiliencia">🛡️ Resiliencia</button>
+            <button class="priority-btn active" data-mode="balance_optimo">⚖️ Óptimo</button>
+            <button class="priority-btn" data-mode="mayor_ganancia">💰 Ganancia</button>
+          </div>
+        </div>
+
+        <!-- Indicadores Físicos -->
+        <div class="indicators-grid">
+          <div id="ind-humedad-w" class="indicator-card">
+            <div class="stat-value" style="color: #10b981;">142.5 <small>mm</small></div>
+            <div class="stat-label">Humedad en raíces (W)</div>
+            <div class="stat-badge badge-green">Adecuado</div>
+          </div>
+          <div id="ind-temp-t" class="indicator-card">
+            <div class="stat-value" style="color: #38bdf8;">16.8 <small>°C</small></div>
+            <div class="stat-label">Temperatura dosel (T)</div>
+            <div class="stat-badge badge-blue">Óptimo</div>
+          </div>
+          <div id="ind-npk" class="indicator-card">
+            <div class="stat-value">N:88 P:34 K:195</div>
+            <div class="stat-label">Nutrientes NPK kg/ha</div>
+            <div class="stat-badge badge-amber">Equilibrado</div>
+          </div>
+          <div id="ind-espesor-h" class="indicator-card">
+            <div class="stat-value">278 <small>mm</small></div>
+            <div class="stat-label">Capa fértil (H)</div>
+            <div class="stat-badge badge-green">0.28 mm/año</div>
+          </div>
+          <div id="ind-escudo" class="indicator-card" style="grid-column: span 2;">
+            <div class="stat-value" style="color: #10b981;">87 <small>/ 100</small></div>
+            <div class="stat-label">Escudo Ambiental Global</div>
+            <div class="stat-badge badge-green">Alta Resiliencia a Sequías y Heladas</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ------------------------------------------------------------------------
+       * PASO 5: Compara y Decide (Rotación Optimizada)
+       * ------------------------------------------------------------------------ -->
+      <div class="step-content" data-step="5">
+        <div class="step-header">
+          <h2>🔄 Comparador de Rotaciones</h2>
+          <p>Alternativa óptima identificada mediante frente de Pareto multi-objetivo.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Secuencia Recomendada</div>
+          <table class="rotation-table">
+            <thead>
+              <tr>
+                <th>Campaña</th>
+                <th>Cultivo</th>
+                <th>Impacto</th>
+              </tr>
+            </thead>
+            <tbody id="rotation-table-body">
+              <tr>
+                <td><strong>P1 (Ene-May)</strong></td>
+                <td><span class="crop-pill">Papa Canchán</span></td>
+                <td><small class="text-green">14.1 t/ha est.</small></td>
+              </tr>
+              <tr>
+                <td><strong>P2 (Jun-Dic)</strong></td>
+                <td><span class="crop-pill">Habas Verdes</span></td>
+                <td><small class="text-green">Fijación +45 kg N/ha</small></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="margin-top: 10px;">
+            <div class="stat-label" style="margin-bottom: 4px;">Motivo Agronómico:</div>
+            <p id="rotation-reason" style="font-size: 0.82rem; color: #cbd5e1;">
+              La rotación de Papa con Habas Verdes restaura el nitrógeno agotado, previene la incidencia de nematodos y reduce la necesidad de fertilizantes sintéticos.
+            </p>
+          </div>
+
+          <button id="btn-apply-suggestion" class="btn-touch btn-primary" style="margin-top: 8px;">
+            🌱 Aplicar Rotación Sugerida a mi Parcela
+          </button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ==============================================================================
+   * 4. Alternador de Vista para Celulares (Mapa vs Panel)
+   * ============================================================================== -->
+  <div class="mobile-view-toggle">
+    <button class="active" data-view="map">🗺️ Ver Mapa</button>
+    <button data-view="panel">📋 Ver Panel</button>
+  </div>
+
+  <!-- ==============================================================================
+   * 5. Modal de Inspección Técnica GeoJSON (Contrato CC-02)
+   * ============================================================================== -->
+  <div id="geojson-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span style="font-weight: 700;">Payload GeoJSON (Contrato CC-02)</span>
+        <button id="btn-close-modal" class="btn-micro-select">✕ Cerrar</button>
+      </div>
+      <div class="modal-body">
+        <pre id="geojson-code" class="code-viewer"></pre>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-copy-geojson" class="btn-touch btn-primary" style="min-height: 38px; font-size: 0.85rem;">
+          📋 Copiar GeoJSON
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor flotante de notificaciones Toast -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Dependencias Externas -->
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet-Geoman Free JS -->
+  <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
+  <!-- Turf.js para cálculo geoespacial -->
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+  
+  <!-- Código de la Aplicación -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

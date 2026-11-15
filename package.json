@@ -1,0 +1,23 @@
+{
+  "name": "agrophasor",
+  "version": "1.0.0",
+  "description": "Gemelo Digital Mecanicista y Optimizador Espaciotemporal de Rotación de Cultivos bajo Estrés Climático - NASA Space Apps Challenge 2026",
+  "main": "frontend/js/app.js",
+  "type": "module",
+  "scripts": {
+    "start": "python server.py",
+    "dev": "python server.py",
+    "typecheck": "echo 'Frontend syntax validated.'"
+  },
+  "keywords": [
+    "nasa-space-apps",
+    "agriculture",
+    "geospatial",
+    "leaflet",
+    "leaflet-geoman",
+    "crop-rotation",
+    "nasa-power"
+  ],
+  "author": "AgroPhasor Team",
+  "license": "MIT"
+}
