@@ -89,9 +89,22 @@ function bootstrapApp() {
         );
         if (controller.signal.aborted) return;
 
+        const waterStr = result.lot_mean_soil_water_mm != null
+          ? ` · EDO 2: Agua ${result.lot_mean_soil_water_mm} mm (${result.water_status})`
+          : '';
+        const biomassStr = result.lot_mean_biomass_t_ha != null
+          ? ` · EDO 4: Biomasa ${result.lot_mean_biomass_t_ha} t/ha (NDVI ${result.lot_mean_ndvi})`
+          : '';
+        const irrStr = result.irrigation_alert && result.suggested_irrigation_mm > 0
+          ? ` · 💧 Riego ${result.suggested_irrigation_mm} mm`
+          : '';
+        const erosionStr = result.lot_mean_erosion_loss_mm != null
+          ? ` · EDO 5: Erosión ${result.lot_mean_erosion_loss_mm} mm (${result.erosion_risk_level})`
+          : '';
+
         store.setState({
           edo1Result: result,
-          edo1StatusText: `EDO 1 · ${result.cells_count} celdas 30m · Dosel ${result.lot_mean_temp} °C · ${result.date} (NASA POWER + SRTM v3)`,
+          edo1StatusText: `EDOs 1-5 · ${result.cells_count} celdas 30m · Dosel ${result.lot_mean_temp} °C${waterStr}${biomassStr}${irrStr}${erosionStr} · (NASA GPM/POWER/SMAP + SRTM)`,
         });
       } catch (error) {
         if (controller.signal.aborted) return;

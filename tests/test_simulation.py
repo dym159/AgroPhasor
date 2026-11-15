@@ -78,6 +78,14 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertGreater(ind["humedad_radicular_W"]["valor"], 0)
         self.assertEqual(ind["temperatura_dosel_T"]["unidad"], "°C")
 
+        # Verificación específica de dinámica EDO 4 (Biomasa y Teledetección)
+        self.assertIn("valor", ind["biomasa_aerea_B"])
+        self.assertEqual(ind["biomasa_aerea_B"]["unidad"], "t/ha")
+        self.assertIn("tasa_crecimiento_diario", ind["biomasa_aerea_B"])
+        self.assertIn("ndvi_satelital_estimado", ind["biomasa_aerea_B"])
+        self.assertIn("cobertura_foliar_pct", ind["biomasa_aerea_B"])
+        self.assertIn("rendimiento_estimado_cosecha", ind["biomasa_aerea_B"])
+
         # 4. Rotación recomendada de Pareto
         self.assertIn("rotacion_recomendada", result)
         rot = result["rotacion_recomendada"]
@@ -175,6 +183,29 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         status, payload = sent[-1]
         self.assertEqual(status, 200)
         self.assertEqual(payload, [{"name": "Huancayo, Junín, Perú", "lat": -12.0651, "lon": -75.2049}])
+
+    def test_edo4_web_api_endpoints(self):
+        """Verifica que el servicio web de EDO 4 compute ciclos y valide con el catálogo oficial."""
+        from backend.services.parcel_edo4 import ParcelEDO4Service
+        from backend.models.edo4_validator import validate_edo4_catalog
+
+        # 1. Validación de catálogo oficial gemini-code-179
+        val = validate_edo4_catalog("gemini-code-1794737993920.json")
+        self.assertTrue(val["valid"])
+
+        # 2. Simulación de ciclo
+        res = ParcelEDO4Service.simulate_crop_cycle(
+            crop_id="maiz",
+            f_rad_series_mj_m2=[20.0] * 15,
+            t_canopy_series_c=[22.0] * 15,
+            soil_water_series_mm=[65.0] * 15,
+            nitrogen_series_kg_ha=[70.0] * 15,
+            phosphorus_series_kg_ha=[40.0] * 15,
+            potassium_series_kg_ha=[90.0] * 15,
+        )
+        self.assertEqual(res["crop"], "Maíz")
+        self.assertEqual(res["days_simulated"], 15)
+        self.assertGreater(res["final_biomass_t_ha"], 0.0)
 
 if __name__ == "__main__":
     unittest.main()
