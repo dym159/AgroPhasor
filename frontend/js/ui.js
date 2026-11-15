@@ -6,10 +6,11 @@
 import { CONFIG } from './config.js';
 
 export class UIManager {
-  constructor({ lotesManager, mapManager, apiService }) {
+  constructor({ lotesManager, mapManager, apiService, escudo3d }) {
     this.lotesManager = lotesManager;
     this.mapManager = mapManager;
     this.apiService = apiService;
+    this.escudo3d = escudo3d;
 
     this.activeStep = 1;
     this.activeTab = "map"; // Para móvil: "map" | "panel"
@@ -52,6 +53,8 @@ export class UIManager {
       btnEditLote: document.getElementById('btn-edit-lote'),
       btnDeleteLote: document.getElementById('btn-delete-lote'),
       btnZoomLote: document.getElementById('btn-zoom-lote'),
+      btnStep1Shield: document.getElementById('btn-step1-shield'),
+      btnMapShield: document.getElementById('btn-map-shield'),
       
       // Estadísticas del lote activo
       statLoteName: document.getElementById('stat-lote-name'),
@@ -176,6 +179,21 @@ export class UIManager {
           this.switchMobileView("map");
         }
       });
+    }
+
+    // Botones para ver el Escudo 2.5D
+    const openEscudoView = () => {
+      this.goToStep(4);
+      this.switchMobileView("panel");
+      this.showToast("🛡️ Gemelo Digital 2.5D: Malla del escudo protector suspendida sobre tus cultivos.", "info");
+    };
+
+    if (this.elements.btnStep1Shield) {
+      this.elements.btnStep1Shield.addEventListener('click', openEscudoView);
+    }
+
+    if (this.elements.btnMapShield) {
+      this.elements.btnMapShield.addEventListener('click', openEscudoView);
     }
 
     // 4. Botón de Simulación principal (con Resiliencia de Selección ante fallos)
@@ -389,6 +407,17 @@ export class UIManager {
 
     const ind = data.indicadores;
 
+    // Actualizar el modelo visual 2.5D del Escudo
+    if (this.escudo3d) {
+      this.escudo3d.updateMetrics({
+        humedad_W: ind.humedad_radicular_W?.valor,
+        temperatura_T: ind.temperatura_dosel_T?.valor,
+        espesor_H: ind.espesor_fertil_H?.valor,
+        escudoScore: ind.escudo_ambiental?.indice,
+        biomasa_B: ind.biomasa_aerea_B?.valor
+      });
+    }
+
     // Humedad radicular W
     if (this.elements.indicatorW) {
       this.elements.indicatorW.innerHTML = `
@@ -502,6 +531,13 @@ export class UIManager {
       cultivo_asignado: cropId,
       periodos: selectedLote.periodos
     });
+
+    if (this.escudo3d) {
+      this.escudo3d.updateMetrics({
+        cropName: crop.name,
+        cropIcon: crop.icon
+      });
+    }
 
     this.renderPeriods();
     this.showToast(`"${crop.name}" asignado a ${this.activePeriod} de ${selectedLote.name}`, "success");

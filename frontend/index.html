@@ -73,6 +73,10 @@
     <!-- Contenedor del Mapa Leaflet + Geoman -->
     <section id="map-wrapper" class="map-wrapper">
       <div id="map"></div>
+      <!-- Botón Flotante para abrir visor del Escudo 2.5D -->
+      <button id="btn-map-shield" class="btn-map-floating-shield" title="Ver el gemelo digital en 2.5D">
+        🛡️ Gemelo Digital (Escudo 2.5D)
+      </button>
     </section>
 
     <!-- Contenedor del Panel Lateral / Drawer Móvil -->
@@ -124,7 +128,10 @@
             <button id="btn-zoom-lote" class="btn-touch btn-secondary" title="Centrar cámara en el lote">
               🔍 Enfocar en Mapa
             </button>
-            <button id="btn-delete-lote" class="btn-touch btn-danger" title="Eliminar este lote">
+            <button id="btn-step1-shield" class="btn-touch btn-secondary" title="Ver modelo 2.5D del terreno">
+              🛡️ Ver Escudo 2.5D
+            </button>
+            <button id="btn-delete-lote" class="btn-touch btn-danger" style="grid-column: span 2;" title="Eliminar este lote">
               🗑️ Eliminar Lote
             </button>
           </div>
@@ -209,6 +216,21 @@
             <button class="priority-btn" data-mode="maxima_resiliencia">🛡️ Resiliencia</button>
             <button class="priority-btn active" data-mode="balance_optimo">⚖️ Óptimo</button>
             <button class="priority-btn" data-mode="mayor_ganancia">💰 Ganancia</button>
+          </div>
+        </div>
+
+        <!-- Visor Isométrico 2.5D del Escudo (Boceto Gemelo Digital) -->
+        <div class="escudo-visor-card">
+          <div class="card-title">
+            <span>🛡️ Gemelo Digital: Escudo y Dosel Protector</span>
+            <span class="escudo-tag">Columnas 2.5D</span>
+          </div>
+          <div class="escudo-canvas-container">
+            <canvas id="escudo-canvas"></canvas>
+          </div>
+          <div class="escudo-hint">
+            <span>👆 Arrastra con el dedo para rotar la perspectiva</span>
+            <span>Malla activa: <strong>NASA POWER Clima</strong></span>
           </div>
         </div>
 

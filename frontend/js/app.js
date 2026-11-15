@@ -6,6 +6,7 @@ import { LotesManager } from './lotes.js';
 import { MapManager } from './map.js';
 import { ApiService } from './api.js';
 import { UIManager } from './ui.js';
+import { Escudo3DViewer } from './escudo3d.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log("Iniciando AgroPhasor...");
@@ -15,10 +16,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const mapManager = new MapManager('map', lotesManager);
   mapManager.init();
 
+  const escudo3d = new Escudo3DViewer('escudo-canvas');
+
   const uiManager = new UIManager({
     lotesManager,
     mapManager,
-    apiService
+    apiService,
+    escudo3d
   });
   uiManager.init();
 
@@ -27,8 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
     lotesManager,
     mapManager,
     apiService,
-    uiManager
+    uiManager,
+    escudo3d
   };
 
-  console.log("AgroPhasor inicializado con éxito.");
+  console.log("AgroPhasor inicializado con éxito con visor de Escudo 2.5D.");
 });

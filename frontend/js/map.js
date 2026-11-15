@@ -57,6 +57,9 @@ export class MapManager {
     // 2. Configurar Geoman (Leaflet-Geoman Free)
     this.setupGeoman();
 
+    // 2.1 Configurar patrón de malla de escudo
+    this.setupShieldSvgPattern();
+
     // 3. Suscribirse a cambios del gestor de lotes
     this.lotesManager.subscribe((lotes, selected) => {
       this.syncMapWithLotes(lotes, selected);
@@ -68,6 +71,29 @@ export class MapManager {
     }
 
     return this;
+  }
+
+  /**
+   * Configurar patrón SVG de malla digital para el efecto de escudo
+   */
+  setupShieldSvgPattern() {
+    this.map.whenReady(() => {
+      const svg = this.map.getPanes().overlayPane.querySelector('svg');
+      if (svg) {
+        let defs = svg.querySelector('defs');
+        if (!defs) {
+          defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+          svg.prepend(defs);
+        }
+
+        defs.innerHTML = `
+          <pattern id="shield-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+            <path d="M 24 0 L 0 0 0 24" fill="none" stroke="rgba(56, 189, 248, 0.4)" stroke-width="1.2"/>
+            <circle cx="12" cy="12" r="1.5" fill="rgba(16, 185, 129, 0.7)"/>
+          </pattern>
+        `;
+      }
+    });
   }
 
   /**
@@ -234,25 +260,27 @@ export class MapManager {
   }
 
   /**
-   * Estilo visual según estado y selección
+   * Estilo visual según estado y selección con estética de "Escudo Protector"
    */
   getPolygonStyle(lote, isSelected) {
     const isConfirmed = lote.status === "confirmed";
 
     if (isSelected) {
       return {
+        className: 'agro-shield-polygon',
         color: isConfirmed ? '#10b981' : '#38bdf8',
         fillColor: isConfirmed ? '#10b981' : '#0284c7',
-        fillOpacity: 0.45,
-        weight: 4,
+        fillOpacity: 0.40,
+        weight: 3.5,
         dashArray: isConfirmed ? null : '6, 6'
       };
     }
 
     return {
+      className: isConfirmed ? 'agro-shield-confirmed' : '',
       color: isConfirmed ? '#059669' : '#94a3b8',
       fillColor: isConfirmed ? '#10b981' : '#64748b',
-      fillOpacity: 0.25,
+      fillOpacity: 0.22,
       weight: 2,
       dashArray: isConfirmed ? null : '4, 4'
     };

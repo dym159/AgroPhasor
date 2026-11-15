@@ -274,6 +274,142 @@ body {
   margin-top: 4px;
 }
 
+/* ------------------------------------------------------------------------------
+ * Efecto de "Escudo Protector" sobre la Parcela (Boceto Gemelo Digital)
+ * ------------------------------------------------------------------------------ */
+.agro-shield-polygon {
+  stroke: #10b981 !important;
+  stroke-width: 3.5px !important;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.85)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.4)) !important;
+  animation: shieldPulse 3s infinite ease-in-out !important;
+}
+
+.agro-shield-confirmed {
+  stroke: #059669 !important;
+  stroke-width: 2.8px !important;
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.5)) !important;
+}
+
+@keyframes shieldPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.7)) drop-shadow(0 0 15px rgba(56, 189, 248, 0.3));
+    stroke-opacity: 0.95;
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(56, 189, 248, 1)) drop-shadow(0 0 25px rgba(16, 185, 129, 0.6));
+    stroke: #38bdf8 !important;
+    stroke-opacity: 1;
+  }
+}
+
+/* Visor 2.5D del Escudo */
+.escudo-visor-card {
+  background: radial-gradient(circle at 50% 20%, rgba(30, 41, 59, 0.95), #0b0f19);
+  border: 1px solid var(--accent-green);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(16, 185, 129, 0.1);
+}
+
+.escudo-visor-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #10b981, #38bdf8, transparent);
+  animation: scanline 4s linear infinite;
+}
+
+@keyframes scanline {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.escudo-canvas-container {
+  width: 100%;
+  height: 240px;
+  position: relative;
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+
+.escudo-canvas-container:active {
+  cursor: grabbing;
+}
+
+#escudo-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.escudo-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.escudo-tag {
+  background-color: rgba(56, 189, 248, 0.15);
+  color: var(--accent-blue);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+/* Botón flotante para ver Escudo en el Mapa */
+.btn-map-floating-shield {
+  position: absolute;
+  bottom: 24px;
+  right: 20px;
+  z-index: 1000;
+  background-color: rgba(15, 23, 42, 0.9);
+  border: 1.5px solid var(--accent-green);
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 30px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(16, 185, 129, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.btn-map-floating-shield:hover {
+  background-color: var(--accent-green);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.6);
+}
+
+/* Modal del Escudo Gemelo Digital */
+.escudo-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
 /* Tarjeta informativa */
 .card {
   background-color: var(--bg-secondary);
