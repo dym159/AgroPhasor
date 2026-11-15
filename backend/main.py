@@ -36,6 +36,7 @@ if BASE_DIR not in sys.path:
 from rotation_ranking import METRICS as ROTATION_METRICS, Candidate, rank_rotations
 from backend.services.parcel_edo1 import ParcelDataError, simulate_parcel
 from backend.services.rotation_service import ClimateUnavailable, recommend_rotation
+from backend.rotation.api import rotation_graph_response
 
 from backend.core.edo1_engine import simulate_canopy_diurnal_cycle
 from backend.core.edo2_engine import simulate_edo2_timeseries, solve_edo2_step
@@ -543,6 +544,11 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(result, status=status)
             return
 
+        if path == "/api/v1/parcelas/rotaciones":
+            result, status = rotation_graph_response(payload)
+            self.send_json_response(result, status=status)
+            return
+
         if path == "/api/v1/rotaciones":
             result, status = rotation_response(payload)
             self.send_json_response(result, status=status)
@@ -897,6 +903,11 @@ if HAS_FASTAPI:
                 "detail": "El cliente debe conservar la selección de la parcela sin perder los vértices.",
             }, status_code=500)
         return compute_simulation_payload(payload)
+
+    @app.post("/api/v1/parcelas/rotaciones")
+    def recommend_rotation_graph_v1(payload: Dict[str, Any]):
+        result, status = rotation_graph_response(payload)
+        return JSONResponse(result, status_code=status)
 
     @app.post("/api/v1/rotaciones")
     def recommend_rotation_v1(payload: Dict[str, Any]):
