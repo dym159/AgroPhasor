@@ -970,3 +970,26 @@ body {
   padding: 4px;
   border-radius: 5px;
 }
+
+/* Recorrido de rotaciones: controles táctiles y una sola columna. */
+.rotation-workflow { overflow-y: auto; min-width: 0; padding: 12px; }
+.rotation-workflow form, .rotation-controls, .rotation-comparison { display: grid; gap: 12px; }
+.rotation-workflow label { display: grid; gap: 6px; }
+.rotation-workflow button, .rotation-workflow summary,
+.rotation-workflow select, .rotation-workflow input:not([type="checkbox"]),
+.rotation-workflow textarea { min-height: 44px; font: inherit; }
+.rotation-workflow button { padding: 10px; white-space: normal; }
+.rotation-workflow summary { cursor: pointer; padding: 10px 0; }
+.rotation-workflow input, .rotation-workflow textarea { max-width: 100%; box-sizing: border-box; }
+.rotation-workflow input[type="checkbox"] { width: 24px; height: 24px; }
+.rotation-workflow fieldset label { min-height: 44px; grid-template-columns: 1fr auto; align-items: center; }
+.rotation-workflow li { display: grid; gap: 4px; padding: 8px 0; }
+.rotation-workflow meter { width: 100%; height: 24px; }
+.rotation-workflow [aria-pressed="true"] { outline: 2px solid currentColor; }
+.rotation-workflow button:disabled { opacity: .5; }
+.rotation-notices { border-left: 3px solid #b7791f; padding-left: 10px; }
+.rotation-workflow [hidden] { display: none; }
+@media (max-width: 600px) {
+  .rotation-workflow { width: 100%; box-sizing: border-box; }
+  .rotation-workflow .rotation-modes { display: grid; gap: 8px; }
+}
