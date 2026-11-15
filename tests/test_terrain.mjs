@@ -1,0 +1,75 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { TerrainSurface, decodeTerrarium } from '../frontend/js/terrain.js';
+import { Escudo3DViewer } from '../frontend/js/escudo3d.js';
+
+test('Terrarium decodes altitude, including fractional and negative elevations', () => {
+  assert.equal(decodeTerrarium(137, 219, 68), 2523.265625);
+  assert.equal(decodeTerrarium(128, 0, 0), 0);
+  assert.equal(decodeTerrarium(127, 255, 128), -0.5);
+});
+
+test('DEM interpolation stays continuous across adjacent tiles; missing heights remain unknown', () => {
+  const surface = new TerrainSurface();
+  assert.equal(surface.sample(128, 128, 1), null);
+  for (let tx = 0; tx < 2; tx++) for (let ty = 0; ty < 2; ty++) {
+    const pixels = new Float32Array(256 * 256);
+    for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) pixels[y * 256 + x] = tx * 256 + x;
+    surface.tiles.set(`1/${tx}/${ty}`, pixels);
+  }
+  assert.equal(surface.sample(128, 128, 1), 255.5);
+  assert(Math.abs(surface.sample(128.001, 128, 1) - surface.sample(127.999, 128, 1) - 0.004) < 1e-8);
+});
+
+const geometry = { type: 'Polygon', coordinates: [
+  [[-75.21, -12.06], [-75.20, -12.06], [-75.20, -12.07], [-75.21, -12.07], [-75.21, -12.06]],
+  [[-75.207, -12.063], [-75.203, -12.063], [-75.203, -12.067], [-75.207, -12.067], [-75.207, -12.063]]
+] };
+
+test('Slope and spatial erosion affect the shared surface only inside the parcel, preserving holes', () => {
+  const surface = new TerrainSurface();
+  surface.setParcel(geometry);
+  surface.sample = () => 3250;
+  const f = surface.footprint;
+  const x = f.minX + f.width * 0.1, y = f.minY + f.height * 0.25;
+  assert.equal(surface.height(x, y), 3250);
+  surface.controls.slopeTheta = 25;
+  surface.physics.erosionSinkingMm = 10;
+  assert.notEqual(surface.height(x, y), 3250);
+  assert.equal(surface.height(f.minX - f.width, y), 3250);
+  assert.equal(surface.height(f.minX + f.width / 2, f.minY + f.height / 2), 3250);
+  assert.notEqual(surface.perturbation(x, y), surface.perturbation(x, f.minY + f.height * 0.75));
+});
+
+test('3D terrain follows elevation while the upper shield stays planar', () => {
+  const viewer = Object.create(Escudo3DViewer.prototype);
+  const surface = new TerrainSurface();
+  surface.setParcel(geometry);
+  const f = surface.footprint;
+  surface.sample = (x, y) => 3250 + (y - f.minY) / f.height * 25;
+  Object.assign(viewer, { footprint: f, terrain: surface, rotation: 0, angle: Math.PI / 6, scale: 1 });
+  const x = 50, y = 30;
+  const offset = viewer.terrainOffset(x, y);
+  assert.notEqual(offset, 0);
+  const ground = viewer.isoProject(x, y, 0, 200, 200);
+  const shield = viewer.isoProject(x, y, 70, 200, 200, false);
+  const flatY = 200 + (x - 95 + y - 65) * Math.sin(Math.PI / 6);
+  assert(Math.abs(shield.y - (flatY - 70 * 0.92)) < 1e-8);
+  assert(Math.abs(ground.y - (flatY - offset * 0.92)) < 1e-8);
+  // Opposite corners with different elevations still lie on the same shield plane.
+  for (const [px, py] of [[0, 0], [190, 0], [190, 130], [0, 130]]) {
+    const point = viewer.isoProject(px, py, 70, 200, 200, false);
+    assert(Math.abs(point.y - (200 + (px - 95 + py - 65) * Math.sin(Math.PI / 6) - 70 * 0.92)) < 1e-8);
+  }
+  assert(viewer.terrainRing(f.polygons[0][0]).length > f.polygons[0][0].length);
+});
+
+test('Large selections bound elevation requests rather than loading unbounded tiles', async () => {
+  const surface = new TerrainSurface();
+  const calls = [];
+  surface.loadTile = async (...args) => { calls.push(args); };
+  assert(await surface.loadBounds(0, 0, 256, 256));
+  assert(calls.length <= 16);
+  surface.loadTile = async () => { throw new Error('offline'); };
+  assert.equal(await surface.loadBounds(100, 100, 100.001, 100.001), false);
+});

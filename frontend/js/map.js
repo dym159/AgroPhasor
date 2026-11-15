@@ -100,7 +100,7 @@ export class MapManager {
             // Relieve local en vista cenital: resaltar curvatura sin desplazar la georreferencia.
             const neighbors = [sample(x - 64, y), sample(x + 64, y), sample(x, y - 64), sample(x, y + 64)];
             const reference = neighbors.every(v => v !== null) ? neighbors.reduce((a, b) => a + b, 0) / 4 : h;
-            return [x, y - 18 * Math.tanh((h - reference) / Math.max(1, mpp * 12))];
+            return [x, y - 30 * Math.tanh((h - reference) / Math.max(0.2, mpp * 1.5))];
           };
           // Sombreado por normales del mismo DEM que utiliza el visor 3D.
           for (let x = 0; x < size.x; x += 16) for (let y = 0; y < size.y; y += 16) {
@@ -108,10 +108,16 @@ export class MapManager {
             const north = sample(x + 8, y), south = sample(x + 8, y + 16);
             if ([west, east, north, south].some(h => h === null)) continue;
             const gradient = (east - west + south - north) / Math.max(1, 32 * mpp);
-            ctx.fillStyle = gradient > 0 ? 'rgba(5, 15, 30, 0.18)' : 'rgba(186, 230, 253, 0.10)';
+            const h = sample(x + 8, y + 8);
+            const level = h === null ? 0 : (h - (west + east + north + south) / 4) / Math.max(0.2, mpp * 1.5);
+            ctx.globalAlpha = 0.08;
+            ctx.fillStyle = terrain.visualColor((left + x + 8) / factor, (top + y + 8) / factor, level, coords.z);
+            ctx.fillRect(x, y, 16, 16);
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = gradient > 0 ? 'rgba(5, 15, 30, 0.04)' : 'rgba(225, 245, 255, 0.03)';
             ctx.fillRect(x, y, 16, 16);
           }
-          ctx.strokeStyle = 'rgba(125, 211, 252, 0.65)'; ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(210, 245, 255, 0.28)'; ctx.lineWidth = 0.7;
           ctx.beginPath();
           // Margen para que las curvas coincidan sin costuras entre teselas.
           for (let x = -32; x <= size.x + 32; x += 32) {
@@ -129,14 +135,15 @@ export class MapManager {
         };
         terrain.loadBounds((left - 100) / factor, (top - 100) / factor,
           (left + size.x + 100) / factor, (top + size.y + 100) / factor, coords.z)
-          .then(draw).catch(() => { ctx.setLineDash([3, 5]); draw(); });
+          .then(complete => { if (!complete) ctx.setLineDash([3, 5]); draw(); })
+          .catch(() => { ctx.setLineDash([3, 5]); draw(); });
         return tile;
       }
     });
     this.map.createPane('parcelGrid');
     this.map.getPane('parcelGrid').style.zIndex = 350;
     this.map.getPane('parcelGrid').style.pointerEvents = 'none';
-    this.gridLayer = new Grid({ pane: 'parcelGrid', tileSize: 256, opacity: 0.8,
+    this.gridLayer = new Grid({ pane: 'parcelGrid', tileSize: 256, opacity: 0.45,
       pmIgnore: true, attribution: 'Relieve: <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen Terrain Tiles</a>' }).addTo(this.map);
   }
 
@@ -172,7 +179,7 @@ export class MapManager {
       pathOptions: {
         color: '#10b981',
         fillColor: '#10b981',
-        fillOpacity: 0.35,
+        fillOpacity: 0.12,
         weight: 3
       }
     });
@@ -314,7 +321,7 @@ export class MapManager {
         className: 'agro-shield-polygon',
         color: isConfirmed ? '#10b981' : '#38bdf8',
         fillColor: isConfirmed ? '#10b981' : '#0284c7',
-        fillOpacity: 0.40,
+        fillOpacity: 0.12,
         weight: 3.5,
         dashArray: isConfirmed ? null : '6, 6'
       };
@@ -324,7 +331,7 @@ export class MapManager {
       className: isConfirmed ? 'agro-shield-confirmed' : '',
       color: isConfirmed ? '#059669' : '#94a3b8',
       fillColor: isConfirmed ? '#10b981' : '#64748b',
-      fillOpacity: 0.22,
+      fillOpacity: 0.08,
       weight: 2,
       dashArray: isConfirmed ? null : '4, 4'
     };

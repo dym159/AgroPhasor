@@ -1,5 +1,5 @@
 import { parcelFootprint } from './parcel-geometry.js';
-import { metersPerWorldPixel } from './terrain.js';
+import { metersPerWorldPixel, exaggerateRelief } from './terrain.js';
 
 /**
  * AgroPhasor - Visor Isométrico 2.5D "Cerros en Cuadrado + Escudo Plano"
@@ -135,7 +135,7 @@ export class Escudo3DViewer {
         if (generation !== this.terrainGeneration) return;
         this.heightCache = new Map();
         if (label) label.textContent = complete
-          ? 'Relieve DEM · pendiente y erosión simuladas · erosión visual ×250'
+          ? 'Relieve visual ×4 · pendiente simulada · erosión base ×250'
           : 'Elevación no disponible o incompleta · sin inventar relieve';
       }).catch(() => {
         if (generation === this.terrainGeneration && label) label.textContent = 'Elevación no disponible';
@@ -153,7 +153,7 @@ export class Escudo3DViewer {
     const reference = this.terrain.sample(cx, cy);
     const height = this.terrain.height(wx, wy, 14, true);
     const result = reference === null || height === null ? 0
-      : (height - reference) * f.scale / metersPerWorldPixel(cy);
+      : exaggerateRelief((height - reference) * f.scale / metersPerWorldPixel(cy));
     this.heightCache.set(key, result);
     return result;
   }
@@ -170,12 +170,12 @@ export class Escudo3DViewer {
     return points;
   }
 
-  parcelPath(ctx, ox, oy, z) {
+  parcelPath(ctx, ox, oy, z, followTerrain = true) {
     ctx.beginPath();
     for (const polygon of this.footprint.polygons) {
       for (const ring of polygon) {
         this.terrainRing(ring).forEach(([x, y], i) => {
-          const p = this.isoProject(x, y, z, ox, oy);
+          const p = this.isoProject(x, y, z, ox, oy, followTerrain);
           if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
         });
         ctx.closePath();
@@ -183,20 +183,21 @@ export class Escudo3DViewer {
     }
   }
 
-  drawParcelGrid(ctx, ox, oy, z, color) {
+  drawParcelGrid(ctx, ox, oy, z, color, followTerrain = true) {
     const f = this.footprint;
-    const step = Math.max(32 / 2 ** this.gridZoom, Math.max(f.width, f.height) / 80);
+    const baseStep = 32 / 2 ** this.gridZoom;
+    const step = baseStep * Math.max(1, Math.ceil(Math.max(f.width, f.height) / baseStep / 80));
     ctx.save();
-    this.parcelPath(ctx, ox, oy, z);
+    this.parcelPath(ctx, ox, oy, z, followTerrain);
     ctx.clip('evenodd');
     ctx.strokeStyle = color;
-    ctx.lineWidth = 0.8;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
     // Misma posición y separación que las celdas del mapa, recortadas al contorno.
     const line = (x1, y1, x2, y2) => {
       const segments = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 4);
       for (let i = 0; i <= segments; i++) {
-        const p = this.isoProject(x1 + (x2 - x1) * i / segments, y1 + (y2 - y1) * i / segments, z, ox, oy);
+        const p = this.isoProject(x1 + (x2 - x1) * i / segments, y1 + (y2 - y1) * i / segments, z, ox, oy, followTerrain);
         if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
       }
     };
@@ -217,8 +218,9 @@ export class Escudo3DViewer {
     const sides = [];
     for (const polygon of this.footprint.polygons) {
       for (const ring of polygon) {
-        for (let i = 0; i < ring.length - 1; i++) {
-          const a = ring[i], b = ring[i + 1];
+        const edge = this.terrainRing(ring);
+        for (let i = 0; i < edge.length - 1; i++) {
+          const a = edge[i], b = edge[i + 1];
           sides.push({ points: [this.isoProject(...a, top, ox, oy), this.isoProject(...b, top, ox, oy),
             this.isoProject(...b, bottom, ox, oy), this.isoProject(...a, bottom, ox, oy)] });
         }
@@ -234,7 +236,7 @@ export class Escudo3DViewer {
     this.parcelPath(ctx, ox, oy, top);
     ctx.fillStyle = this.state.soilColor.top; ctx.fill('evenodd');
     this.drawTerrainFacets(ctx, ox, oy, top);
-    this.drawParcelGrid(ctx, ox, oy, top, 'rgba(167, 243, 208, 0.55)');
+    this.drawParcelGrid(ctx, ox, oy, top, 'rgba(225, 255, 248, 0.95)');
     ctx.save();
     this.parcelPath(ctx, ox, oy, top); ctx.clip('evenodd');
     if (this.state.stage !== 'transicion') this.drawCrops(ctx, ox, oy, thickness, 190, 130, sinking);
@@ -246,16 +248,16 @@ export class Escudo3DViewer {
     ctx.globalAlpha = active ? 0.35 : 0.15;
     for (const polygon of this.footprint.polygons) {
       for (const [x, y] of polygon[0].slice(0, -1)) {
-        const a = this.isoProject(x, y, top, ox, oy), b = this.isoProject(x, y, shieldZ, ox, oy);
+        const a = this.isoProject(x, y, top, ox, oy), b = this.isoProject(x, y, shieldZ, ox, oy, false);
         ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       }
     }
-    this.parcelPath(ctx, ox, oy, shieldZ);
-    ctx.fillStyle = this.state.shieldColor; ctx.globalAlpha = active ? 0.2 : 0.04;
+    this.parcelPath(ctx, ox, oy, shieldZ, false);
+    ctx.fillStyle = this.state.shieldColor; ctx.globalAlpha = active ? 0.10 : 0.04;
     ctx.fill('evenodd'); ctx.globalAlpha = active ? 0.9 : 0.35;
     ctx.lineWidth = 1.5; if (!active) ctx.setLineDash([4, 4]); ctx.stroke();
     ctx.restore();
-    if (active) this.drawParcelGrid(ctx, ox, oy, shieldZ, this.state.shieldColor);
+    if (active) this.drawParcelGrid(ctx, ox, oy, shieldZ, this.state.shieldColor, false);
   }
 
   drawTerrainFacets(ctx, ox, oy, z) {
@@ -268,13 +270,17 @@ export class Escudo3DViewer {
         const points = vertices.map(([vx, vy]) => this.isoProject(vx, vy, z, ox, oy));
         const dx = this.terrainOffset(x + 5, y) - this.terrainOffset(x, y);
         const dy = this.terrainOffset(x, y + 5) - this.terrainOffset(x, y);
-        triangles.push({ points, light: Math.max(-0.4, Math.min(0.4, (dx + dy) / 20)) });
+        const f = this.footprint;
+        const wx = f.minX + (x + 2.5 - f.offsetX) / f.scale;
+        const wy = f.minY + (y + 2.5 - f.offsetY) / f.scale;
+        const color = this.terrain?.visualColor(wx, wy, 0, 14, true) || this.state.soilColor.top;
+        triangles.push({ points, color, light: Math.max(-0.5, Math.min(0.65, (dx + dy) / 9)) });
       }
     }
     triangles.sort((a, b) => a.points.reduce((v, p) => v + p.y, 0) - b.points.reduce((v, p) => v + p.y, 0));
-    for (const {points, light} of triangles) {
+    for (const {points, color, light} of triangles) {
       ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-      ctx.closePath(); ctx.fillStyle = this.state.soilColor.top; ctx.fill();
+      ctx.closePath(); ctx.fillStyle = color; ctx.fill();
       ctx.fillStyle = light < 0 ? 'rgba(226, 232, 240, ' + (-light) + ')' : 'rgba(0, 0, 0, ' + light + ')';
       ctx.fill();
     }
@@ -282,7 +288,8 @@ export class Escudo3DViewer {
   }
 
   // Transformación isométrica 3D -> 2D con rotación interactiva
-  isoProject(x, y, z, originX, originY) {
+  isoProject(x, y, z, originX, originY, followTerrain = true) {
+    if (followTerrain) z += this.terrainOffset(x, y);
     // Centro del bloque
     const cx = x - 95;
     const cy = y - 65;
@@ -657,7 +664,7 @@ export class Escudo3DViewer {
    * 6. HUD superior con indicador de Estado y Psi
    */
   drawHUD(ctx, ox, oy, sw, sl, sz) {
-    const centerTop = this.isoProject(sw / 2, sl / 2, sz + 18, ox, oy);
+    const centerTop = this.isoProject(sw / 2, sl / 2, sz + 18, ox, oy, false);
 
     ctx.save();
     const badgeW = 210;

@@ -2,6 +2,17 @@ import { parcelFootprint } from './parcel-geometry.js';
 
 export const decodeTerrarium = (r, g, b) => r * 256 + g + b / 256 - 32768;
 export const metersPerWorldPixel = y => 156543.03392804097 / Math.cosh(Math.PI * (1 - 2 * y / 256));
+// Realce exclusivamente visual, acotado para conservar el encuadre del visor.
+export const exaggerateRelief = height => 55 * Math.tanh(height * 4 / 55);
+export function reliefColor(level, erosion = 0) {
+  const amount = Math.min(1, Math.abs(level));
+  const base = [64, 170, 145];
+  const target = level >= 0 ? [255, 190, 55] : [143, 105, 255];
+  const red = Math.min(0.85, Math.max(0, erosion));
+  const rgb = base.map((value, i) => Math.round((value + (target[i] - value) * amount) * (1 - red)
+    + [245, 65, 55][i] * red));
+  return `rgb(${rgb.join(',')})`;
+}
 
 // Caché compartida por el mapa y el visor. Nunca sustituir un DEM ausente por montañas inventadas.
 export class TerrainSurface {
@@ -54,8 +65,12 @@ export class TerrainSurface {
   }
 
   async loadBounds(minX, minY, maxX, maxY, zoom = 14) {
-    const z = Math.max(0, Math.min(14, Math.floor(zoom)));
-    const factor = 2 ** z / 256;
+    let z = Math.max(0, Math.min(14, Math.floor(zoom)));
+    let factor = 2 ** z / 256;
+    while (z > 0 && (Math.floor(maxX * factor) - Math.floor(minX * factor) + 1)
+      * (Math.floor(maxY * factor) - Math.floor(minY * factor) + 1) > 16) {
+      factor = 2 ** --z / 256;
+    }
     const jobs = [];
     for (let x = Math.floor(minX * factor); x <= Math.floor(maxX * factor); x++) {
       for (let y = Math.floor(minY * factor); y <= Math.floor(maxY * factor); y++) jobs.push(this.loadTile(z, x, y));
@@ -111,5 +126,19 @@ export class TerrainSurface {
     const elevation = this.sample(x, y, zoom);
     if (elevation === null) return null;
     return elevation + ((parcel || this.contains(x, y)) ? this.perturbation(x, y) : 0);
+  }
+
+  visualColor(x, y, localLevel = 0, zoom = 14, parcel = false) {
+    const f = this.footprint;
+    if (!f || (!parcel && !this.contains(x, y))) return reliefColor(localLevel);
+    const centerY = f.minY + f.height / 2;
+    const reference = this.sample(f.minX + f.width / 2, centerY, zoom);
+    const height = this.height(x, y, zoom, true);
+    if (reference === null || height === null) return reliefColor(0);
+    const level = exaggerateRelief((height - reference) * f.scale / metersPerWorldPixel(centerY)) / 35;
+    const u = (x - f.minX) / f.width, v = (y - f.minY) / f.height;
+    const erosion = Math.min(0.85, (this.physics.erosionSinkingMm || 0) / 18)
+      * Math.sin(Math.PI * u) ** 2 * Math.sin(Math.PI * v) ** 2;
+    return reliefColor(level, erosion);
   }
 }
