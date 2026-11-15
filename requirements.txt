@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pydantic
+numpy
+shapely>=2.1,<3
+pyproj>=3,<4
