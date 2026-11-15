@@ -1,11 +1,12 @@
 """
 Servicio de Simulación Espacio-Temporal para AgroPhasor.
 Orquesta:
-1. Recepción y normalización de datos de NASA POWER (T2M, Radiación, RH).
-2. Procesamiento de la cuadrícula de celdas 30x30m (Topografía SRTM).
-3. Downscaling topoclimático local.
-4. Ejecución vectorizada de EDO 1 para todo el lote.
-5. Generación de diagnósticos de Escudo Térmico y alertas.
+1. Recepción y normalización de datos de NASA POWER (T2M, Radiación, RH, Lluvia, GWETROOT).
+2. Detección automática de la Humedad Radicular real del suelo vía NASA (SMAP / GWETROOT).
+3. Procesamiento de la cuadrícula de celdas 30x30m (Topografía SRTM).
+4. Downscaling topoclimático local.
+5. Ejecución vectorizada de EDO 1 para todo el lote.
+6. Generación de diagnósticos de Escudo Térmico y alertas.
 """
 
 from typing import Dict, Any, List, Optional
@@ -26,7 +27,7 @@ class SimulationService:
         nasa_hourly_data: Dict[str, Dict[str, float]],
         grid_cells: List[Dict[str, Any]],
         crop_id: str,
-        soil_water_mm: float = 50.0,
+        soil_water_mm: Optional[float] = None,
         ref_altitude_m: Optional[float] = None,
         is_radiation_mj_hr: bool = True,
     ) -> Dict[str, Any]:
@@ -34,10 +35,11 @@ class SimulationService:
         Ejecuta la simulación para todas las celdas de 30x30m del terreno sobre las horas disponibles.
         
         Args:
-            nasa_hourly_data: Diccionario con llaves 'T2M', 'ALLSKY_SFC_SW_DWN', 'RH2M'.
+            nasa_hourly_data: Diccionario con llaves 'T2M', 'ALLSKY_SFC_SW_DWN', 'RH2M'
+                              y opcionalmente 'GWETROOT' (Humedad radicular asimilada de SMAP).
             grid_cells: Lista de celdas de la parcela [{'cell_id': '0_0', 'altitude_m': 3250.0, 'slope_deg': 5.0, 'aspect_deg': 180.0}, ...]
             crop_id: Identificador del cultivo ('papa', 'maiz', 'haba', 'barbecho')
-            soil_water_mm: Nivel de humedad en suelo (mm)
+            soil_water_mm: Nivel de humedad en suelo (mm). Si es None, se extrae de NASA GWETROOT.
             ref_altitude_m: Cota altitudinal de referencia para gradiente vertical
         """
         crop = get_crop_parameters(crop_id)
@@ -45,6 +47,7 @@ class SimulationService:
         t2m_dict = nasa_hourly_data.get("T2M", {})
         rad_dict = nasa_hourly_data.get("ALLSKY_SFC_SW_DWN", {})
         rh_dict = nasa_hourly_data.get("RH2M", {})
+        gwetroot_dict = nasa_hourly_data.get("GWETROOT", {})
         
         timestamps = sorted(t2m_dict.keys())
         if not timestamps:
@@ -54,6 +57,21 @@ class SimulationService:
         rad_raw = [max(0.0, float(rad_dict.get(ts, 0.0))) for ts in timestamps]
         rad_raw_wm2 = [convert_nasa_radiation_to_wm2(value) for value in rad_raw] if is_radiation_mj_hr else rad_raw
         rh_raw = [float(rh_dict.get(ts, 60.0)) for ts in timestamps]
+        
+        # Inferencia o lectura de la humedad radicular real del suelo (SMAP / NASA GWETROOT)
+        soil_moisture_source = "manual"
+        if soil_water_mm is None:
+            if gwetroot_dict:
+                # GWETROOT es fracción de saturación [0, 1] asimilada por NASA de SMAP
+                gwet_vals = [float(v) for v in gwetroot_dict.values() if float(v) >= 0.0]
+                gwet_mean = float(np.mean(gwet_vals)) if gwet_vals else 0.65
+                # Escalamos según la Capacidad de Campo del cultivo
+                soil_water_mm = round(gwet_mean * crop.W_fc, 2)
+                soil_moisture_source = "NASA_SMAP_GWETROOT"
+            else:
+                # Valor por defecto típico de suelo con humedad media
+                soil_water_mm = round(0.70 * crop.W_fc, 2)
+                soil_moisture_source = "default_70pct_Wfc"
         
         # Altitud media de referencia si no se especifica
         if ref_altitude_m is None and grid_cells:
@@ -132,6 +150,7 @@ class SimulationService:
         return {
             "crop": crop.name,
             "soil_water_mm": soil_water_mm,
+            "soil_moisture_source": soil_moisture_source,
             "timestamps_count": len(timestamps),
             "lot_mean_temp": round(float(np.mean(all_canopy_means)), 2),
             "cells_count": len(cells_output),

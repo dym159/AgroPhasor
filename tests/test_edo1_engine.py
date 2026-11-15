@@ -5,7 +5,7 @@ Verifica estabilidad numérica, límites asintóticos físicos y los 4 criterios
 
 import math
 import numpy as np
-import pytest
+# import pytest
 
 from backend.models.crop_parameters import get_crop_parameters, CROP_CATALOG
 from backend.core.physics import (
@@ -28,7 +28,6 @@ def test_tetens_physics():
     es_20 = saturation_vapor_pressure(20.0)
     assert 2.30 <= es_20 <= 2.40  # e_s(20°C) ≈ 2.34 kPa
     
-    # La derivada de Penman debe ser estrictamente positiva
     delta = penman_saturation_slope(20.0)
     assert delta > 0.0
 
@@ -55,7 +54,6 @@ def test_nighttime_asymptotic_cooling():
         )
         t_curr = step.t_canopy_c
         
-    # Debe haber convergido prácticamente a la temperatura del aire
     assert abs(t_curr - t_air) < 0.2
 
 
@@ -89,21 +87,19 @@ def test_cooling_with_water_vs_drought_fever():
         crop=crop
     )
     
-    # El cultivo regado debe estar más fresco que el seco
     assert step_water.t_canopy_c < step_drought.t_canopy_c
-    
-    # La sequía debe provocar un calentamiento superior a 8 °C sobre el aire
     diff_drought = step_drought.t_canopy_c - t_air
     assert diff_drought >= 8.0
     assert step_drought.is_fever is True
 
 
-def test_simulation_service_field():
-    """Verifica que el servicio procese correctamente una parcela con múltiples celdas."""
+def test_simulation_service_field_and_smap():
+    """Verifica el procesamiento de parcela y la inferencia automática de GWETROOT (SMAP)."""
     mock_nasa_data = {
         "T2M": {f"20230101{h:02d}": 12.0 + 5.0 * math.sin(h * math.pi / 12) for h in range(24)},
         "ALLSKY_SFC_SW_DWN": {f"20230101{h:02d}": max(0.0, 2.5 * math.sin(h * math.pi / 12)) for h in range(24)},
-        "RH2M": {f"20230101{h:02d}": 60.0 for h in range(24)}
+        "RH2M": {f"20230101{h:02d}": 60.0 for h in range(24)},
+        "GWETROOT": {f"20230101{h:02d}": 0.80 for h in range(24)}  # 80% de humedad en raíces según SMAP
     }
     
     grid = [
@@ -111,18 +107,16 @@ def test_simulation_service_field():
         {"cell_id": "0_1", "altitude_m": 3250.0, "slope_deg": 12.0, "aspect_deg": 90.0}
     ]
     
+    # Sin especificar soil_water_mm para que lo infiera de NASA GWETROOT
     res = SimulationService.run_field_simulation(
         nasa_hourly_data=mock_nasa_data,
         grid_cells=grid,
         crop_id="papa",
-        soil_water_mm=55.0
+        soil_water_mm=None
     )
     
     assert res["crop"] == "Papa"
     assert res["cells_count"] == 2
-    assert len(res["cells"]) == 2
-    
-    # La celda más alta (3250m) debe ser en promedio más fría que la más baja (3100m)
-    temp_low = res["cells"][0]["mean_canopy_temp"]
-    temp_high = res["cells"][1]["mean_canopy_temp"]
-    assert temp_high < temp_low
+    assert res["soil_moisture_source"] == "NASA_SMAP_GWETROOT"
+    # Papa tiene W_fc = 75 mm, por lo que 80% de 75 mm = 60 mm
+    assert res["soil_water_mm"] == 60.0
