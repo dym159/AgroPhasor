@@ -1,4 +1,4 @@
-import { CROP_GROUPS, VISUAL_CROPS } from '../data/mockVisualData.js';
+import { CROP_DRAG_TYPE, CROP_GROUPS, VISUAL_CROPS } from '../data/mockVisualData.js';
 import { clearChildren, createElement } from '../utils/dom.js';
 
 export function createCropsPanel(container, initialState, callbacks) {
@@ -81,6 +81,7 @@ export function createCropsPanel(container, initialState, callbacks) {
         {
           type: 'button',
           className: `crop-row ${isSelected ? 'is-selected' : ''}`,
+          attrs: { draggable: 'true' },
           onClick: () => callbacks.onToggleCrop(crop.id),
         },
         [
@@ -89,6 +90,10 @@ export function createCropsPanel(container, initialState, callbacks) {
         ]
       );
 
+      itemBtn.addEventListener('dragstart', (event) => {
+        event.dataTransfer.setData(CROP_DRAG_TYPE, crop.id);
+        event.dataTransfer.effectAllowed = 'copy';
+      });
       list.append(itemBtn);
     }
   }

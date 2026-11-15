@@ -1,0 +1,857 @@
+﻿nombre_cultivo,region,precio_soles_kg
+Aceituna,Arequipa,5.00
+Aceituna,Ayacucho,2.50
+Aceituna,Ica,2.38
+Aceituna,La Libertad,7.50
+Aceituna,Lima,8.19
+Aceituna,Lima Metropolitana,7.99
+Aceituna,Moquegua,5.00
+Aceituna,Tacna,7.20
+Ají,Amazonas,3.07
+Ají,Ancash,2.89
+Ají,Apurímac,3.00
+Ají,Arequipa,11.35
+Ají,Ayacucho,4.43
+Ají,Cajamarca,2.50
+Ají,Huánuco,4.46
+Ají,Ica,1.48
+Ají,Junín,2.50
+Ají,La Libertad,4.61
+Ají,Lambayeque,3.00
+Ají,Lima,5.66
+Ají,Lima Metropolitana,3.10
+Ají,Loreto,0.36
+Ají,Moquegua,1.30
+Ají,Pasco,4.97
+Ají,Tacna,3.50
+Ají,Tumbes,12.00
+Ají,Ucayali,3.85
+Ajo,Amazonas,6.00
+Ajo,Ancash,6.80
+Ajo,Apurímac,4.00
+Ajo,Arequipa,3.95
+Ajo,Ayacucho,6.03
+Ajo,Cajamarca,10.68
+Ajo,Huancavelica,5.22
+Ajo,Huánuco,3.88
+Ajo,Ica,3.10
+Ajo,Junín,4.62
+Ajo,La Libertad,10.00
+Ajo,Lima,4.50
+Ajo,Lima Metropolitana,1.60
+Ajo,Moquegua,5.50
+Ajo,Pasco,3.20
+Ajo,Piura,10.68
+Ajo,Puno,1.84
+Ajo,Tacna,7.00
+Alcachofa,Apurímac,3.00
+Alcachofa,Arequipa,2.44
+Alcachofa,Cusco,2.50
+Alcachofa,Ica,4.20
+Alcachofa,Junín,3.80
+Alcachofa,La Libertad,1.60
+Alcachofa,Lima,2.46
+Alfalfa,Amazonas,0.39
+Alfalfa,Ancash,0.78
+Alfalfa,Apurímac,0.46
+Alfalfa,Arequipa,0.16
+Alfalfa,Ayacucho,0.50
+Alfalfa,Cajamarca,0.34
+Alfalfa,Cusco,0.60
+Alfalfa,Huancavelica,0.49
+Alfalfa,Huánuco,0.28
+Alfalfa,Ica,0.58
+Alfalfa,Junín,0.38
+Alfalfa,La Libertad,0.39
+Alfalfa,Lambayeque,0.47
+Alfalfa,Lima,0.46
+Alfalfa,Lima Metropolitana,0.44
+Alfalfa,Moquegua,0.25
+Alfalfa,Pasco,0.48
+Alfalfa,Piura,1.00
+Alfalfa,Puno,0.46
+Alfalfa,Tacna,0.46
+Algodón rama,Huánuco,1.50
+Algodón rama,Ica,1.97
+Algodón rama,Lambayeque,3.39
+Algodón rama,Lima,3.23
+Algodón rama,Lima Metropolitana,7.00
+Algodón rama,Piura,3.45
+Algodón rama,San Martín,3.00
+Algodón rama,Ucayali,1.61
+Arándano,Ancash,14.69
+Arándano,Arequipa,15.00
+Arándano,Ica,12.37
+Arándano,La Libertad,11.62
+Arándano,Lambayeque,10.00
+Arándano,Lima,13.02
+Arándano,Moquegua,14.00
+Arándano,Piura,7.00
+Arroz cáscara,Amazonas,1.00
+Arroz cáscara,Ancash,1.62
+Arroz cáscara,Arequipa,1.52
+Arroz cáscara,Cajamarca,1.28
+Arroz cáscara,Cusco,3.38
+Arroz cáscara,Huánuco,0.95
+Arroz cáscara,Junín,2.47
+Arroz cáscara,La Libertad,1.21
+Arroz cáscara,Lambayeque,1.26
+Arroz cáscara,Loreto,0.70
+Arroz cáscara,Madre de Dios,1.46
+Arroz cáscara,Pasco,1.95
+Arroz cáscara,Piura,1.20
+Arroz cáscara,San Martín,1.03
+Arroz cáscara,Tumbes,1.10
+Arroz cáscara,Ucayali,0.72
+Arveja seca,Amazonas,3.00
+Arveja seca,Ancash,5.56
+Arveja seca,Apurímac,4.56
+Arveja seca,Arequipa,4.50
+Arveja seca,Ayacucho,3.23
+Arveja seca,Cajamarca,3.99
+Arveja seca,Cusco,5.84
+Arveja seca,Huancavelica,4.06
+Arveja seca,Huánuco,4.72
+Arveja seca,Ica,5.00
+Arveja seca,Junín,3.37
+Arveja seca,La Libertad,4.13
+Arveja seca,Lambayeque,2.19
+Arveja seca,Lima,3.33
+Arveja seca,Pasco,3.51
+Arveja seca,Piura,5.17
+Arveja seca,Puno,2.51
+Arveja verde,Amazonas,2.46
+Arveja verde,Ancash,2.50
+Arveja verde,Apurímac,2.63
+Arveja verde,Arequipa,3.31
+Arveja verde,Ayacucho,3.26
+Arveja verde,Cajamarca,2.56
+Arveja verde,Cusco,3.50
+Arveja verde,Huancavelica,2.86
+Arveja verde,Huánuco,1.93
+Arveja verde,Ica,3.60
+Arveja verde,Junín,2.13
+Arveja verde,La Libertad,4.78
+Arveja verde,Lambayeque,1.96
+Arveja verde,Lima,2.37
+Arveja verde,Lima Metropolitana,4.20
+Arveja verde,Moquegua,4.07
+Arveja verde,Pasco,2.02
+Arveja verde,Piura,4.58
+Arveja verde,Tacna,4.00
+Avena forrajera,Apurímac,0.50
+Avena forrajera,Arequipa,0.97
+Avena forrajera,Ayacucho,0.40
+Avena forrajera,Cajamarca,0.18
+Avena forrajera,Cusco,0.25
+Avena forrajera,Huancavelica,0.58
+Avena forrajera,Huánuco,0.28
+Avena forrajera,Junín,0.38
+Avena forrajera,La Libertad,0.23
+Avena forrajera,Moquegua,0.80
+Avena forrajera,Pasco,0.96
+Avena forrajera,Puno,0.56
+Avena forrajera,Tacna,0.70
+Cacao,Amazonas,15.36
+Cacao,Ayacucho,17.04
+Cacao,Cajamarca,14.22
+Cacao,Cusco,14.49
+Cacao,Huánuco,18.00
+Cacao,Junín,17.91
+Cacao,La Libertad,6.94
+Cacao,Lambayeque,15.00
+Cacao,Loreto,9.52
+Cacao,Madre de Dios,13.14
+Cacao,Pasco,17.27
+Cacao,Piura,10.33
+Cacao,Puno,24.11
+Cacao,San Martín,16.43
+Cacao,Tumbes,12.31
+Cacao,Ucayali,16.53
+Café pergamino,Amazonas,18.71
+Café pergamino,Ayacucho,17.51
+Café pergamino,Cajamarca,17.69
+Café pergamino,Cusco,18.20
+Café pergamino,Huancavelica,16.00
+Café pergamino,Huánuco,19.83
+Café pergamino,Junín,18.99
+Café pergamino,La Libertad,7.89
+Café pergamino,Lambayeque,17.00
+Café pergamino,Loreto,4.92
+Café pergamino,Madre de Dios,12.00
+Café pergamino,Pasco,16.28
+Café pergamino,Piura,14.78
+Café pergamino,Puno,14.68
+Café pergamino,San Martín,17.55
+Café pergamino,Ucayali,8.00
+Camote,Amazonas,2.20
+Camote,Ancash,1.64
+Camote,Apurímac,2.50
+Camote,Arequipa,2.27
+Camote,Ayacucho,1.30
+Camote,Cajamarca,1.32
+Camote,Cusco,2.00
+Camote,Huancavelica,2.14
+Camote,Huánuco,1.62
+Camote,Ica,1.19
+Camote,La Libertad,1.06
+Camote,Lambayeque,0.80
+Camote,Lima,0.84
+Camote,Lima Metropolitana,1.00
+Camote,Madre de Dios,1.42
+Camote,Moquegua,1.50
+Camote,Piura,1.33
+Camote,Puno,1.45
+Camote,Tacna,1.40
+Camote,Ucayali,1.60
+Cebada forrajera,Apurímac,0.50
+Cebada forrajera,Arequipa,0.75
+Cebada forrajera,Ayacucho,0.49
+Cebada forrajera,Cusco,0.40
+Cebada forrajera,Huancavelica,0.30
+Cebada forrajera,Junín,0.31
+Cebada forrajera,Pasco,1.00
+Cebada forrajera,Puno,0.40
+Cebada grano,Amazonas,2.34
+Cebada grano,Ancash,2.58
+Cebada grano,Apurímac,2.02
+Cebada grano,Arequipa,1.79
+Cebada grano,Ayacucho,3.21
+Cebada grano,Cajamarca,2.24
+Cebada grano,Cusco,1.86
+Cebada grano,Huancavelica,2.26
+Cebada grano,Huánuco,2.60
+Cebada grano,Ica,1.55
+Cebada grano,Junín,1.90
+Cebada grano,La Libertad,2.33
+Cebada grano,Lambayeque,1.00
+Cebada grano,Lima,2.26
+Cebada grano,Lima Metropolitana,1.40
+Cebada grano,Moquegua,2.96
+Cebada grano,Pasco,2.69
+Cebada grano,Piura,2.95
+Cebada grano,Puno,2.00
+Cebada grano,Tacna,2.00
+Cebolla,Amazonas,2.00
+Cebolla,Ancash,1.01
+Cebolla,Apurímac,1.37
+Cebolla,Arequipa,0.76
+Cebolla,Ayacucho,1.60
+Cebolla,Cajamarca,1.65
+Cebolla,Cusco,1.03
+Cebolla,Huancavelica,1.20
+Cebolla,Huánuco,1.20
+Cebolla,Ica,0.84
+Cebolla,Junín,1.27
+Cebolla,La Libertad,1.38
+Cebolla,Lambayeque,1.03
+Cebolla,Lima,1.64
+Cebolla,Lima Metropolitana,0.80
+Cebolla,Moquegua,1.00
+Cebolla,Piura,0.90
+Cebolla,Puno,1.00
+Cebolla,Tacna,1.30
+Espárrago,Ancash,7.75
+Espárrago,Ica,6.19
+Espárrago,La Libertad,4.80
+Espárrago,Lambayeque,2.00
+Espárrago,Lima,5.19
+Frijol grano seco,Amazonas,4.56
+Frijol grano seco,Ancash,6.55
+Frijol grano seco,Apurímac,5.00
+Frijol grano seco,Arequipa,5.00
+Frijol grano seco,Ayacucho,5.39
+Frijol grano seco,Cajamarca,4.77
+Frijol grano seco,Cusco,6.00
+Frijol grano seco,Huancavelica,4.68
+Frijol grano seco,Huánuco,4.05
+Frijol grano seco,Ica,5.41
+Frijol grano seco,Junín,3.55
+Frijol grano seco,La Libertad,4.88
+Frijol grano seco,Lambayeque,3.56
+Frijol grano seco,Lima,4.00
+Frijol grano seco,Lima Metropolitana,4.52
+Frijol grano seco,Loreto,1.98
+Frijol grano seco,Madre de Dios,7.09
+Frijol grano seco,Pasco,3.79
+Frijol grano seco,Piura,3.30
+Frijol grano seco,Puno,2.80
+Frijol grano seco,San Martín,8.51
+Frijol grano seco,Tumbes,4.80
+Frijol grano seco,Ucayali,9.02
+Granadilla,Amazonas,1.50
+Granadilla,Ancash,3.88
+Granadilla,Apurímac,1.09
+Granadilla,Ayacucho,2.09
+Granadilla,Cajamarca,3.98
+Granadilla,Cusco,4.13
+Granadilla,Huancavelica,1.17
+Granadilla,Huánuco,1.86
+Granadilla,Ica,2.80
+Granadilla,Junín,1.97
+Granadilla,La Libertad,2.59
+Granadilla,Lambayeque,3.00
+Granadilla,Lima,1.90
+Granadilla,Loreto,0.51
+Granadilla,Pasco,3.53
+Granadilla,Piura,2.21
+Granadilla,Puno,2.67
+Granadilla,Ucayali,1.77
+Haba seca,Amazonas,2.08
+Haba seca,Ancash,4.99
+Haba seca,Apurímac,3.28
+Haba seca,Arequipa,3.87
+Haba seca,Ayacucho,2.95
+Haba seca,Cajamarca,3.25
+Haba seca,Cusco,2.70
+Haba seca,Huancavelica,2.95
+Haba seca,Huánuco,3.34
+Haba seca,Ica,1.25
+Haba seca,Junín,4.20
+Haba seca,La Libertad,4.00
+Haba seca,Lambayeque,3.00
+Haba seca,Lima,3.42
+Haba seca,Moquegua,6.00
+Haba seca,Pasco,4.93
+Haba seca,Piura,3.11
+Haba seca,Puno,3.16
+Limón sutíl,Amazonas,1.46
+Limón sutíl,Ancash,2.48
+Limón sutíl,Apurímac,1.84
+Limón sutíl,Arequipa,3.00
+Limón sutíl,Ayacucho,2.52
+Limón sutíl,Cajamarca,1.36
+Limón sutíl,Cusco,2.11
+Limón sutíl,Huancavelica,1.44
+Limón sutíl,Huánuco,1.13
+Limón sutíl,Ica,1.73
+Limón sutíl,Junín,1.30
+Limón sutíl,La Libertad,1.48
+Limón sutíl,Lambayeque,0.80
+Limón sutíl,Lima,0.60
+Limón sutíl,Lima Metropolitana,1.00
+Limón sutíl,Loreto,0.99
+Limón sutíl,Madre de Dios,2.86
+Limón sutíl,Moquegua,2.00
+Limón sutíl,Pasco,2.00
+Limón sutíl,Piura,1.43
+Limón sutíl,Puno,1.02
+Limón sutíl,San Martín,1.93
+Limón sutíl,Tumbes,2.32
+Limón sutíl,Ucayali,4.64
+Maíz a. duro,Amazonas,1.50
+Maíz a. duro,Ancash,1.67
+Maíz a. duro,Apurímac,2.00
+Maíz a. duro,Arequipa,1.90
+Maíz a. duro,Ayacucho,1.61
+Maíz a. duro,Cajamarca,1.28
+Maíz a. duro,Cusco,2.00
+Maíz a. duro,Huancavelica,1.58
+Maíz a. duro,Huánuco,1.31
+Maíz a. duro,Ica,1.20
+Maíz a. duro,Junín,1.49
+Maíz a. duro,La Libertad,1.30
+Maíz a. duro,Lambayeque,1.28
+Maíz a. duro,Lima,1.33
+Maíz a. duro,Lima Metropolitana,1.60
+Maíz a. duro,Loreto,0.82
+Maíz a. duro,Madre de Dios,1.50
+Maíz a. duro,Moquegua,2.50
+Maíz a. duro,Pasco,1.42
+Maíz a. duro,Piura,1.78
+Maíz a. duro,Puno,2.87
+Maíz a. duro,San Martín,0.96
+Maíz a. duro,Tumbes,1.68
+Maíz a. duro,Ucayali,1.39
+Maíz amiláceo,Amazonas,3.38
+Maíz amiláceo,Ancash,5.20
+Maíz amiláceo,Apurímac,4.67
+Maíz amiláceo,Arequipa,3.50
+Maíz amiláceo,Ayacucho,4.00
+Maíz amiláceo,Cajamarca,3.43
+Maíz amiláceo,Cusco,5.22
+Maíz amiláceo,Huancavelica,3.71
+Maíz amiláceo,Huánuco,4.10
+Maíz amiláceo,Ica,3.00
+Maíz amiláceo,Junín,3.01
+Maíz amiláceo,La Libertad,3.63
+Maíz amiláceo,Lambayeque,2.59
+Maíz amiláceo,Lima,3.42
+Maíz amiláceo,Lima Metropolitana,3.20
+Maíz amiláceo,Moquegua,2.50
+Maíz amiláceo,Pasco,3.00
+Maíz amiláceo,Piura,2.08
+Maíz amiláceo,Puno,4.40
+Maíz amiláceo,Tacna,5.89
+Maíz chala,Ancash,0.78
+Maíz chala,Arequipa,0.27
+Maíz chala,Cajamarca,3.00
+Maíz chala,Huánuco,0.26
+Maíz chala,La Libertad,0.72
+Maíz chala,Lambayeque,0.31
+Maíz chala,Lima,0.37
+Maíz chala,Lima Metropolitana,0.35
+Maíz chala,Moquegua,0.60
+Maíz chala,Tacna,0.66
+Maíz choclo,Amazonas,1.47
+Maíz choclo,Ancash,1.50
+Maíz choclo,Apurímac,1.20
+Maíz choclo,Arequipa,1.91
+Maíz choclo,Ayacucho,1.50
+Maíz choclo,Cajamarca,4.19
+Maíz choclo,Cusco,1.23
+Maíz choclo,Huancavelica,1.42
+Maíz choclo,Huánuco,2.98
+Maíz choclo,Ica,2.13
+Maíz choclo,Junín,1.70
+Maíz choclo,La Libertad,1.97
+Maíz choclo,Lambayeque,2.01
+Maíz choclo,Lima,1.79
+Maíz choclo,Lima Metropolitana,4.00
+Maíz choclo,Loreto,0.47
+Maíz choclo,Moquegua,3.50
+Maíz choclo,Pasco,1.32
+Maíz choclo,Piura,1.00
+Maíz choclo,Tacna,3.36
+Maíz choclo,Tumbes,1.77
+Mandarina,Arequipa,3.13
+Mandarina,Ayacucho,2.00
+Mandarina,Cusco,0.90
+Mandarina,Huánuco,1.20
+Mandarina,Ica,1.81
+Mandarina,Junín,0.63
+Mandarina,La Libertad,2.50
+Mandarina,Lambayeque,0.80
+Mandarina,Lima,1.53
+Mandarina,Lima Metropolitana,1.13
+Mandarina,Loreto,0.50
+Mandarina,Madre de Dios,1.50
+Mandarina,Moquegua,3.00
+Mandarina,Pasco,1.30
+Mandarina,Puno,1.02
+Mandarina,San Martín,2.00
+Mandarina,Tumbes,1.02
+Mandarina,Ucayali,1.76
+Mango,Amazonas,5.24
+Mango,Ancash,1.80
+Mango,Apurímac,1.00
+Mango,Arequipa,3.00
+Mango,Ayacucho,1.00
+Mango,Cajamarca,1.60
+Mango,Cusco,0.86
+Mango,Huancavelica,1.92
+Mango,Huánuco,1.13
+Mango,Ica,1.33
+Mango,Junín,1.45
+Mango,La Libertad,2.44
+Mango,Lambayeque,1.12
+Mango,Lima,1.20
+Mango,Lima Metropolitana,2.28
+Mango,Loreto,0.36
+Mango,Madre de Dios,1.29
+Mango,Moquegua,3.00
+Mango,Pasco,0.74
+Mango,Piura,2.32
+Mango,San Martín,0.98
+Mango,Tumbes,0.79
+Mango,Ucayali,1.63
+Manzana,Amazonas,2.00
+Manzana,Ancash,1.93
+Manzana,Apurímac,1.12
+Manzana,Arequipa,2.24
+Manzana,Ayacucho,1.00
+Manzana,Cajamarca,2.00
+Manzana,Cusco,2.09
+Manzana,Huancavelica,1.47
+Manzana,Huánuco,3.11
+Manzana,Ica,1.80
+Manzana,Junín,1.53
+Manzana,La Libertad,1.78
+Manzana,Lima,2.11
+Manzana,Lima Metropolitana,2.30
+Manzana,Moquegua,2.00
+Manzana,Tacna,2.31
+Melocotón,Amazonas,1.33
+Melocotón,Ancash,3.48
+Melocotón,Apurímac,2.17
+Melocotón,Arequipa,3.10
+Melocotón,Ayacucho,2.87
+Melocotón,Cusco,2.50
+Melocotón,Huancavelica,1.50
+Melocotón,Huánuco,2.91
+Melocotón,Ica,2.30
+Melocotón,Junín,2.59
+Melocotón,La Libertad,3.50
+Melocotón,Lima,3.26
+Melocotón,Lima Metropolitana,4.20
+Melocotón,Moquegua,4.69
+Melocotón,Puno,1.94
+Melocotón,Tacna,3.60
+Naranja,Amazonas,0.99
+Naranja,Ancash,2.06
+Naranja,Apurímac,0.91
+Naranja,Arequipa,2.50
+Naranja,Ayacucho,1.20
+Naranja,Cajamarca,0.95
+Naranja,Cusco,1.02
+Naranja,Huancavelica,1.17
+Naranja,Huánuco,2.46
+Naranja,Ica,2.21
+Naranja,Junín,0.62
+Naranja,La Libertad,2.32
+Naranja,Lambayeque,0.90
+Naranja,Lima,1.70
+Naranja,Lima Metropolitana,1.20
+Naranja,Loreto,0.52
+Naranja,Madre de Dios,1.32
+Naranja,Moquegua,1.50
+Naranja,Pasco,1.14
+Naranja,Piura,1.54
+Naranja,Puno,0.82
+Naranja,San Martín,0.40
+Naranja,Tacna,1.20
+Naranja,Tumbes,1.05
+Naranja,Ucayali,1.62
+Oca,Amazonas,1.20
+Oca,Ancash,1.53
+Oca,Apurímac,1.21
+Oca,Arequipa,2.50
+Oca,Ayacucho,1.39
+Oca,Cajamarca,1.30
+Oca,Cusco,2.68
+Oca,Huancavelica,2.40
+Oca,Huánuco,1.02
+Oca,Ica,0.83
+Oca,Junín,0.83
+Oca,La Libertad,2.51
+Oca,Lima,1.30
+Oca,Moquegua,2.04
+Oca,Pasco,1.50
+Oca,Piura,3.85
+Oca,Puno,2.09
+Olluco,Amazonas,3.47
+Olluco,Ancash,2.43
+Olluco,Apurímac,1.50
+Olluco,Arequipa,2.50
+Olluco,Ayacucho,1.77
+Olluco,Cajamarca,2.25
+Olluco,Cusco,0.67
+Olluco,Huancavelica,1.73
+Olluco,Huánuco,1.31
+Olluco,Ica,1.19
+Olluco,Junín,1.65
+Olluco,La Libertad,3.93
+Olluco,Lambayeque,2.00
+Olluco,Lima,1.57
+Olluco,Moquegua,3.00
+Olluco,Pasco,1.52
+Olluco,Piura,2.86
+Olluco,Puno,2.34
+Orégano,Apurímac,3.12
+Orégano,Arequipa,8.00
+Orégano,Ayacucho,1.00
+Orégano,Junín,1.80
+Orégano,La Libertad,5.00
+Orégano,Lima,2.10
+Orégano,Moquegua,7.00
+Orégano,Puno,12.00
+Orégano,Tacna,3.31
+Pallar seco,Ancash,6.00
+Pallar seco,Arequipa,2.00
+Pallar seco,Ayacucho,2.80
+Pallar seco,Huancavelica,3.50
+Pallar seco,Ica,5.44
+Pallar seco,La Libertad,3.86
+Pallar seco,Lambayeque,1.04
+Palma aceitera,Huánuco,0.70
+Palma aceitera,Loreto,0.46
+Palma aceitera,San Martín,0.71
+Palma aceitera,Ucayali,0.62
+Palta,Amazonas,3.41
+Palta,Ancash,5.84
+Palta,Apurímac,3.00
+Palta,Arequipa,17.18
+Palta,Ayacucho,3.24
+Palta,Cajamarca,3.07
+Palta,Cusco,1.19
+Palta,Huancavelica,2.49
+Palta,Huánuco,3.27
+Palta,Ica,3.95
+Palta,Junín,2.07
+Palta,La Libertad,3.78
+Palta,Lambayeque,2.80
+Palta,Lima,4.36
+Palta,Lima Metropolitana,3.95
+Palta,Loreto,0.51
+Palta,Madre de Dios,1.70
+Palta,Moquegua,5.50
+Palta,Pasco,3.26
+Palta,Piura,2.58
+Palta,Puno,3.04
+Palta,San Martín,1.25
+Palta,Tacna,5.00
+Palta,Ucayali,1.61
+Papa,Amazonas,1.09
+Papa,Ancash,1.33
+Papa,Apurímac,1.05
+Papa,Arequipa,1.40
+Papa,Ayacucho,1.34
+Papa,Cajamarca,1.52
+Papa,Cusco,12.22
+Papa,Huancavelica,0.93
+Papa,Huánuco,1.11
+Papa,Ica,1.66
+Papa,Junín,0.91
+Papa,La Libertad,1.50
+Papa,Lambayeque,1.00
+Papa,Lima,1.50
+Papa,Lima Metropolitana,0.52
+Papa,Moquegua,1.25
+Papa,Pasco,1.32
+Papa,Piura,1.22
+Papa,Puno,2.04
+Papa,Tacna,1.39
+Papaya,Amazonas,1.82
+Papaya,Ancash,3.45
+Papaya,Apurímac,2.50
+Papaya,Arequipa,3.80
+Papaya,Ayacucho,1.83
+Papaya,Cajamarca,1.51
+Papaya,Cusco,1.55
+Papaya,Huancavelica,2.46
+Papaya,Huánuco,2.00
+Papaya,Ica,2.44
+Papaya,Junín,1.07
+Papaya,La Libertad,1.57
+Papaya,Lambayeque,0.80
+Papaya,Lima,3.80
+Papaya,Loreto,0.43
+Papaya,Madre de Dios,1.76
+Papaya,Moquegua,3.00
+Papaya,Pasco,1.78
+Papaya,Piura,1.30
+Papaya,Puno,2.36
+Papaya,San Martín,1.05
+Papaya,Tumbes,0.81
+Papaya,Ucayali,1.54
+Páprika,Ancash,12.00
+Páprika,Arequipa,8.50
+Páprika,Cajamarca,8.00
+Páprika,Ica,8.80
+Páprika,La Libertad,11.00
+Páprika,Lambayeque,1.80
+Páprika,Lima,8.74
+Páprika,Piura,3.00
+Páprika,Tacna,3.90
+Pimiento,Ica,1.50
+Pimiento,La Libertad,3.20
+Pimiento,Lambayeque,2.50
+Pimiento,Lima,3.19
+Pimiento,Lima Metropolitana,1.35
+Pimiento,Piura,1.30
+Pimiento,Tacna,1.41
+Pimiento,Tumbes,2.50
+Piña,Amazonas,2.18
+Piña,Ayacucho,2.15
+Piña,Cajamarca,2.17
+Piña,Cusco,1.89
+Piña,Huánuco,1.34
+Piña,Junín,1.14
+Piña,La Libertad,1.30
+Piña,Loreto,0.42
+Piña,Madre de Dios,2.10
+Piña,Pasco,1.77
+Piña,Puno,2.20
+Piña,San Martín,2.05
+Piña,Ucayali,1.42
+Piquillo,La Libertad,2.00
+Piquillo,Lambayeque,0.30
+Piquillo,Piura,1.45
+Plátano,Amazonas,1.57
+Plátano,Ancash,2.84
+Plátano,Apurímac,0.83
+Plátano,Arequipa,3.60
+Plátano,Ayacucho,1.01
+Plátano,Cajamarca,0.89
+Plátano,Cusco,0.97
+Plátano,Huancavelica,1.26
+Plátano,Huánuco,1.29
+Plátano,Ica,1.12
+Plátano,Junín,1.23
+Plátano,La Libertad,1.43
+Plátano,Lambayeque,1.06
+Plátano,Lima,1.80
+Plátano,Lima Metropolitana,1.26
+Plátano,Loreto,0.44
+Plátano,Madre de Dios,1.17
+Plátano,Moquegua,3.00
+Plátano,Pasco,1.02
+Plátano,Piura,1.56
+Plátano,Puno,1.37
+Plátano,San Martín,1.15
+Plátano,Tacna,3.20
+Plátano,Tumbes,1.06
+Plátano,Ucayali,1.58
+Quinua,Ancash,6.00
+Quinua,Apurímac,5.50
+Quinua,Arequipa,6.19
+Quinua,Ayacucho,5.09
+Quinua,Cajamarca,4.79
+Quinua,Cusco,4.58
+Quinua,Huancavelica,5.00
+Quinua,Huánuco,5.20
+Quinua,Ica,5.00
+Quinua,Junín,6.00
+Quinua,La Libertad,5.78
+Quinua,Lambayeque,3.00
+Quinua,Lima Metropolitana,5.75
+Quinua,Moquegua,6.00
+Quinua,Puno,5.37
+Quinua,Tacna,3.75
+Tangelo,Ayacucho,2.23
+Tangelo,Cusco,1.50
+Tangelo,Ica,1.34
+Tangelo,Junín,1.04
+Tangelo,Lima,1.60
+Tangelo,Tumbes,1.50
+Tangelo,Ucayali,1.71
+Tomate,Amazonas,1.13
+Tomate,Ancash,1.64
+Tomate,Apurímac,2.21
+Tomate,Arequipa,1.74
+Tomate,Ayacucho,1.65
+Tomate,Cajamarca,2.36
+Tomate,Cusco,4.00
+Tomate,Huancavelica,1.40
+Tomate,Huánuco,1.50
+Tomate,Ica,1.45
+Tomate,Junín,1.20
+Tomate,La Libertad,2.18
+Tomate,Lambayeque,1.01
+Tomate,Lima,2.49
+Tomate,Lima Metropolitana,1.37
+Tomate,Loreto,0.37
+Tomate,Moquegua,0.96
+Tomate,Piura,0.88
+Tomate,San Martín,1.86
+Tomate,Tacna,1.37
+Tomate,Tumbes,2.00
+Tomate,Ucayali,1.65
+Trigo,Amazonas,2.48
+Trigo,Ancash,4.25
+Trigo,Apurímac,2.56
+Trigo,Arequipa,2.14
+Trigo,Ayacucho,3.72
+Trigo,Cajamarca,3.02
+Trigo,Cusco,2.30
+Trigo,Huancavelica,2.88
+Trigo,Huánuco,3.43
+Trigo,Ica,2.16
+Trigo,Junín,2.38
+Trigo,La Libertad,2.52
+Trigo,Lambayeque,0.90
+Trigo,Lima,2.33
+Trigo,Lima Metropolitana,5.50
+Trigo,Moquegua,3.60
+Trigo,Pasco,2.73
+Trigo,Piura,2.24
+Trigo,Puno,1.99
+Trigo,Tacna,1.20
+Tuna,Ancash,2.00
+Tuna,Apurímac,1.00
+Tuna,Arequipa,75.00
+Tuna,Ayacucho,1.40
+Tuna,Cajamarca,2.64
+Tuna,Cusco,2.00
+Tuna,Huancavelica,2.00
+Tuna,Huánuco,1.46
+Tuna,Ica,3.28
+Tuna,Junín,1.62
+Tuna,La Libertad,1.74
+Tuna,Lambayeque,1.00
+Tuna,Lima,2.47
+Tuna,Lima Metropolitana,1.90
+Tuna,Moquegua,2.47
+Tuna,Pasco,3.00
+Tuna,Tacna,5.00
+Uva,Ancash,3.28
+Uva,Arequipa,5.99
+Uva,Ayacucho,3.00
+Uva,Cajamarca,3.11
+Uva,Ica,2.00
+Uva,La Libertad,3.78
+Uva,Lambayeque,2.40
+Uva,Lima,2.73
+Uva,Lima Metropolitana,4.20
+Uva,Moquegua,4.50
+Uva,Piura,3.00
+Uva,San Martín,3.10
+Uva,Tacna,3.97
+Uva,Tumbes,2.10
+Yuca,Amazonas,1.71
+Yuca,Ancash,2.21
+Yuca,Apurímac,1.69
+Yuca,Arequipa,2.33
+Yuca,Ayacucho,2.34
+Yuca,Cajamarca,1.87
+Yuca,Cusco,2.23
+Yuca,Huancavelica,2.50
+Yuca,Huánuco,1.32
+Yuca,Ica,1.21
+Yuca,Junín,1.29
+Yuca,La Libertad,1.33
+Yuca,Lambayeque,1.23
+Yuca,Lima,1.31
+Yuca,Lima Metropolitana,1.30
+Yuca,Loreto,0.42
+Yuca,Madre de Dios,1.44
+Yuca,Pasco,1.20
+Yuca,Piura,1.34
+Yuca,Puno,2.94
+Yuca,San Martín,1.04
+Yuca,Tumbes,0.52
+Yuca,Ucayali,1.33
+Zanahoria,Amazonas,2.29
+Zanahoria,Ancash,1.16
+Zanahoria,Apurímac,1.41
+Zanahoria,Arequipa,1.27
+Zanahoria,Ayacucho,1.07
+Zanahoria,Cajamarca,1.53
+Zanahoria,Cusco,2.50
+Zanahoria,Huancavelica,0.80
+Zanahoria,Huánuco,0.54
+Zanahoria,Ica,1.00
+Zanahoria,Junín,0.73
+Zanahoria,La Libertad,1.36
+Zanahoria,Lambayeque,0.92
+Zanahoria,Lima,0.66
+Zanahoria,Lima Metropolitana,1.30
+Zanahoria,Moquegua,1.50
+Zanahoria,Pasco,1.00
+Zanahoria,Piura,1.50
+Zanahoria,Puno,1.50
+Zapallo,Amazonas,1.73
+Zapallo,Ancash,1.08
+Zapallo,Apurímac,0.69
+Zapallo,Arequipa,1.41
+Zapallo,Ayacucho,1.00
+Zapallo,Cajamarca,0.95
+Zapallo,Cusco,2.33
+Zapallo,Huancavelica,1.40
+Zapallo,Huánuco,0.88
+Zapallo,Ica,1.37
+Zapallo,Junín,1.03
+Zapallo,La Libertad,1.06
+Zapallo,Lambayeque,0.79
+Zapallo,Lima,1.01
+Zapallo,Lima Metropolitana,1.00
+Zapallo,Loreto,0.49
+Zapallo,Madre de Dios,1.10
+Zapallo,Moquegua,2.00
+Zapallo,Pasco,1.30
+Zapallo,Piura,2.00
+Zapallo,Puno,1.00
+Zapallo,San Martín,0.80
+Zapallo,Tacna,2.39
+Zapallo,Tumbes,0.80
+Zapallo,Ucayali,1.58

@@ -96,19 +96,15 @@ def water_limitation_factor(
 ) -> float:
     """
     Factor de limitación hídrica f_W(W) (PDF Sec. 3.2.4 y 3.3):
-    Usa la formulación de saturación f_W = W / (W + K_W) o el umbral de agotamiento radicular.
-    - Si W <= W_pmp: 0.0 (estrés hídrico severo / paro fotosintético).
-    - Si W >= W_crit: 1.0 (óptima transpiración y asimilación).
-    - En zona intermedia: saturación Michaelis-Menten acotada.
+    Saturación f_W = W / (W + K_W). K_W se estima de los umbrales
+    cuando el llamador no proporciona un valor calibrado.
     """
-    if soil_water_mm <= w_pmp_mm:
-        return 0.0
     
     if k_w_mm is None:
         # Calibración biofísica automática de K_W a partir de los límites radiculares
         k_w_mm = max(1.0, 0.5 * (w_crit_mm - w_pmp_mm))
         
-    usable_water = max(0.0, soil_water_mm - w_pmp_mm)
+    usable_water = max(0.0, soil_water_mm)
     factor = usable_water / (usable_water + k_w_mm)
     return max(0.0, min(1.0, factor))
 

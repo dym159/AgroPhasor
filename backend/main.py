@@ -35,6 +35,7 @@ if BASE_DIR not in sys.path:
 
 from rotation_ranking import METRICS as ROTATION_METRICS, Candidate, rank_rotations
 from backend.services.parcel_edo1 import ParcelDataError, simulate_parcel
+from backend.services.rotation_service import ClimateUnavailable, recommend_rotation
 
 from backend.core.edo1_engine import simulate_canopy_diurnal_cycle
 from backend.core.edo2_engine import simulate_edo2_timeseries, solve_edo2_step
@@ -364,6 +365,8 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     pareto_f2_val = compute_soil_pareto_metric_f2(h0_soil, h_current_calc, eta_val)
 
     return {
+        "simulation_kind": "demonstration",
+        "warning": "Endpoint histórico con valores de demostración. Usa /api/v1/parcelas/simulacion y /api/v1/rotaciones para cálculo físico.",
         "status": "success",
         "meta": {
             "engine": "AgroPhasor-FastODE-Mantaro",
@@ -449,15 +452,33 @@ def build_parcel_saved_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def crop_cycles():
+    return {key: crop.duration_days for key, crop in CROP_CATALOG.items()
+            if crop.key != "suelo_desnudo_transicion"}
+
+
+def rotation_response(payload):
+    try:
+        return recommend_rotation(payload), 200
+    except ValueError as exc:
+        return {"error": str(exc)}, 422
+    except ClimateUnavailable as exc:
+        return {"error": str(exc)}, 503
+
+
 def parcel_edo1_response(payload):
     try:
-        return simulate_parcel(payload), 200
-    except (ValueError, TypeError) as exc:
+        result = simulate_parcel(payload)
+        if payload.get("phases") and payload.get("selected_date"):
+            from backend.services.plan_service import replay_plan
+            result = replay_plan(result, payload["phases"], payload["selected_date"])
+        return result, 200
+    except (ValueError, TypeError, KeyError) as exc:
         return {"error": str(exc)}, 400
-    except ParcelDataError as exc:
+    except (ParcelDataError, ClimateUnavailable) as exc:
         return {"error": str(exc)}, 502
     except ImportError:
-        return {"error": "Instala las dependencias de EDO 1 indicadas en el README."}, 503
+        return {"error": "Instala las dependencias de simulación indicadas en el README."}, 503
 
 
 class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
@@ -497,6 +518,10 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(build_v1_health_payload())
             return
 
+        if path == "/api/v1/crop-cycles":
+            self.send_json_response(crop_cycles())
+            return
+
         super().do_GET()
 
     def do_POST(self):
@@ -513,8 +538,13 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response({"error": f"JSON inválido: {str(e)}"}, status=400)
             return
 
-        if path == "/api/v1/parcelas/edo1":
+        if path in ("/api/v1/parcelas/simulacion", "/api/v1/parcelas/edo1"):
             result, status = parcel_edo1_response(payload)
+            self.send_json_response(result, status=status)
+            return
+
+        if path == "/api/v1/rotaciones":
+            result, status = rotation_response(payload)
             self.send_json_response(result, status=status)
             return
 
@@ -729,6 +759,10 @@ if HAS_FASTAPI:
         except (OSError, ValueError, KeyError, TypeError):
             return JSONResponse({"error": "El buscador no está disponible por ahora."}, status_code=502)
 
+    @app.get("/api/v1/crop-cycles")
+    def crop_cycles_api():
+        return crop_cycles()
+
     @app.get("/crops")
     def list_crops():
         """Devuelve la lista de cultivos precalibrados en el sistema."""
@@ -794,6 +828,12 @@ if HAS_FASTAPI:
             }, status_code=500)
         return compute_simulation_payload(payload)
 
+    @app.post("/api/v1/rotaciones")
+    def recommend_rotation_v1(payload: Dict[str, Any]):
+        result, status = rotation_response(payload)
+        return JSONResponse(result, status_code=status)
+
+    @app.post("/api/v1/parcelas/simulacion")
     @app.post("/api/v1/parcelas/edo1")
     def simulate_parcel_v1(payload: Dict[str, Any]):
         result, status = parcel_edo1_response(payload)
@@ -998,7 +1038,7 @@ def run():
         print("==================================================================")
         print(" 🚀 AgroPhasor Servidor Activo")
         print(f" 🌐 Aplicación Web Frontend:  http://localhost:{PORT}")
-        print(f" 📡 Endpoint de Simulación:   http://localhost:{PORT}/api/v1/simular")
+        print(f" 📡 Simulación de parcela:   http://localhost:{PORT}/api/v1/parcelas/simulacion")
         print(f" 🩺 Health Check:             http://localhost:{PORT}/api/v1/health")
         print("==================================================================")
         try:

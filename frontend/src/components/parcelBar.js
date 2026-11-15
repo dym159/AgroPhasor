@@ -5,7 +5,7 @@ export function renderParcelBar(container, state, callbacks) {
 
   clearChildren(container);
 
-  const { selectedParcel, centerMode, hasActiveTerrain, edo1Result } = state;
+  const { selectedParcel, centerMode, hasActiveTerrain, parcelSimulationResult } = state;
   const isTerrainView = centerMode === 'terrain';
   const titleText = hasActiveTerrain ? selectedParcel.name : 'Sin terreno seleccionado';
 
@@ -15,11 +15,11 @@ export function renderParcelBar(container, state, callbacks) {
   });
 
   const infoChildren = [nameEl];
-  if (hasActiveTerrain && edo1Result?.lot_mean_temp != null) {
+  if (hasActiveTerrain && parcelSimulationResult?.phase === 'cultivo') {
     infoChildren.push(
       createElement('span', {
         className: 'panel-tag',
-        text: `Dosel: ${edo1Result.lot_mean_temp} °C · ${edo1Result.cells_count} celdas SRTM`,
+        text: `Dosel: ${parcelSimulationResult.lot_mean_temp} °C · ${parcelSimulationResult.cells_count} celdas SRTM`,
       })
     );
   }

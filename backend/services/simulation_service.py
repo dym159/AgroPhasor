@@ -29,12 +29,13 @@ class SimulationService:
         crop_id: str,
         soil_water_mm: Optional[float] = None,
         ref_altitude_m: Optional[float] = None,
-        is_radiation_mj_hr: bool = True
+        is_radiation_mj_hr: bool = True,
+        crop_parameters: Optional[CropParameters] = None,
     ) -> Dict[str, Any]:
         """
         Ejecuta la simulación para todas las celdas de 30x30m del terreno sobre las horas disponibles.
         """
-        crop = get_crop_parameters(crop_id)
+        crop = crop_parameters or get_crop_parameters(crop_id)
         
         t2m_dict = nasa_hourly_data.get("T2M", {})
         rad_dict = nasa_hourly_data.get("ALLSKY_SFC_SW_DWN", {})
@@ -135,7 +136,8 @@ class SimulationService:
                 "lissajous_area": round(al_area, 2),
                 "thermal_shield": shield_color,
                 "fever_hours_count": fever_hours,
-                "hourly_canopy_temps": canopy_temps
+                "hourly_canopy_temps": canopy_temps,
+                "hourly_air_temps": air_temps,
             })
             
         lot_mean = sum(all_canopy_means) / float(len(all_canopy_means)) if all_canopy_means else 0.0
@@ -145,6 +147,7 @@ class SimulationService:
             "soil_moisture_source": soil_moisture_source,
             "is_radiation_mj_hr": is_radiation_mj_hr,
             "timestamps_count": len(timestamps),
+            "timestamps": timestamps,
             "lot_mean_temp": round(lot_mean, 2),
             "cells_count": len(cells_output),
             "cells": cells_output

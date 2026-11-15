@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TerrainSurface, decodeTerrarium } from '../frontend/js/terrain.js';
 import { Escudo3DViewer } from '../frontend/js/escudo3d.js';
+import { buildParcelSimulationMesh, shieldColor } from '../frontend/src/services/parcelSimulationMesh.js';
 
 test('Terrarium decodes altitude, including fractional and negative elevations', () => {
   assert.equal(decodeTerrarium(137, 219, 68), 2523.265625);
@@ -25,6 +26,24 @@ const geometry = { type: 'Polygon', coordinates: [
   [[-75.21, -12.06], [-75.20, -12.06], [-75.20, -12.07], [-75.21, -12.07], [-75.21, -12.06]],
   [[-75.207, -12.063], [-75.203, -12.063], [-75.203, -12.067], [-75.207, -12.067], [-75.207, -12.063]]
 ] };
+
+test('The active 3D view keeps cell geometry and applies cumulative soil loss to its elevation', () => {
+  const parcel = { polygon: geometry.coordinates[0].map(([lon, lat]) => [lat, lon]) };
+  const cell = {
+    geometry, longitude: -75.209, latitude: -12.061, altitude_m: 3250,
+    soil_color_rgb: [101, 67, 33], accumulated_erosion_mm: 0,
+  };
+  const eroded = { ...cell, soil_color_rgb: [128, 128, 128], accumulated_erosion_mm: 200 };
+  const doubleLoss = { ...eroded, accumulated_erosion_mm: 400 };
+  const { cells: [first, second, third] } = buildParcelSimulationMesh(parcel, [cell, eroded, doubleLoss]);
+  assert.equal(first.polygons[0].length, 2);
+  assert.equal(second.z - first.z, third.z - second.z);
+  assert(second.z < first.z);
+  assert.equal(second.color, 'rgb(128,128,128)');
+  assert.equal(shieldColor(0), 'rgb(249,64,70)');
+  assert.equal(shieldColor(0.5), 'rgb(146,110,163)');
+  assert.equal(shieldColor(1), 'rgb(42,155,255)');
+});
 
 test('Slope and spatial erosion affect the shared surface only inside the parcel, preserving holes', () => {
   const surface = new TerrainSurface();

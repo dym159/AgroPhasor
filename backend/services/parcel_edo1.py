@@ -1,5 +1,6 @@
-"""Crea la malla métrica y carga los forzamientos del EDO 1."""
+"""Simula las cinco EDO y deriva las salidas visuales de la parcela."""
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
 import math
@@ -13,7 +14,8 @@ MAX_CELLS = 500
 POWER_URL = "https://power.larc.nasa.gov/api/temporal/hourly/point"
 SRTM_URL = "https://api.opentopodata.org/v1/srtm30m"
 POWER_PARAMETERS = ("T2M", "ALLSKY_SFC_SW_DWN", "RH2M")
-REQUESTED_POWER_PARAMETERS = ("T2M", "ALLSKY_SFC_SW_DWN", "RH2M", "PRECTOTCORR", "GWETROOT")
+REQUESTED_POWER_PARAMETERS = (*POWER_PARAMETERS, "PRECTOT")
+POWER_DAILY_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 SRTM_LOCK = Lock()
 last_srtm_call = 0.0
 
@@ -219,7 +221,7 @@ def load_power(longitude, latitude, latest_day):
                 day = latest_day - timedelta(days=offset)
                 hours = [f"{day:%Y%m%d}{hour:02d}" for hour in range(24)]
                 series = {}
-                for key in REQUESTED_POWER_PARAMETERS:
+                for key in (*REQUESTED_POWER_PARAMETERS, "PRECTOTCORR"):
                     if key in data:
                         series[key] = {hour: float(data[key].get(hour, fill)) for hour in hours}
                     elif key in POWER_PARAMETERS:
@@ -245,6 +247,22 @@ def radiation_uses_mj(response):
     if "mj" in units or units in {"mj/m2", "mj/m2/hr", "mj/m2/hour", "mj/hr"}:
         return True
     raise ValueError(f"Unidad de radiación desconocida: {units}")
+
+
+def load_root_wetness(longitude, latitude, day):
+    """Lee la humedad radicular diaria si el servicio la tiene disponible."""
+    date_key = day.strftime("%Y%m%d")
+    params = {
+        "parameters": "GWETROOT", "community": "AG",
+        "longitude": longitude, "latitude": latitude, "time-standard": "LST",
+        "start": date_key, "end": date_key, "format": "JSON",
+    }
+    try:
+        response = read_json(f"{POWER_DAILY_URL}?{urlencode(params)}")
+        water = float(response["properties"]["parameter"]["GWETROOT"][date_key])
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+    return water if 0 <= water <= 1 else None
 
 
 def load_elevations(points):
@@ -366,9 +384,13 @@ def log_parcel_telemetry(day, reference, series, ref_altitude_m, result):
 
 
 def simulate_parcel(payload):
+    from backend.core.edo2_engine import compute_soil_limits, relative_stomatal_conductance, solve_edo2_step
+    from backend.core.edo3_engine import SoilChemicalProperties, solve_edo3_step
+    from backend.core.edo4_engine import execute_harvest_event, solve_edo4_step
+    from backend.core.edo5_engine import solve_edo5_step
+    from backend.core.physics import thermal_comfort_index
     from backend.models.crop_parameters import CROP_CATALOG, get_crop_parameters
     from backend.services.simulation_service import SimulationService
-    from backend.core.edo2_engine import solve_edo2_step
 
     if not isinstance(payload, dict):
         raise ValueError("Envía la geometría de la parcela como JSON.")
@@ -378,6 +400,20 @@ def simulate_parcel(payload):
     crop_aliases = {"papa_canchan": "papa", "maiz_amilaceo": "maiz", "habas_verdes": "haba"}
     crop = crop_aliases.get(requested_crop, requested_crop)
     crop = crop if crop in CROP_CATALOG else "papa"
+    crop_param = get_crop_parameters(crop)
+    is_crop = crop_param.key != "suelo_desnudo_transicion"
+    theta_fc = float(payload.get("theta_fc", 0.30))
+    theta_wp = float(payload.get("theta_wp", 0.14))
+    if not 0 <= theta_wp < theta_fc <= 1:
+        raise ValueError("La humedad del suelo debe cumplir 0 ≤ θ de marchitez < θ de campo ≤ 1.")
+    water_limits = compute_soil_limits(crop_param, theta_fc, theta_wp, float(payload.get("h_current_mm", payload.get("h0_mm", 400.0))))
+    crop_param = replace(
+        crop_param, W_fc=water_limits.w_cc, W_pmp=water_limits.w_pmp, W_crit=water_limits.w_crit,
+    )
+    h0_initial = float(payload.get("h0_mm", 400.0))
+    h_start = float(payload.get("h_current_mm", h0_initial))
+    if not math.isfinite(h0_initial) or h0_initial <= 0 or not 0 <= h_start <= h0_initial:
+        raise ValueError("El espesor inicial debe ser positivo y el actual debe estar entre 0 y H(0).")
     water_input = payload.get("soil_water_mm")
     if water_input is not None:
         water = float(water_input)
@@ -392,15 +428,12 @@ def simulate_parcel(payload):
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
     day, series, radiation_in_mj = load_power(*reference, yesterday)
 
-    # Inferencia dinámica de humedad del suelo vía satélite SMAP / NASA GWETROOT si no fue fijada a mano
-    crop_param = get_crop_parameters(crop)
+    # Humedad radicular estimada al inicio del paso diario.
     if water is None:
-        gwet_series = series.get("GWETROOT", {})
-        valid_gwet = [v for v in gwet_series.values() if math.isfinite(v) and v >= 0.0]
-        if valid_gwet:
-            mean_gwet = sum(valid_gwet) / float(len(valid_gwet))
+        mean_gwet = load_root_wetness(*reference, day)
+        if mean_gwet is not None:
             water = round(crop_param.W_pmp + mean_gwet * (crop_param.W_fc - crop_param.W_pmp), 2)
-            soil_water_source = "NASA_SMAP_GWETROOT"
+            soil_water_source = "NASA_POWER_GWETROOT"
         else:
             water = round(0.70 * crop_param.W_fc, 2)
             soil_water_source = "default_70pct_Wfc"
@@ -419,7 +452,7 @@ def simulate_parcel(payload):
         )
     result = SimulationService.run_field_simulation(
         series, cells, crop, soil_water_mm=water, ref_altitude_m=elevations[-1],
-        is_radiation_mj_hr=radiation_in_mj,
+        is_radiation_mj_hr=radiation_in_mj, crop_parameters=crop_param,
     )
     for cell, thermal in zip(cells, result["cells"]):
         thermal.update(cell)
@@ -427,12 +460,13 @@ def simulate_parcel(payload):
     result["lot_mean_temp"] = round(sum(c["area_m2"] * c["mean_canopy_temp"] for c in result["cells"]) / area, 2)
 
     # Resolución acoplada de EDO 2 (Balance Hidrológico Radicular) y EDO 3 (Macronutrientes NPK) por celda con SRTM
-    crop_param = get_crop_parameters(crop)
-    t_air_mean = sum(series["T2M"].values()) / float(len(series["T2M"]))
     rh_mean = sum(series["RH2M"].values()) / float(len(series["RH2M"]))
-    precip_total = sum(series.get("PRECTOTCORR", {}).values()) if "PRECTOTCORR" in series else 0.0
-
-    from backend.core.edo3_engine import solve_edo3_step, SoilChemicalProperties
+    rainfall = series.get("PRECTOT") or series.get("PRECTOTCORR", {})
+    has_rainfall = all(math.isfinite(rainfall.get(ts, -1)) and rainfall.get(ts, -1) >= 0
+                       for ts in result["timestamps"])
+    precip_total = sum(rainfall[ts] for ts in result["timestamps"]) if has_rainfall else 0.0
+    radiation = sum(series["ALLSKY_SFC_SW_DWN"].values())
+    rad_daily_mj = radiation if radiation_in_mj else radiation * 0.0036
     soil_props = SoilChemicalProperties(
         om_pct=float(payload.get("soil_om_pct", 3.0)),
         cic_cmolc_kg=float(payload.get("soil_cic", 22.0)),
@@ -443,6 +477,7 @@ def simulate_parcel(payload):
     init_n = float(init_npk.get("N", 85.0))
     init_p = float(init_npk.get("P", 32.0))
     init_k = float(init_npk.get("K", 180.0))
+    b_est = crop_param.B_max_t_ha * 0.45 if is_crop else 0.0
 
     last_edo3_step = None
     for thermal in result["cells"]:
@@ -450,32 +485,34 @@ def simulate_parcel(payload):
         edo2_step = solve_edo2_step(
             w_current_mm=water,
             precip_mm=precip_total,
-            t_air_c=thermal.get("mean_canopy_temp", t_air_mean),
+            t_air_c=sum(thermal["hourly_air_temps"]) / len(thermal["hourly_air_temps"]),
             rh_pct=rh_mean,
             slope_deg=slope,
             crop=crop_param,
+            theta_fc=theta_fc,
+            theta_wp=theta_wp,
+            is_crop=is_crop,
+            biomass_t_ha=b_est,
+            depth_mm=h_start, canopy_temp_c=thermal["mean_canopy_temp"],
             dt_days=1.0
         )
 
-        # Tasa de erosión hídrica en ladera (EDO 5 acoplada con lluvia NASA GPM/POWER y pendiente SRTM)
-        from backend.core.edo5_engine import solve_edo5_step
-        b_est = crop_param.B_max_t_ha * 0.45
-        h0_initial = float(payload.get("h0_mm", 400.0))
+        # EDO 5 usa la cobertura al inicio del paso diario.
         edo5_step = solve_edo5_step(
-            h_current_mm=h0_initial,
+            h_current_mm=h_start,
             precip_mm=precip_total,
             slope_deg=slope,
             biomass_t_ha=b_est,
-            is_transition=(crop in ("barbecho", "transicion")),
+            is_transition=not is_crop,
             h_initial_mm=h0_initial,
-            theta_fc=float(payload.get("theta_fc", 0.30)),
-            theta_wp=float(payload.get("theta_wp", 0.14)),
+            theta_fc=theta_fc,
+            theta_wp=theta_wp,
             current_nutrients_kg_ha={"N": init_n, "P": init_p, "K": init_k}
         )
         eros_rate = abs(edo5_step.dh_dt_mm_day)
 
         # Resolución acoplada de EDO 3 por celda
-        cell_t = thermal.get("mean_canopy_temp", t_air_mean)
+        cell_t = thermal["mean_canopy_temp"]
         edo3_step = solve_edo3_step(
             n_current_kg_ha=init_n,
             p_current_kg_ha=init_p,
@@ -485,14 +522,13 @@ def simulate_parcel(payload):
             t_soil_c=cell_t,
             crop=crop_param,
             soil=soil_props,
+            biomass_t_ha=b_est,
             erosion_rate_mm_day=eros_rate,
-            is_crop=(crop != "barbecho")
+            is_crop=is_crop
         )
         last_edo3_step = edo3_step
 
         # Resolución acoplada de EDO 4 (Biomasa B y Teledetección NDVI con radiación NASA POWER)
-        from backend.core.edo4_engine import solve_edo4_step, execute_harvest_event
-        rad_daily_mj = sum(series["ALLSKY_SFC_SW_DWN"].values()) if radiation_in_mj else (sum(series["ALLSKY_SFC_SW_DWN"].values()) * 0.0036)
         edo4_step = solve_edo4_step(
             b_current_t_ha=b_est,
             f_rad_daily_mj_m2=rad_daily_mj,
@@ -502,7 +538,7 @@ def simulate_parcel(payload):
             phosphorus_kg_ha=edo3_step.p_kg_ha,
             potassium_kg_ha=edo3_step.k_kg_ha,
             crop=crop_param,
-            q_is_crop=(crop not in ("barbecho", "transicion")),
+            q_is_crop=is_crop,
             dt_days=1.0
         )
         harvest_edo4 = execute_harvest_event(
@@ -510,13 +546,26 @@ def simulate_parcel(payload):
             crop=crop_param
         )
 
+        # Se combina T horaria con W y NPK resultantes del paso diario.
+        eta_water = relative_stomatal_conductance(edo2_step.soil_water_mm, water_limits) if is_crop else 0.0
+        thermal_comfort = [
+            thermal_comfort_index(t, crop_param.T_opt, crop_param.delta_T_tol)
+            for t in thermal["hourly_canopy_temps"]
+        ]
         thermal.update(
+            shield_enabled=is_crop,
+            rain_exposure_alert=not is_crop,
+            hourly_thermal_comfort=[round(value, 4) for value in thermal_comfort] if is_crop else None,
+            water_condition_index=round(eta_water, 4) if is_crop else None,
+            hourly_environmental_index=[
+                round(value * eta_water * edo3_step.eta_nutrientes, 4) for value in thermal_comfort
+            ] if is_crop else None,
             soil_water_mm=edo2_step.soil_water_mm,
             etc_mm=edo2_step.etc_mm,
             drainage_mm=edo2_step.drainage_mm,
             gamma_c_relative=edo2_step.gamma_c_relative,
-            is_irrigation_needed=edo2_step.is_irrigation_needed,
-            suggested_irrigation_mm=edo2_step.suggested_irrigation_mm,
+            is_irrigation_needed=is_crop and edo2_step.is_irrigation_needed,
+            suggested_irrigation_mm=edo2_step.suggested_irrigation_mm if is_crop else 0.0,
             nutrientes_n_kg_ha=edo3_step.n_kg_ha,
             nutrientes_p_kg_ha=edo3_step.p_kg_ha,
             nutrientes_k_kg_ha=edo3_step.k_kg_ha,
@@ -530,7 +579,9 @@ def simulate_parcel(payload):
             yield_commercial_t_ha=harvest_edo4.commercial_yield_t_ha,
             net_margin_usd_ha=harvest_edo4.net_margin_usd_ha,
             h_current_mm=edo5_step.h_current_mm,
+            h_initial_mm=edo5_step.h_initial_mm,
             erosion_loss_mm=edo5_step.erosion_loss_step_mm,
+            accumulated_erosion_mm=edo5_step.accumulated_erosion_mm,
             dh_dt_mm_day=edo5_step.dh_dt_mm_day,
             soil_retention_ratio=edo5_step.soil_retention_ratio,
             soil_color_rgb=edo5_step.soil_color_rgb,
@@ -580,7 +631,7 @@ def simulate_parcel(payload):
         irrigation_alert=any_irrigation,
         suggested_irrigation_mm=max_suggested_irr,
         soil_moisture_source=soil_water_source,
-        precipitation_daily_mm=round(precip_total, 2),
+        precipitation_daily_mm=round(precip_total, 2) if has_rainfall else None,
         lot_mean_n_kg_ha=mean_n,
         lot_mean_p_kg_ha=mean_p,
         lot_mean_k_kg_ha=mean_k,
@@ -599,21 +650,22 @@ def simulate_parcel(payload):
         erosion_hotspot_slope_deg=round(hotspot_cell.get("slope_deg", 0.0), 1) if hotspot_cell else 0.0,
         data_sources={
             "meteorology": "NASA POWER (T2M, ALLSKY_SFC_SW_DWN, RH2M)",
-            "precipitation": "NASA GPM / IMERG (via PRECTOTCORR)",
-            "soil_moisture": "NASA SMAP (via GWETROOT)",
+            "precipitation": "NASA POWER" if has_rainfall else None,
+            "soil_moisture": soil_water_source,
             "topography": "SRTM v3 30m (Open Topo Data / USGS)",
-            "biomass_ndvi": "Landsat & MODIS (NDVI) / GEDI L4",
-            "soil_attributes": "USDA SSURGO / Web Soil Survey (WSS)"
+            "biomass_ndvi": "NDVI derivado de biomasa simulada (sin observación orbital)",
+            "soil_attributes": "Parámetros ingresados o valores de referencia"
         }
     )
     result.update(
-        timestamps=list(series["T2M"]),
         date=day.isoformat(),
         time_standard="LST",
         cell_size_m=CELL_M,
         climate_source="NASA POWER",
         terrain_source="SRTM v3 (Open Topo Data)",
         crop_id=crop,
+        phase="cultivo" if is_crop else "transicion",
+        optimal_canopy_temp=crop_param.T_opt if is_crop else None,
         reference_crop_used=crop == "papa" and requested_crop not in ("papa", "papa_canchan"),
     )
     log_parcel_telemetry(day, reference, series, elevations[-1], result)

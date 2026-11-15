@@ -1,6 +1,12 @@
-// Cliente HTTP para los endpoints reales de AgroPhasor (NASA POWER + SRTM EDO 1, Simulación CC-09 y Nominatim).
+// Cliente HTTP de la simulación de parcela, recomendaciones y búsqueda de localidades.
 
 import { STRATEGY_MODES } from '../data/mockVisualData.js';
+
+export async function fetchCropCycles() {
+  const response = await fetch('/api/v1/crop-cycles');
+  if (!response.ok) throw new Error('No se pudo cargar la duración de los cultivos.');
+  return response.json();
+}
 
 export function parcelToGeoJsonGeometry(parcel) {
   if (!parcel?.polygon || parcel.polygon.length < 3) return null;
@@ -18,22 +24,22 @@ export function parcelToGeoJsonGeometry(parcel) {
   };
 }
 
-export async function fetchParcelEdo1(parcel, cropId = 'papa', signal) {
+export async function fetchParcelSimulation(parcel, cropId = 'papa', signal, plan = {}) {
   const geometry = parcelToGeoJsonGeometry(parcel);
   if (!geometry) {
     throw new Error('Selecciona o dibuja un polígono válido en el mapa.');
   }
 
-  const response = await fetch('/api/v1/parcelas/edo1', {
+  const response = await fetch('/api/v1/parcelas/simulacion', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ geometry, crop_id: cropId }),
+    body: JSON.stringify({ geometry, crop_id: cropId, ...plan }),
     signal,
   });
 
   const data = await response.json().catch(() => null);
-  if (!response.ok || !data) {
-    throw new Error(data?.error || 'El servidor no pudo calcular NASA POWER + SRTM.');
+  if (!response.ok || !data?.cells?.length) {
+    throw new Error(data?.error || data?.detail || 'La simulación de la parcela no está disponible.');
   }
   return data;
 }
@@ -82,4 +88,18 @@ export async function searchPlaces(query) {
   }
   const data = await response.json();
   return Array.isArray(data) ? data : [];
+}
+
+export async function fetchRotation(payload, signal) {
+  const response = await fetch('/api/v1/rotaciones', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(data?.routes)) {
+    throw new Error(data?.error || 'No se pudo calcular la rotación.');
+  }
+  return data;
 }

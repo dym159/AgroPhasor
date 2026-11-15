@@ -1,4 +1,3 @@
-import { DEMO_PARCELS } from '../data/mockVisualData.js';
 import { searchPlaces } from '../services/agroApi.js';
 import { clearChildren, createElement } from '../utils/dom.js';
 
@@ -59,19 +58,7 @@ export function mountParcelSelectorMap(container, state, callbacks) {
   let activeLeafletMap = null;
   let activePolygonLayer = null;
   let activeThermalLayer = null;
-
-  const presetsRow = createElement('div', { className: 'stage-presets' });
-  for (const parcel of DEMO_PARCELS) {
-    const isSelected =
-      state.hasActiveTerrain && state.selectedParcel.id === parcel.id;
-    const btn = createElement('button', {
-      type: 'button',
-      className: `btn ${isSelected ? 'btn-active' : ''}`,
-      text: parcel.name,
-      onClick: () => callbacks.onSelectPresetParcel(parcel),
-    });
-    presetsRow.append(btn);
-  }
+  let lastCells;
 
   const searchForm = createPlaceSearchControl((place) => {
     if (activeLeafletMap) {
@@ -123,21 +110,31 @@ export function mountParcelSelectorMap(container, state, callbacks) {
   ]);
 
   const toolbar = createElement('div', { className: 'stage-toolbar' }, [
-    presetsRow,
     rightControls,
   ]);
 
+  const statusText = createElement('span', { attrs: { role: 'status' } });
+  const retryButton = createElement('button', {
+    type: 'button',
+    className: 'btn',
+    text: 'Reintentar',
+    onClick: callbacks.onRetrySimulation,
+  });
   const statusBar = createElement('div', {
     className: 'edo1-status-bar',
-    text: state.edo1StatusText || 'NASA POWER + SRTM v3 listos',
-  });
+  }, [statusText, retryButton]);
+  function updateStatus(nextState) {
+    statusText.textContent = nextState.parcelSimulationStatusText;
+    retryButton.hidden = !nextState.parcelSimulationFailed;
+  }
+  updateStatus(state);
 
   const body = createElement('div', { className: 'stage-body' }, [statusBar]);
   container.append(toolbar, body);
 
   if (typeof window.L === 'undefined') {
-    renderFallbackSelector(body, state, callbacks);
-    return { update: () => {}, destroy: () => {} };
+    renderFallbackSelector(body);
+    return { update: updateStatus, destroy: () => {} };
   }
 
   const mapHost = createElement('div', { className: 'leaflet-map-host' });
@@ -159,13 +156,15 @@ export function mountParcelSelectorMap(container, state, callbacks) {
   activeLeafletMap = mapSetup.map;
   activePolygonLayer = mapSetup.polygonLayer;
 
-  renderThermalCells(state.edo1Result?.cells);
+  renderThermalCells(state.parcelSimulationResult?.cells);
 
   requestAnimationFrame(() => {
     if (activeLeafletMap) activeLeafletMap.invalidateSize();
   });
 
   function renderThermalCells(cells) {
+    if (cells === lastCells) return;
+    lastCells = cells;
     if (activeThermalLayer) {
       activeThermalLayer.remove();
       activeThermalLayer = null;
@@ -181,18 +180,23 @@ export function mountParcelSelectorMap(container, state, callbacks) {
       })),
       {
         pmIgnore: true,
-        style: ({ properties: { mean_canopy_temp: mean } }) => ({
+        style: ({ properties: cell }) => ({
           pmIgnore: true,
           color: '#f8fafc',
           weight: 1,
-          fillColor: `hsl(${Math.max(0, Math.min(220, 220 - mean * 7))}, 85%, 50%)`,
+          fillColor: cell.shield_enabled
+            ? `hsl(${Math.max(0, Math.min(220, 220 - cell.mean_canopy_temp * 7))}, 85%, 50%)`
+            : `rgb(${cell.soil_color_rgb.join(',')})`,
           fillOpacity: 0.42,
         }),
         onEachFeature: ({ properties: cell }, layer) => {
           layer.bindTooltip(
             `Celda ${cell.cell_id} · ${cell.latitude.toFixed(5)}°, ${cell.longitude.toFixed(5)}°<br>` +
-              `Dosel medio ${cell.mean_canopy_temp} °C (mín ${cell.min_canopy_temp} °C / máx ${cell.max_canopy_temp} °C)<br>` +
-              `SRTM ${cell.altitude_m.toFixed(1)} m · pendiente ${cell.slope_deg.toFixed(1)}°`
+              (cell.shield_enabled
+                ? `Dosel medio ${cell.mean_canopy_temp} °C (mín ${cell.min_canopy_temp} °C / máx ${cell.max_canopy_temp} °C)<br>`
+                : 'Suelo desnudo · Exposición a la lluvia<br>') +
+              `SRTM ${cell.altitude_m.toFixed(1)} m · pendiente ${cell.slope_deg.toFixed(1)}°<br>` +
+              `Fertilidad ${Math.round(cell.eta_nutrientes * 100)} % · limitante ${cell.limiting_nutrient}`
           );
         },
       }
@@ -215,9 +219,8 @@ export function mountParcelSelectorMap(container, state, callbacks) {
   }
 
   function update(nextState) {
-    statusBar.textContent =
-      nextState.edo1StatusText || 'NASA POWER + SRTM v3 listos';
-    renderThermalCells(nextState.edo1Result?.cells);
+    updateStatus(nextState);
+    renderThermalCells(nextState.parcelSimulationResult?.cells);
   }
 
   return {
@@ -292,7 +295,7 @@ function initializeLeafletMap(mapHost, parcel, hasActiveTerrain, onPolygonCreate
     maxZoom: 21,
     zoomAnimation: false,
     fadeAnimation: false,
-  }).setView(parcel.center, 16);
+  }).setView(parcel?.center ?? [-9.19, -75.02], parcel ? 16 : 5);
 
   const OverzoomImagery = L.GridLayer.extend({
     createTile: createOverzoomImageryTile,
@@ -361,23 +364,9 @@ function initializeLeafletMap(mapHost, parcel, hasActiveTerrain, onPolygonCreate
   return { map, polygonLayer };
 }
 
-function renderFallbackSelector(body, state, callbacks) {
-  const grid = createElement('div', { className: 'fallback-plot-grid' });
-  for (const parcel of DEMO_PARCELS) {
-    const isSelected =
-      state.hasActiveTerrain && state.selectedParcel.id === parcel.id;
-    const card = createElement(
-      'button',
-      {
-        type: 'button',
-        className: `fallback-plot-card ${isSelected ? 'is-selected' : ''}`,
-        onClick: () => callbacks.onSelectPresetParcel(parcel),
-      },
-      [createElement('span', { className: 'strategy-name', text: parcel.name })]
-    );
-    grid.append(card);
-  }
-
-  const wrapper = createElement('div', { className: 'fallback-map-panel' }, [grid]);
-  body.append(wrapper);
+function renderFallbackSelector(body) {
+  body.append(createElement('div', {
+    className: 'fallback-map-panel',
+    text: 'El mapa no está disponible. Recarga la página para dibujar tu terreno.',
+  }));
 }

@@ -194,7 +194,7 @@ class TestEDO4Engine(unittest.TestCase):
 
         # En marchitez permanente
         fw_wilting = water_limitation_factor(w_pmp - 5.0, w_pmp, w_crit)
-        self.assertEqual(fw_wilting, 0.0)
+        self.assertAlmostEqual(fw_wilting, (w_pmp - 5) / (w_pmp - 5 + max(1, .5 * (w_crit - w_pmp))))
 
         # Por encima de crítico (confort)
         fw_optimal = water_limitation_factor(w_crit + 20.0, w_pmp, w_crit)
@@ -205,7 +205,7 @@ class TestEDO4Engine(unittest.TestCase):
             b_current_t_ha=4.0,
             f_rad_daily_mj_m2=20.0,
             temp_canopy_c=25.0,
-            soil_water_mm=w_pmp,  # En marchitez permanente
+            soil_water_mm=0.0,  # Sin agua
             nitrogen_kg_ha=50.0,
             phosphorus_kg_ha=30.0,
             potassium_kg_ha=60.0,

@@ -3,6 +3,7 @@ const COMPACT_CROP_ROWS = [
   'maiz|Maíz Amiláceo|Granos|#facc15',
   'quinua|Quinua|Granos|#fb923c',
   'haba|Haba|Leguminosas|#22c55e',
+  'frijol|Frijol grano seco|Leguminosas|#4ade80',
   'alfalfa|Alfalfa|Forrajes|#10b981',
   'avena|Avena Forrajera|Forrajes|#34d399',
   'cebada|Cebada|Granos|#a3e635',
@@ -20,56 +21,16 @@ function buildCropCatalog(rows) {
   });
 }
 
-export const VISUAL_CROPS = buildCropCatalog(COMPACT_CROP_ROWS);
+export const VISUAL_CROPS = buildCropCatalog(COMPACT_CROP_ROWS).filter((crop) => ['papa', 'maiz', 'frijol'].includes(crop.id));
+export const CROP_DRAG_TYPE = 'application/x-agrophasor-crop';
 
 export const CROP_GROUPS = ['Todos', ...new Set(VISUAL_CROPS.map((crop) => crop.group))];
-
-export const DEMO_PARCELS = [
-  {
-    id: 'mantaro-base',
-    name: 'Valle del Mantaro (Plano)',
-    baseElevationM: 3250,
-    reliefDeltaM: 2,
-    center: [-12.06, -75.21],
-    polygon: [
-      [-12.0595, -75.2108],
-      [-12.0595, -75.2096],
-      [-12.0604, -75.2096],
-      [-12.0604, -75.2108],
-    ],
-  },
-  {
-    id: 'ica-sur',
-    name: 'Valle de Ica (Plano)',
-    baseElevationM: 406,
-    reliefDeltaM: 1,
-    center: [-14.07, -75.73],
-    polygon: [
-      [-14.0695, -75.7308],
-      [-14.0695, -75.7295],
-      [-14.0705, -75.7295],
-      [-14.0705, -75.7308],
-    ],
-  },
-  {
-    id: 'ladera-2z',
-    name: 'Ladera Andina (Con pendiente)',
-    baseElevationM: 3380,
-    reliefDeltaM: 36,
-    center: [-12.0359, -75.1745],
-    polygon: [
-      [-12.035, -75.1755],
-      [-12.035, -75.1735],
-      [-12.0368, -75.1735],
-      [-12.0368, -75.1755],
-    ],
-  },
-];
 
 export const STRATEGY_MODES = [
   {
     id: 'max-yield',
     backendMode: 'mayor_ganancia',
+    weights: { w1: 5, w2: 5, w3: 85, w4: 5 },
     label: 'Máximo Rendimiento',
     accentColor: '#f59e0b',
     subRoutes: [
@@ -81,6 +42,7 @@ export const STRATEGY_MODES = [
   {
     id: 'optimal-balance',
     backendMode: 'balance_optimo',
+    weights: { w1: 25, w2: 25, w3: 25, w4: 25 },
     label: 'Balance Óptimo',
     accentColor: '#38bdf8',
     subRoutes: [
@@ -90,6 +52,7 @@ export const STRATEGY_MODES = [
   {
     id: 'max-resilience',
     backendMode: 'maxima_resiliencia',
+    weights: { w1: 50, w2: 30, w3: 10, w4: 10 },
     label: 'Máxima Resiliencia',
     accentColor: '#22c55e',
     subRoutes: [
@@ -105,15 +68,6 @@ export const PDF_KNOBS = [
   { id: 'w2', symbol: 'w2', label: 'Mejor Tierra al Final', defaultValue: 25 },
   { id: 'w3', symbol: 'w3', label: 'Mayor Ganancia', defaultValue: 25 },
   { id: 'w4', symbol: 'w4', label: 'Rotación Más Rápida', defaultValue: 25 },
-];
-
-export const ROTATION_TYPES = [
-  { id: 'austeridad-hidrica', name: 'Austeridad Hídrica' },
-  { id: 'hospital-suelo', name: 'Hospital de Suelo' },
-  { id: 'zonificada-25d', name: 'Zonificada 2.5D' },
-  { id: 'forrajera-mixta', name: 'Forrajera / Mixta' },
-  { id: 'agil-ciclo-corto', name: 'Ágil / Ciclo Corto' },
-  { id: 'comercial-intensiva', name: 'Comercial Intensiva' },
 ];
 
 export const TIMELINE_MONTHS = [

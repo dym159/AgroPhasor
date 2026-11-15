@@ -164,7 +164,7 @@ def solve_edo3_step(
     xi_k_val = xi_k if xi_k is not None else float(GLOBAL_CONSTANTS.get("xi_K", 0.003))
 
     f_t = microbial_temperature_factor(t_soil_c, q10_val)
-    phi_chem = soil.phi_ph_ec
+    phi_chem = calculate_phi_ph_ec(soil.ph, soil.ec_ds_m)
 
     # Humedad relativa W / Wcc
     w_rel = max(0.0, min(1.2, w_mm / max(1.0, w_cc_mm)))
@@ -186,33 +186,32 @@ def solve_edo3_step(
 
     # -------------------- 1. VECTOR DE FUENTES S(t) --------------------
     # Nitrógeno: SN = FN_fert + Ffix,c * B + kmin0 * OM * (W/Wcc) * fT
-    # Nota: Si k_min0_val es en 1/día, multiplica al pool orgánico estimado (OM * factor ~ 150 kg N / %OM)
-    # Si k_min0_val es ya kg N/(ha*día*%OM), se evalúa directamente.
-    organic_n_pool = soil.om_pct * 120.0
+    # Coeficientes aplicados directamente según la sección 3.2.3 del PDF.
+    organic_n_pool = soil.om_pct
     sn_mineralization = k_min0_val * organic_n_pool * w_rel * f_t
-    sn_fixation = f_fix * b_act * 15.0  # F_fix escalado a producción diaria
+    sn_fixation = f_fix * b_act
     sn_total = fertilizer_npk_kg_ha[0] + sn_fixation + sn_mineralization
 
     # Fósforo: SP = FP_fert + Fsol,c * B + mineralización basal
-    sp_solubilization = f_sol * b_act * 8.0
-    sp_native = 0.03 * w_rel * f_t
+    sp_solubilization = f_sol * b_act
+    sp_native = 0.0
     sp_total = fertilizer_npk_kg_ha[1] + sp_solubilization + sp_native
 
     # Potasio: SK = FK_fert + SK_res + liberación basal de arcillas
     # SK_res = I(q = Transición) * beta_K * kdec * B
-    sk_stover = (1.0 - ic) * (beta_k_val * 25.0) * k_dec_val * b_act
-    sk_native = 0.40 * f_t
+    sk_stover = (1.0 - ic) * beta_k_val * k_dec_val * b_act
+    sk_native = 0.0
     sk_total = fertilizer_npk_kg_ha[2] + sk_stover + sk_native
 
     # ----------------- 2. VECTOR DE TASAS DE PÉRDIDA Lambda(t) -----------------
     # Nitrógeno: Lambda_N = (kl,N / CIC) * W + Ic * phi_chem * ka_N * fT + xi_N * eros
-    lambda_n = (k_ln_val / cic) * w_mm * 0.10 + ic * phi_chem * ka_n * f_t + xi_n_val * eros
+    lambda_n = w_mm * (k_ln_val / cic + ic * phi_chem * ka_n * f_t) + xi_n_val * eros
 
     # Fósforo (sin lixiviación vertical): Lambda_P = Ic * phi_chem * ka_P * fT * W + xi_P * eros
     lambda_p = ic * phi_chem * ka_p * f_t * w_mm + xi_p_val * eros
 
     # Potasio: Lambda_K = (kl,K / CIC) * W + Ic * phi_chem * ka_K * fT + xi_K * eros
-    lambda_k = (k_lk_val / cic) * w_mm * 0.10 + ic * phi_chem * ka_k * f_t + xi_k_val * eros
+    lambda_k = w_mm * (k_lk_val / cic + ic * phi_chem * ka_k * f_t) + xi_k_val * eros
 
     # ----------------- 3. INTEGRACIÓN ANALÍTICA EXACTA -----------------
     # N(t + dt) = exp(-Lambda * dt) * N(t) + dt * phi1(Lambda * dt) * S

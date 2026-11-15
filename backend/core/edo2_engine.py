@@ -52,10 +52,11 @@ class EDO2StepOutput:
 def compute_soil_limits(
     crop: CropParameters,
     theta_fc: float = 0.30,
-    theta_wp: float = 0.14
+    theta_wp: float = 0.14,
+    depth_mm: Optional[float] = None
 ) -> SoilHydraulicLimits:
     """Calcula los límites hídricos del suelo para una especie dada."""
-    zr = max(50.0, crop.Zr_mm)
+    zr = max(0.0, depth_mm) if depth_mm is not None else max(50.0, crop.Zr_mm)
     w_cc = theta_fc * zr
     w_pmp = theta_wp * zr
     p_dep = max(0.05, min(0.95, crop.p_depletion))
@@ -70,6 +71,16 @@ def compute_soil_limits(
         raw=round(w_cc - w_crit, 2),
         taw=round(w_cc - w_pmp, 2)
     )
+
+
+def relative_stomatal_conductance(w_mm: float, limits: SoilHydraulicLimits) -> float:
+    """Fracción de apertura estomática usada en el balance diario de EDO 2."""
+    if limits.w_cc <= 0:
+        return 0.0
+    if w_mm >= limits.w_crit:
+        return 1.0
+    span = max(1e-4, limits.w_crit - limits.w_pmp)
+    return max(0.0, min(1.0, (w_mm - limits.w_pmp) / span))
 
 
 def solve_edo2_step(
@@ -89,7 +100,9 @@ def solve_edo2_step(
     biomass_t_ha: Optional[float] = None,
     dt_days: float = 1.0,
     tau_warning_days: float = 2.0,
-    is_crop: bool = True
+    is_crop: bool = True,
+    depth_mm: Optional[float] = None,
+    canopy_temp_c: Optional[float] = None
 ) -> EDO2StepOutput:
     """
     Integra un paso de tiempo dt de EDO 2 (Balance Hidrológico Radicular).
@@ -120,7 +133,7 @@ def solve_edo2_step(
     if biomass_t_ha is None:
         biomass_t_ha = crop.B_max_t_ha if is_crop else crop.B0_t_ha
 
-    limits = compute_soil_limits(crop, theta_fc, theta_wp)
+    limits = compute_soil_limits(crop, theta_fc, theta_wp, depth_mm)
     w_cc = limits.w_cc
     w_pmp = limits.w_pmp
     w_crit = limits.w_crit
@@ -132,20 +145,12 @@ def solve_edo2_step(
 
     # 2. Déficit de presión de vapor atmosférico VPD [kPa]
     ea_air = actual_vapor_pressure(t_air_c, rh_pct)
-    es_air = saturation_vapor_pressure(t_air_c)
+    es_air = saturation_vapor_pressure(t_air_c if canopy_temp_c is None else canopy_temp_c)
     vpd = max(0.0, es_air - ea_air)
 
     # 3. Factor de conductancia estomática gamma_c(W) (AgroPhasor.pdf Sec. 3.3)
     eps = 1e-4
-    if not is_crop or crop.gamma_max <= 0.0:
-        gamma_rel = 0.0
-    elif w_current_mm >= w_crit:
-        gamma_rel = 1.0
-    elif w_current_mm <= w_pmp:
-        gamma_rel = 0.0
-    else:
-        denom = max(eps, w_crit - w_pmp)
-        gamma_rel = max(0.0, min(1.0, (w_current_mm - w_pmp) / denom))
+    gamma_rel = relative_stomatal_conductance(w_current_mm, limits) if is_crop and crop.gamma_max > 0 else 0.0
 
     # Conductancia efectiva diaria: gamma_max_daily [mm / (kPa · día)]
     # Si gamma_max está en kg/(m²·s·kPa), multiplicamos por 86400 s/día
@@ -167,7 +172,13 @@ def solve_edo2_step(
     total_infil = infil_precip + infil_riego
 
     dw_dt = total_infil - etc - drainage
-    w_tentative = w_current_mm + dw_dt * dt_days
+    # Freeze stomatal conductance and biomass within the step. Evaporation
+    # and drainage are linear in W, allowing an exponential update.
+    loss_rate = kd * sin_theta + e_suelo0 * canopy_shading / max(eps, w_cc)
+    source = total_infil - transpiration
+    decay = math.exp(-loss_rate * dt_days)
+    w_tentative = (w_current_mm * decay + source * (-math.expm1(-loss_rate * dt_days)) / loss_rate
+                   if loss_rate > 0 else w_current_mm + source * dt_days)
 
     # 6. Frontera física de saturación: corte Wcc y escorrentía superficial
     runoff = 0.0
@@ -178,6 +189,23 @@ def solve_edo2_step(
         w_next = 0.0
     else:
         w_next = w_tentative
+
+    active_time = dt_days
+    if w_tentative < 0 and source < 0 and loss_rate > 0:
+        equilibrium = source / loss_rate
+        active_time = math.log((w_current_mm - equilibrium) / -equilibrium) / loss_rate
+    if loss_rate > 0:
+        equilibrium = source / loss_rate
+        water_integral = equilibrium * active_time + (w_current_mm - equilibrium) * (-math.expm1(-loss_rate * active_time)) / loss_rate
+    else:
+        water_integral = w_current_mm * active_time + .5 * source * active_time ** 2
+    water_integral = max(0.0, water_integral)
+    evaporation_total = e_suelo0 * canopy_shading / max(eps, w_cc) * water_integral
+    drainage_total = kd * sin_theta * water_integral
+    transpiration_total = transpiration * active_time
+    # Water entering after exhaustion is consumed immediately by unmet demand.
+    if active_time < dt_days:
+        transpiration_total += total_infil * (dt_days - active_time)
 
     # 7. Capa de Diagnóstico y Alertas Operativas (Sec. 2.6.2)
     is_irrigation = w_next <= w_crit
@@ -191,10 +219,10 @@ def solve_edo2_step(
     return EDO2StepOutput(
         soil_water_mm=round(w_next, 2),
         dw_dt=round(dw_dt, 3),
-        etc_mm=round(etc * dt_days, 3),
-        transpiration_mm=round(transpiration * dt_days, 3),
-        evaporation_soil_mm=round(evap_soil * dt_days, 3),
-        drainage_mm=round(drainage * dt_days, 3),
+        etc_mm=round(transpiration_total + evaporation_total, 3),
+        transpiration_mm=round(transpiration_total, 3),
+        evaporation_soil_mm=round(evaporation_total, 3),
+        drainage_mm=round(drainage_total, 3),
         runoff_mm=round(runoff, 3),
         infiltration_mm=round(total_infil * dt_days, 3),
         gamma_c_relative=round(gamma_rel, 3),

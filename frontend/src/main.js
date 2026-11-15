@@ -2,12 +2,13 @@ import { createCenterStage } from './components/centerStage.js';
 import { createCropsPanel } from './components/cropsPanel.js';
 import { createKnobsPanel } from './components/knobsPanel.js';
 import { renderParcelBar } from './components/parcelBar.js';
-import { renderRotationsPanel } from './components/rotationsPanel.js';
+import { createRotationsPanel } from './components/rotationsPanel.js';
 import { renderStrategyPanel } from './components/strategyPanel.js';
 import { createTimelineBar } from './components/timelineBar.js';
-import { STRATEGY_MODES } from './data/mockVisualData.js';
-import { fetchParcelEdo1, fetchSimulation } from './services/agroApi.js';
+import { STRATEGY_MODES, VISUAL_CROPS } from './data/mockVisualData.js';
+import { fetchCropCycles, fetchParcelSimulation } from './services/agroApi.js';
 import { createUiState } from './state/uiState.js';
+import { assignPhaseCrop } from './utils/phaseDates.js';
 
 function rebalanceKnobs(currentKnobs, changedId, nextValue) {
   const clamped = Math.max(0, Math.min(100, Math.round(nextValue)));
@@ -40,19 +41,30 @@ function bootstrapApp() {
   const timelineEl = document.getElementById('timeline-bar');
 
   const store = createUiState();
-  let edo1Controller = null;
-  let edo1Timer = null;
-  let lastEdo1Signature = '';
-  let recommendationController = null;
-  let recommendationTimer = null;
+  const rotationsPanel = createRotationsPanel(rotationsEl, (stages) => {
+    const phases = stages.map(({ crop_id, start, harvest, residue_fraction, irrigation_mm_day }) => ({ cropId: crop_id, start, harvest, residue_fraction, irrigation_mm_day }));
+    store.setState({ phases });
+    scheduleParcelSimulation();
+  });
+  let parcelSimulationController = null;
+  let parcelSimulationTimer = null;
+  let lastParcelSignature = '';
 
-  function scheduleEdo1Simulation() {
+  function scheduleParcelSimulation({ retry = false } = {}) {
     const state = store.getState();
-    if (!state.hasActiveTerrain || !state.selectedParcel?.polygon?.length) {
-      edo1Controller?.abort();
+    const hasParcel = state.hasActiveTerrain && state.selectedParcel?.polygon?.length;
+    const activePhase = state.phases.find((phase) => phase.start <= (state.simulationDate ?? state.phases[0]?.start)
+      && (phase.harvest ?? '9999-12-31') > (state.simulationDate ?? state.phases[0]?.start));
+    const selectedCrop = activePhase?.cropId ?? state.phases.find((phase) => phase.cropId)?.cropId ?? state.previewCropId;
+    const cropId = state.isBareSoil ? 'transicion' : selectedCrop ?? 'papa';
+    if (!hasParcel) {
+      parcelSimulationController?.abort();
+      clearTimeout(parcelSimulationTimer);
+      lastParcelSignature = '';
       store.setState({
-        edo1Result: null,
-        edo1StatusText: 'Selecciona o dibuja un terreno en el mapa.',
+        parcelSimulationResult: null,
+        parcelSimulationFailed: false,
+        parcelSimulationStatusText: 'Dibuja el contorno de tu terreno en el mapa.',
       });
       return;
     }
@@ -60,84 +72,54 @@ function bootstrapApp() {
     const signature = JSON.stringify([
       state.selectedParcel.id,
       state.selectedParcel.polygon,
-      state.previewCropId,
+      cropId,
+      state.phases, state.simulationDate,
+      !state.isBareSoil && !selectedCrop,
     ]);
-    if (signature === lastEdo1Signature) return;
-    lastEdo1Signature = signature;
+    if (!retry && signature === lastParcelSignature) return;
+    lastParcelSignature = signature;
 
-    edo1Controller?.abort();
-    clearTimeout(edo1Timer);
+    parcelSimulationController?.abort();
+    clearTimeout(parcelSimulationTimer);
 
     const controller = new AbortController();
-    edo1Controller = controller;
+    parcelSimulationController = controller;
 
     store.setState({
-      edo1StatusText: 'Consultando NASA POWER (T2M) + SRTM v3 (30m)...',
+      parcelSimulationResult: null,
+      parcelSimulationFailed: false,
+      parcelSimulationStatusText: state.isBareSoil
+        ? 'Calculando el suelo desnudo con NASA POWER y SRTM…'
+        : 'Calculando el escudo con NASA POWER y SRTM…',
     });
 
-    edo1Timer = setTimeout(async () => {
+    parcelSimulationTimer = setTimeout(async () => {
       try {
-        const result = await fetchParcelEdo1(
+        const result = await fetchParcelSimulation(
           state.selectedParcel,
-          state.previewCropId,
-          controller.signal
+          cropId,
+          controller.signal,
+          !state.isBareSoil && state.phases.length && state.phases.every((phase) => phase.cropId && phase.harvest)
+            ? { phases: state.phases, selected_date: state.simulationDate && state.simulationDate >= state.phases[0].start && state.simulationDate <= state.phases.at(-1).harvest ? state.simulationDate : state.phases[0].start }
+            : {}
         );
         if (controller.signal.aborted) return;
 
-        const waterStr = result.lot_mean_soil_water_mm != null
-          ? ` · EDO 2: Agua ${result.lot_mean_soil_water_mm} mm (${result.water_status})`
-          : '';
-        const biomassStr = result.lot_mean_biomass_t_ha != null
-          ? ` · EDO 4: Biomasa ${result.lot_mean_biomass_t_ha} t/ha (NDVI ${result.lot_mean_ndvi})`
-          : '';
-        const irrStr = result.irrigation_alert && result.suggested_irrigation_mm > 0
-          ? ` · 💧 Riego ${result.suggested_irrigation_mm} mm`
-          : '';
-        const erosionStr = result.lot_mean_erosion_loss_mm != null
-          ? ` · EDO 5: Erosión ${result.lot_mean_erosion_loss_mm} mm (${result.erosion_risk_level})`
-          : '';
+        const cropLabel = result.reference_crop_used || (!state.isBareSoil && !selectedCrop)
+          ? `${result.crop} (referencia)` : result.crop;
 
         store.setState({
-          edo1Result: result,
-          edo1StatusText: `EDOs 1-5 · ${result.cells_count} celdas 30m · Dosel ${result.lot_mean_temp} °C${waterStr}${biomassStr}${irrStr}${erosionStr} · (NASA GPM/POWER/SMAP + SRTM)`,
+          parcelSimulationResult: result,
+          parcelSimulationStatusText: `${cropLabel} · ${result.date} · ${result.cells_count} celdas de 30 m`,
         });
       } catch (error) {
         if (controller.signal.aborted) return;
         store.setState({
-          edo1StatusText: `EDO 1: ${error.message}`,
+          parcelSimulationFailed: true,
+          parcelSimulationStatusText: error.message,
         });
       }
     }, 250);
-  }
-
-  function refreshRecommendation(patch = {}, delay = 0) {
-    recommendationController?.abort();
-    clearTimeout(recommendationTimer);
-    store.setState({ ...patch, simulationResult: null, recommendationStatus: 'loading' });
-
-    const state = store.getState();
-    if (!state.hasActiveTerrain) return;
-    const strategy = STRATEGY_MODES.find((mode) => mode.id === state.selectedStrategyId);
-    const subRoute = strategy?.subRoutes.find((route) => route.id === state.selectedSubRouteId);
-    const weights = state.recommendationSource === 'knobs' ? state.knobs : subRoute?.weights;
-    const controller = new AbortController();
-    recommendationController = controller;
-
-    recommendationTimer = setTimeout(async () => {
-      try {
-        const sim = await fetchSimulation(
-          state.selectedParcel, state.selectedStrategyId, weights, controller.signal
-        );
-        if (controller.signal.aborted) return;
-        if (!sim?.rotacion_recomendada?.sugerencia_optimizada?.length) {
-          store.setState({ recommendationStatus: 'error' });
-          return;
-        }
-        store.setState({ simulationResult: sim, recommendationStatus: 'ready' });
-      } catch {
-        if (!controller.signal.aborted) store.setState({ recommendationStatus: 'error' });
-      }
-    }, delay);
   }
 
   const knobsPanel = createKnobsPanel(
@@ -147,10 +129,18 @@ function bootstrapApp() {
       const current = store.getState();
       if (current.knobsLocked || current.knobs[knobId] === value) return;
       const nextKnobs = rebalanceKnobs(current.knobs, knobId, value);
-      refreshRecommendation({ knobs: nextKnobs, recommendationSource: 'knobs' }, 140);
+      store.setState({ knobs: nextKnobs });
     },
     () => store.setState({ knobsLocked: !store.getState().knobsLocked })
   );
+
+  function updateSelectedCrops(ids, preferredCropId) {
+    store.setState({
+      selectedCropIds: ids,
+      previewCropId: ids.includes(preferredCropId) ? preferredCropId : ids.at(-1) ?? null,
+    });
+    scheduleParcelSimulation();
+  }
 
   const cropsPanel = createCropsPanel(cropsEl, store.getState(), {
     onSearchCrop: (query) => store.setState({ cropSearchQuery: query }),
@@ -161,57 +151,63 @@ function bootstrapApp() {
       const nextIds = exists
         ? current.selectedCropIds.filter((id) => id !== cropId)
         : [...current.selectedCropIds, cropId];
-      store.setState({
-        selectedCropIds: nextIds,
-        previewCropId: cropId,
-      });
-      scheduleEdo1Simulation();
+      updateSelectedCrops(nextIds, exists ? current.previewCropId : cropId);
     },
     onSelectBatch: (batchIds) => {
       const current = store.getState();
       const merged = Array.from(new Set([...current.selectedCropIds, ...batchIds]));
-      store.setState({
-        selectedCropIds: merged,
-        previewCropId: batchIds[0] ?? current.previewCropId,
-      });
-      scheduleEdo1Simulation();
+      updateSelectedCrops(merged, current.previewCropId ?? batchIds[0]);
     },
-    onClearCrops: () => {
-      store.setState({ selectedCropIds: [] });
-    },
+    onClearCrops: () => updateSelectedCrops([], null),
   });
 
   const timelineBar = createTimelineBar(timelineEl, store.getState(), {
-    onChangeMonth: (monthIndex) => store.setState({ activeMonthIndex: monthIndex }),
-    onAddPeriod: () => {
-      const current = store.getState();
-      store.setState({ periodCount: Math.min(6, current.periodCount + 1) });
+    onInspectDate: (simulationDate) => {
+      store.setState({ simulationDate });
+      scheduleParcelSimulation();
+    },
+    onPlantingStart: (plantingStart) => {
+      if (store.getState().plantingStart !== plantingStart) store.setState({ plantingStart });
+    },
+    onAddPhase: (start) => {
+      const { phases: existing, previewCropId, cropCycles } = store.getState();
+      const last = existing.at(-1);
+      if (last && start <= last.start) return;
+      const prefix = last && last.harvest !== start
+        ? [...existing.slice(0, -1), { ...last, harvest: start, manualEnd: true }]
+        : existing;
+      const cropId = last ? '' : previewCropId ?? '';
+      const phases = assignPhaseCrop([...prefix, { start }], prefix.length, cropId, cropCycles);
+      store.setState({ phases });
+      scheduleParcelSimulation();
+    },
+    onAssignCrop: (phaseIndex, cropId) => {
+      const { phases, cropCycles } = store.getState();
+      const phase = phases[phaseIndex];
+      if (!phase || phase.cropId === cropId) return;
+      if (cropId && !VISUAL_CROPS.some((crop) => crop.id === cropId)) return;
+
+      const nextPhases = assignPhaseCrop(phases, phaseIndex, cropId, cropCycles);
+      store.setState({ phases: nextPhases });
+      scheduleParcelSimulation();
     },
   });
 
   const handleDeleteTerrain = () => {
-    lastEdo1Signature = '';
-    edo1Controller?.abort();
-    recommendationController?.abort();
-    clearTimeout(recommendationTimer);
+    lastParcelSignature = '';
+    parcelSimulationController?.abort();
+    clearTimeout(parcelSimulationTimer);
     store.setState({
       hasActiveTerrain: false,
+      selectedParcel: null,
       centerMode: 'select',
-      edo1Result: null,
-      simulationResult: null,
-      edo1StatusText: 'Terreno eliminado. Selecciona o dibuja otro lote.',
+      parcelSimulationResult: null,
+      parcelSimulationFailed: false,
+      parcelSimulationStatusText: 'Terreno eliminado. Selecciona o dibuja otro lote.',
     });
   };
 
   const centerStage = createCenterStage(centerEl, {
-    onSelectPresetParcel: (parcel) => {
-      refreshRecommendation({
-        selectedParcel: parcel,
-        hasActiveTerrain: true,
-        edo1Result: null,
-      });
-      scheduleEdo1Simulation();
-    },
     onCustomPolygonDrawn: (polygonCoords) => {
       if (!polygonCoords?.length) return;
       const centerLat =
@@ -219,17 +215,17 @@ function bootstrapApp() {
       const centerLng =
         polygonCoords.reduce((acc, pt) => acc + pt[1], 0) / polygonCoords.length;
 
-      refreshRecommendation({
+      store.setState({
         selectedParcel: {
           id: `custom-${Date.now()}`,
-          name: 'Terreno Satelital Dibujado',
+          name: 'Terreno seleccionado',
           center: [centerLat, centerLng],
           polygon: polygonCoords,
         },
         hasActiveTerrain: true,
-        edo1Result: null,
+        parcelSimulationResult: null,
       });
-      scheduleEdo1Simulation();
+      scheduleParcelSimulation();
     },
     onConfirmTerrain: () => {
       store.setState({ centerMode: 'terrain' });
@@ -237,6 +233,11 @@ function bootstrapApp() {
     onBackToMap: () => {
       store.setState({ centerMode: 'select' });
     },
+    onToggleBareSoil: () => {
+      store.setState({ isBareSoil: !store.getState().isBareSoil });
+      scheduleParcelSimulation();
+    },
+    onRetrySimulation: () => scheduleParcelSimulation({ retry: true }),
     onDeleteTerrain: handleDeleteTerrain,
   });
 
@@ -248,20 +249,19 @@ function bootstrapApp() {
 
     renderStrategyPanel(strategyEl, state, {
       onSelectStrategy: (strategyId, subRouteId) => {
-        refreshRecommendation({
+        const strategy = STRATEGY_MODES.find((mode) => mode.id === strategyId);
+        const branch = strategy.subRoutes.find((route) => route.id === subRouteId);
+        store.setState({
           selectedStrategyId: strategyId,
           selectedSubRouteId: subRouteId,
-          recommendationSource: 'strategy',
+          knobs: store.getState().knobsLocked ? store.getState().knobs : branch?.weights ?? strategy.weights,
         });
       },
     });
 
     knobsPanel.update(state.knobs, state.knobsLocked);
     cropsPanel.update(state);
-
-    renderRotationsPanel(rotationsEl, state, (rotationId) => {
-      store.setState({ selectedRotationId: rotationId });
-    });
+    rotationsPanel.update(state);
 
     timelineBar.update(state);
     centerStage.render(state);
@@ -269,8 +269,17 @@ function bootstrapApp() {
 
   store.subscribe(renderAll);
   renderAll(store.getState());
-  scheduleEdo1Simulation();
-  refreshRecommendation();
+  scheduleParcelSimulation();
+  fetchCropCycles().then((cropCycles) => {
+    const { phases } = store.getState();
+    const pending = phases.findIndex((phase) => !phase.harvest && cropCycles[phase.cropId]);
+    store.setState({
+      cropCycles,
+      ...(pending >= 0 ? { phases: assignPhaseCrop(phases, pending, phases[pending].cropId, cropCycles) } : {}),
+    });
+  }).catch((error) => {
+    console.error(error);
+  });
 }
 
 document.addEventListener('DOMContentLoaded', bootstrapApp);

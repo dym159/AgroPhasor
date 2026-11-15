@@ -6,17 +6,9 @@ export function renderStrategyPanel(container, state, callbacks) {
 
   clearChildren(container);
 
-  const shieldScore = state.simulationResult?.indicadores?.escudo_ambiental?.indice;
-  const headerChildren = [
+  const header = createElement('div', { className: 'panel-header' }, [
     createElement('h2', { className: 'panel-title', text: 'Estrategias' }),
-  ];
-  if (shieldScore != null) {
-    headerChildren.push(
-      createElement('span', { className: 'panel-tag', text: `Escudo ${shieldScore}/100` })
-    );
-  }
-
-  const header = createElement('div', { className: 'panel-header' }, headerChildren);
+  ]);
   const list = createElement('div', { className: 'strategy-list panel-scroll' });
 
   for (const mode of STRATEGY_MODES) {

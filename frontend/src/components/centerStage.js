@@ -8,7 +8,7 @@ export function createCenterStage(container, callbacks) {
   let lastMountKey = '';
 
   function render(state) {
-    const mountKey = `${state.centerMode}:${state.selectedParcel.id}:${state.hasActiveTerrain}`;
+    const mountKey = `${state.centerMode}:${state.selectedParcel?.id}:${state.hasActiveTerrain}`;
 
     if (mountKey === lastMountKey) {
       activeHandle?.update?.(state);
@@ -23,15 +23,17 @@ export function createCenterStage(container, callbacks) {
       activeHandle = mountTerrainVisualizer(container, state, {
         onBackToMap: callbacks.onBackToMap,
         onDeleteTerrain: callbacks.onDeleteTerrain,
+        onToggleBareSoil: callbacks.onToggleBareSoil,
+        onRetrySimulation: callbacks.onRetrySimulation,
       });
       return;
     }
 
     activeHandle = mountParcelSelectorMap(container, state, {
-      onSelectPresetParcel: callbacks.onSelectPresetParcel,
       onCustomPolygonDrawn: callbacks.onCustomPolygonDrawn,
       onConfirmTerrain: callbacks.onConfirmTerrain,
       onDeleteTerrain: callbacks.onDeleteTerrain,
+      onRetrySimulation: callbacks.onRetrySimulation,
     });
   }
 

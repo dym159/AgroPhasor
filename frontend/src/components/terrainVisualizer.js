@@ -1,111 +1,91 @@
-import { VISUAL_CROPS } from '../data/mockVisualData.js';
-import { buildTerrainFromSatellite, normalizeParcelBoundary } from '../services/satelliteTerrainBuilder.js';
+import { buildParcelSimulationMesh, buildPreviewMesh, shieldColor } from '../services/parcelSimulationMesh.js';
+import { buildTerrainFromSatellite } from '../services/satelliteTerrainBuilder.js';
 import { clearChildren, createElement } from '../utils/dom.js';
 
-const GRID_ROWS = 6;
-const GRID_COLS = 8;
-const HALF_WIDTH = 0.9;
-const HALF_DEPTH = 0.65;
 const INITIAL_YAW = -0.58;
-const INITIAL_TILT = 0.5;
+const INITIAL_TILT = 0.56;
 
 export function mountTerrainVisualizer(container, state, callbacks) {
-  if (!container) return { update: () => {}, destroy: () => {} };
-
   clearChildren(container);
 
-  const boundary = splitBoundaryByCell(normalizeParcelBoundary(state.selectedParcel.polygon));
-  let currentCrop = findCrop(state.previewCropId);
-  let yawAngle = INITIAL_YAW;
-  let tiltAngle = INITIAL_TILT;
+  let yaw = INITIAL_YAW;
+  let tilt = INITIAL_TILT;
   let offsetX = 0;
   let offsetY = 0;
-  let panEnabled = false;
   let drag = null;
-  let isDisposed = false;
-  let terrainModel = null;
-  let lastEdo1Result = state.edo1Result;
-  let terrainLoadId = 0;
+  let result = null;
+  let mesh = null;
+  let previewMesh = null;
+  let previewRequested = false;
+  let disposed = false;
+  let hour = 0;
 
-  const variationBadge = createElement('span', {
-    className: 'panel-tag',
-    text: 'Muestreando relieve SRTM + satélite...',
-  });
-
-  const deleteTerrainBtn = createElement('button', {
-    type: 'button',
-    className: 'btn btn-danger',
-    text: 'Eliminar terreno',
-    onClick: callbacks.onDeleteTerrain,
-  });
-
-  const changeTerrainBtn = createElement('button', {
+  const status = createElement('span', { className: 'panel-tag', attrs: { role: 'status' } });
+  const bareSoil = createElement('button', {
     type: 'button',
     className: 'btn',
-    text: 'Cambiar terreno',
-    onClick: callbacks.onBackToMap,
+    text: 'Suelo desnudo',
+    onClick: callbacks.onToggleBareSoil,
   });
-
+  const retry = createElement('button', {
+    type: 'button',
+    className: 'btn',
+    text: 'Reintentar',
+    onClick: callbacks.onRetrySimulation,
+  });
   const toolbar = createElement('div', { className: 'stage-toolbar' }, [
     createElement('div', { className: 'stage-presets' }, [
-      createElement('span', {
-        className: 'parcel-bar-name',
-        text: state.selectedParcel.name,
-      }),
-      variationBadge,
+      createElement('span', { className: 'parcel-bar-name', text: state.selectedParcel.name }),
+      status,
     ]),
     createElement('div', { className: 'stage-presets' }, [
-      deleteTerrainBtn,
-      changeTerrainBtn,
+      retry,
+      bareSoil,
+      createElement('button', {
+        type: 'button', className: 'btn', text: 'Cambiar terreno', onClick: callbacks.onBackToMap,
+      }),
+      createElement('button', {
+        type: 'button', className: 'btn btn-danger', text: 'Eliminar terreno', onClick: callbacks.onDeleteTerrain,
+      }),
     ]),
   ]);
 
   const canvas = createElement('canvas', {
     className: 'terrain-canvas',
-    attrs: { tabindex: 0, 'aria-label': 'Vista 3D del terreno. Usa las flechas para girar o desplazar.' },
+    attrs: { tabindex: 0, 'aria-label': 'Terreno 3D. Usa las flechas para girar.' },
   });
-
-  const panButton = createElement('button', {
-    type: 'button',
-    className: 'btn',
-    text: 'Desplazar',
-    attrs: { 'aria-pressed': false },
-    onClick: () => {
-      panEnabled = !panEnabled;
-      panButton.setAttribute('aria-pressed', String(panEnabled));
-      panButton.classList.toggle('btn-active', panEnabled);
-    },
-  });
-  const resetButton = createElement('button', {
-    type: 'button',
-    className: 'btn',
-    text: 'Restablecer vista',
-    onClick: () => {
-      yawAngle = INITIAL_YAW;
-      tiltAngle = INITIAL_TILT;
-      offsetX = 0;
-      offsetY = 0;
-      drawScene();
-    },
-  });
-  const viewControls = createElement('div', { className: 'terrain-view-controls' }, [
-    panButton, resetButton,
-  ]);
-  const canvasWrap = createElement('div', { className: 'terrain-canvas-wrap' }, [
-    canvas, viewControls,
-  ]);
-
-  const body = createElement('div', { className: 'stage-body' }, [canvasWrap]);
-  container.append(toolbar, body);
-
-  const context = canvas.getContext('2d');
-  if (!context) return { update: () => {}, destroy: () => {} };
-
-  const resizeObserver = new ResizeObserver(() => {
-    syncCanvasSize(canvas, canvasWrap);
+  const hourControl = createElement('input', { type: 'range', attrs: {
+    min: 0, max: 23, value: 12, 'aria-label': 'Hora del escudo',
+  } });
+  hourControl.addEventListener('input', () => {
+    hour = hourControl.valueAsNumber;
     drawScene();
   });
-  resizeObserver.observe(canvasWrap);
+  const hourLabel = createElement('label', {}, ['Hora del escudo', hourControl]);
+  toolbar.append(hourLabel);
+  const context = canvas.getContext('2d');
+  const legend = createElement('div', { className: 'terrain-legend' }, [
+    createElement('div', {}, ['Escudo · crítico', createElement('span', { className: 'terrain-legend-shield' }), 'Óptimo']),
+    createElement('div', {}, ['Suelo fértil', createElement('span', { className: 'terrain-legend-soil' }), 'Roca']),
+  ]);
+  const shieldStatus = createElement('div', { className: 'terrain-legend', attrs: { role: 'status' } });
+  const view = createElement('div', { className: 'terrain-canvas-wrap' }, [
+    canvas,
+    legend,
+    shieldStatus,
+  ]);
+  const diagnostics = createElement('p', { className: 'terrain-diagnostics', attrs: { role: 'status' } });
+  view.append(diagnostics);
+  const body = createElement('div', { className: 'stage-body terrain-stage-body' }, [view]);
+  container.append(toolbar, body);
+
+  const resizeObserver = new ResizeObserver(() => {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(view.clientWidth * dpr));
+    canvas.height = Math.max(1, Math.round(view.clientHeight * dpr));
+    drawScene();
+  });
+  resizeObserver.observe(view);
 
   canvas.addEventListener('pointerdown', (event) => {
     if (drag || event.button !== 0) return;
@@ -113,31 +93,32 @@ export function mountTerrainVisualizer(container, state, callbacks) {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      pan: panEnabled || event.shiftKey,
+      distance: 0,
+      pan: event.shiftKey,
     };
     canvas.setPointerCapture(event.pointerId);
   });
-
   canvas.addEventListener('pointermove', (event) => {
     if (drag?.id !== event.pointerId) return;
-    moveView(event.clientX - drag.x, event.clientY - drag.y, drag.pan);
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    drag.distance += Math.hypot(dx, dy);
     drag.x = event.clientX;
     drag.y = event.clientY;
+    if (drag.distance > 4) moveView(dx, dy, drag.pan);
   });
-
-  const stopDragging = (event) => {
-    if (drag?.id === event.pointerId) drag = null;
-  };
-  canvas.addEventListener('pointerup', stopDragging);
-  canvas.addEventListener('pointercancel', stopDragging);
-  canvas.addEventListener('lostpointercapture', stopDragging);
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    canvas.addEventListener(event, ({ pointerId }) => {
+      if (drag?.id === pointerId) drag = null;
+    });
+  }
   canvas.addEventListener('keydown', (event) => {
     const step = {
       ArrowLeft: [-24, 0], ArrowRight: [24, 0], ArrowUp: [0, -24], ArrowDown: [0, 24],
     }[event.key];
     if (!step) return;
     event.preventDefault();
-    moveView(step[0], step[1], panEnabled || event.shiftKey);
+    moveView(step[0], step[1], event.shiftKey);
   });
 
   function moveView(dx, dy, pan) {
@@ -145,337 +126,163 @@ export function mountTerrainVisualizer(container, state, callbacks) {
       offsetX += dx;
       offsetY += dy;
     } else {
-      yawAngle = (yawAngle + dx * 0.008) % (2 * Math.PI);
-      tiltAngle = clamp(tiltAngle - dy * 0.006, 0.18, Math.PI / 2);
+      yaw = (yaw + dx * 0.008) % (2 * Math.PI);
+      tilt = Math.max(0.25, Math.min(Math.PI / 2, tilt - dy * 0.006));
     }
-    drawScene();
-  }
-
-  syncCanvasSize(canvas, canvasWrap);
-  drawScene();
-  loadSatelliteTerrain(state.selectedParcel, state.edo1Result);
-
-  async function loadSatelliteTerrain(parcel, edo1Result) {
-    const loadId = ++terrainLoadId;
-    const built = await buildTerrainFromSatellite(
-      parcel,
-      GRID_ROWS,
-      GRID_COLS,
-      edo1Result
-    );
-    if (isDisposed || loadId !== terrainLoadId) return;
-
-    terrainModel = built;
-    const tempSuffix =
-      built.lotMeanTemp != null ? ` · Dosel ${built.lotMeanTemp} °C` : '';
-    variationBadge.textContent = built.hasVariation
-      ? `${built.sourceLabel}: +${built.deltaMeters} m (${built.minElevation}–${built.maxElevation} m)${tempSuffix}`
-      : `${built.sourceLabel}: Sin variación (${built.deltaMeters} m · Plano)${tempSuffix}`;
-
     drawScene();
   }
 
   function drawScene() {
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
-    if (!width || !height) return;
+    const width = view.clientWidth;
+    const height = view.clientHeight;
+    if (!context || !width || !height) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
     context.clearRect(0, 0, width, height);
+    const surface = mesh ?? previewMesh;
+    if (!surface) return;
 
+    const scale = Math.min(width, height) * 0.40;
     const centerX = width * 0.5 + offsetX;
-    const centerY = height * 0.57 + offsetY;
-    const scale = Math.min(width, height) * 0.42;
-    const cosYaw = Math.cos(yawAngle);
-    const sinYaw = Math.sin(yawAngle);
-    const sinTilt = Math.sin(tiltAngle);
-    const cosTilt = Math.cos(tiltAngle);
-
-    const project = (nx, ny, nz) => {
-      const rx = nx * cosYaw - ny * sinYaw;
-      const ry = nx * sinYaw + ny * cosYaw;
-      return {
-        x: centerX + rx * scale,
-        y: centerY + (ry * sinTilt - nz * cosTilt) * scale,
-      };
-    };
-
-    drawExtrudedBox(context, project, {
-      x1: -HALF_WIDTH,
-      y1: -HALF_DEPTH,
-      x2: HALF_WIDTH,
-      y2: HALF_DEPTH,
-      zBottom: -0.2,
-      zTop: 0,
-      topColor: '#2c4730',
-      topStroke: '#526375',
-      sideColors: ['#5c3b21', '#422917'],
-      sideStroke: '#7c5130',
+    const centerY = height * 0.53 + offsetY;
+    const cosYaw = Math.cos(yaw);
+    const sinYaw = Math.sin(yaw);
+    const sinTilt = Math.sin(tilt);
+    const cosTilt = Math.cos(tilt);
+    const depth = ([x, y]) => x * sinYaw + y * cosYaw;
+    const project = ([x, y], z) => ({
+      x: centerX + (x * cosYaw - y * sinYaw) * scale,
+      y: centerY + (depth([x, y]) * sinTilt - z * cosTilt) * scale,
     });
-
-    if (terrainModel) {
-      drawSatelliteCells(context, project, terrainModel);
+    const sorted = [...surface.cells].sort((a, b) => depth(a.center) - depth(b.center));
+    for (const { polygons, z, color } of sorted) {
+      for (const rings of polygons) {
+        const path = new Path2D();
+        for (const [index, ring] of rings.entries()) {
+          const top = ring.map((vertex) => project(vertex, z));
+          const bottom = ring.map((vertex) => project(vertex, surface.floor));
+          drawCellSides(context, top, bottom, index > 0);
+          traceRing(path, top);
+        }
+        context.fillStyle = color;
+        context.fill(path, 'evenodd');
+        context.strokeStyle = 'rgba(214, 194, 167, 0.35)';
+        context.lineWidth = 1;
+        context.stroke(path);
+      }
     }
 
-    if (terrainModel) drawCrops(context, project, currentCrop.tint, terrainModel);
-    drawSpatialGrid(context, project);
-    drawParcelBoundary(context, project, boundary, terrainModel);
+    const shieldCells = sorted.filter(({ cell }) => cell?.shield_enabled);
+    if (!shieldCells.length) return;
+
+    // Toda la cuadrícula comparte una cota, incluso sobre las celdas erosionadas.
+    const shieldZ = Math.max(...sorted.map(({ z }) => z)) + 0.22;
+    for (const { cell, center, polygons } of shieldCells) {
+      const air = cell.hourly_air_temps;
+      const canopy = cell.hourly_canopy_temps;
+      if (!air?.length || canopy?.length !== air.length) continue;
+      const meanAir = air.reduce((sum, value) => sum + value, 0) / air.length;
+      const meanCanopy = canopy.reduce((sum, value) => sum + value, 0) / canopy.length;
+      const vertices = polygons.flat(2);
+      const radius = Math.min(
+        Math.max(...vertices.map(([x]) => x)) - Math.min(...vertices.map(([x]) => x)),
+        Math.max(...vertices.map(([, y]) => y)) - Math.min(...vertices.map(([, y]) => y))
+      ) * .43;
+      // A shared temperature scale preserves differences in Lissajous area.
+      const trajectory = air.map((value, index) => project([
+        center[0] + (value - meanAir) / 20 * radius,
+        center[1] + (canopy[index] - meanCanopy) / 20 * radius,
+      ], shieldZ));
+      const path = new Path2D();
+      traceRing(path, trajectory);
+      path.closePath();
+      const color = shieldColor(cell.hourly_environmental_index[hour] ?? 0);
+      context.fillStyle = color;
+      context.globalAlpha = .4;
+      context.fill(path);
+      context.globalAlpha = 1;
+      context.strokeStyle = color;
+      context.lineWidth = 1.5;
+      context.stroke(path);
+      const point = trajectory[Math.min(hour, trajectory.length - 1)];
+      context.beginPath();
+      context.arc(point.x, point.y, 2, 0, Math.PI * 2);
+      context.fill();
+    }
   }
 
   function update(nextState) {
-    currentCrop = findCrop(nextState.previewCropId);
-    if (nextState.edo1Result !== lastEdo1Result) {
-      lastEdo1Result = nextState.edo1Result;
-      loadSatelliteTerrain(nextState.selectedParcel, nextState.edo1Result);
+    status.textContent = nextState.parcelSimulationStatusText;
+    const simulation = nextState.parcelSimulationResult;
+    diagnostics.hidden = !simulation;
+    if (simulation) {
+      const water = simulation.irrigation_alert
+        ? `Riego sugerido · ${Number(simulation.suggested_irrigation_mm).toFixed(1)} mm`
+        : 'Humedad sobre el umbral de riego';
+      const fertility = Number(simulation.lot_mean_eta_nutrientes);
+      diagnostics.textContent = `${water} · Suficiencia de nutrientes ${Math.round(fertility * 100)} %`
+        + (simulation.plan_simulation ? ' · Escenario histórico 2023' : '');
     }
+    retry.hidden = !nextState.parcelSimulationFailed;
+    bareSoil.classList.toggle('btn-active', nextState.isBareSoil);
+    bareSoil.setAttribute('aria-pressed', String(nextState.isBareSoil));
+    const hasShield = nextState.parcelSimulationResult?.cells.some((cell) => cell.shield_enabled);
+    shieldStatus.hidden = Boolean(hasShield);
+    shieldStatus.textContent = nextState.isBareSoil
+      ? 'Suelo desnudo · escudo desactivado'
+      : nextState.parcelSimulationFailed || nextState.parcelSimulationResult ? 'Escudo no disponible'
+      : 'Calculando el escudo…';
+    if (!nextState.parcelSimulationResult && !previewRequested) {
+      previewRequested = true;
+      buildTerrainFromSatellite(nextState.selectedParcel).then((model) => {
+        if (disposed) return;
+        previewMesh = buildPreviewMesh(model);
+        if (!mesh) drawScene();
+      }).catch(() => {});
+    }
+    if (result === nextState.parcelSimulationResult) return;
+
+    result = nextState.parcelSimulationResult;
+    mesh = result ? buildParcelSimulationMesh(nextState.selectedParcel, result.cells) : null;
+    hour = result ? Math.min(12, result.timestamps.length - 1) : 0;
+    legend.hidden = !result;
+    legend.firstElementChild.hidden = !hasShield;
+    shieldStatus.classList.toggle('terrain-legend-offset', Boolean(result && !hasShield));
     drawScene();
   }
 
+  legend.hidden = true;
+  update(state);
   return {
     update,
     destroy: () => {
-      isDisposed = true;
+      disposed = true;
       resizeObserver.disconnect();
     },
   };
 }
 
-function drawSatelliteCells(ctx, project, model) {
-  const { rows, cols, normalizedHeights, cellColors, gridPoints } = model;
-  const dx = (2 * HALF_WIDTH) / cols;
-  const dy = (2 * HALF_DEPTH) / rows;
+function traceRing(path, ring) {
+  const [first, ...rest] = ring;
+  path.moveTo(first.x, first.y);
+  for (const point of rest) path.lineTo(point.x, point.y);
+  path.closePath();
+}
 
-  const cellsToDraw = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const idx = r * cols + c;
-      if (gridPoints[idx] && !gridPoints[idx].insidePolygon) continue;
-
-      const x1 = -HALF_WIDTH + c * dx;
-      const y1 = -HALF_DEPTH + r * dy;
-      const x2 = x1 + dx;
-      const y2 = y1 + dy;
-      const zTop = normalizedHeights[idx] || 0;
-      const centerScreen = project((x1 + x2) * 0.5, (y1 + y2) * 0.5, 0);
-
-      cellsToDraw.push({
-        x1,
-        y1,
-        x2,
-        y2,
-        zTop,
-        color: cellColors[idx] ?? '#325136',
-        screenY: centerScreen.y,
-      });
-    }
+function drawCellSides(context, top, bottom, isHole) {
+  let signedArea = 0;
+  for (let i = 0; i < top.length; i++) {
+    const a = top[i];
+    const b = top[(i + 1) % top.length];
+    signedArea += a.x * b.y - a.y * b.x;
   }
-
-  cellsToDraw.sort((a, b) => a.screenY - b.screenY);
-
-  for (const cell of cellsToDraw) {
-    if (cell.zTop > 0.005) {
-      drawExtrudedBox(ctx, project, {
-        x1: cell.x1,
-        y1: cell.y1,
-        x2: cell.x2,
-        y2: cell.y2,
-        zBottom: 0,
-        zTop: cell.zTop,
-        topColor: cell.color,
-        topStroke: 'rgba(148, 163, 184, 0.35)',
-        sideColors: ['#6b472b', '#4e331e'],
-        sideStroke: 'rgba(255, 255, 255, 0.16)',
-      });
-    } else {
-      const quad = [
-        project(cell.x1, cell.y1, 0),
-        project(cell.x2, cell.y1, 0),
-        project(cell.x2, cell.y2, 0),
-        project(cell.x1, cell.y2, 0),
-      ];
-      fillPolygon(ctx, quad, cell.color, 'rgba(148, 163, 184, 0.22)');
-    }
+  const sign = Math.sign(signedArea) * (isHole ? -1 : 1);
+  context.fillStyle = '#3a302b';
+  for (let i = 0; i < top.length; i++) {
+    const next = (i + 1) % top.length;
+    if ((top[next].x - top[i].x) * sign >= 0) continue;
+    const face = new Path2D();
+    traceRing(face, [top[i], top[next], bottom[next], bottom[i]]);
+    context.fill(face);
   }
-}
-
-function drawExtrudedBox(ctx, project, box) {
-  const top = [
-    project(box.x1, box.y1, box.zTop),
-    project(box.x2, box.y1, box.zTop),
-    project(box.x2, box.y2, box.zTop),
-    project(box.x1, box.y2, box.zTop),
-  ];
-  const base = [
-    project(box.x1, box.y1, box.zBottom),
-    project(box.x2, box.y1, box.zBottom),
-    project(box.x2, box.y2, box.zBottom),
-    project(box.x1, box.y2, box.zBottom),
-  ];
-
-  const sideFaces = [
-    { quad: [top[0], top[1], base[1], base[0]], color: box.sideColors[1] },
-    { quad: [top[1], top[2], base[2], base[1]], color: box.sideColors[0] },
-    { quad: [top[2], top[3], base[3], base[2]], color: box.sideColors[1] },
-    { quad: [top[3], top[0], base[0], base[3]], color: box.sideColors[0] },
-  ];
-
-  sideFaces.sort((a, b) => averageY(a.quad) - averageY(b.quad));
-  for (const face of sideFaces.slice(2)) {
-    fillPolygon(ctx, face.quad, face.color, box.sideStroke);
-  }
-
-  fillPolygon(ctx, top, box.topColor, box.topStroke);
-}
-
-function averageY(points) {
-  return (points[0].y + points[1].y + points[2].y + points[3].y) / 4;
-}
-
-function drawCrops(ctx, project, tint, model) {
-  const dx = (2 * HALF_WIDTH) / GRID_COLS;
-  const dy = (2 * HALF_DEPTH) / GRID_ROWS;
-
-  for (let r = 0; r < GRID_ROWS; r++) {
-    for (let c = 0; c < GRID_COLS; c++) {
-      const idx = r * GRID_COLS + c;
-      if (model?.gridPoints?.[idx] && !model.gridPoints[idx].insidePolygon) {
-        continue;
-      }
-
-      const nx = -HALF_WIDTH + (c + 0.5) * dx;
-      const ny = -HALF_DEPTH + (r + 0.5) * dy;
-      const baseZ = model?.normalizedHeights?.[idx] || 0.01;
-      const root = project(nx, ny, baseZ);
-      const tip = project(nx, ny, baseZ + 0.14);
-
-      ctx.strokeStyle = '#4ade80';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(root.x, root.y);
-      ctx.lineTo(tip.x, tip.y);
-      ctx.stroke();
-
-      ctx.fillStyle = tint;
-      ctx.beginPath();
-      ctx.ellipse(tip.x - 3.5, tip.y + 2.5, 4, 2, -0.5, 0, Math.PI * 2);
-      ctx.ellipse(tip.x + 3.5, tip.y + 2.5, 4, 2, 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-}
-
-function drawSpatialGrid(ctx, project) {
-  const gridZ = 0.4;
-  ctx.strokeStyle = 'rgba(148, 163, 184, 0.26)';
-  ctx.lineWidth = 1;
-
-  for (let c = 0; c <= GRID_COLS; c++) {
-    const nx = -HALF_WIDTH + (c / GRID_COLS) * (2 * HALF_WIDTH);
-    const start = project(nx, -HALF_DEPTH, gridZ);
-    const end = project(nx, HALF_DEPTH, gridZ);
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
-  }
-
-  for (let r = 0; r <= GRID_ROWS; r++) {
-    const ny = -HALF_DEPTH + (r / GRID_ROWS) * (2 * HALF_DEPTH);
-    const start = project(-HALF_WIDTH, ny, gridZ);
-    const end = project(HALF_WIDTH, ny, gridZ);
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-    ctx.stroke();
-  }
-}
-
-function splitBoundaryByCell(points) {
-  const segments = [];
-  for (let i = 0; i < points.length; i++) {
-    const start = points[i];
-    const end = points[(i + 1) % points.length];
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    if (dx === 0 && dy === 0) continue;
-
-    const crossings = new Set([0, 1]);
-    for (const [origin, delta, cells] of [[start.x, dx, GRID_COLS], [start.y, dy, GRID_ROWS]]) {
-      if (!delta) continue;
-      for (let line = 1; line < cells; line++) {
-        const t = (line / cells - origin) / delta;
-        if (t > 0 && t < 1) crossings.add(t);
-      }
-    }
-    const stops = [...crossings].sort((a, b) => a - b);
-    for (let j = 1; j < stops.length; j++) {
-      const from = stops[j - 1];
-      const to = stops[j];
-      const midpoint = (from + to) / 2;
-      const col = clamp(Math.floor((start.x + dx * midpoint) * GRID_COLS), 0, GRID_COLS - 1);
-      const row = clamp(Math.floor((start.y + dy * midpoint) * GRID_ROWS), 0, GRID_ROWS - 1);
-      segments.push({
-        cell: row * GRID_COLS + col,
-        x1: (2 * (start.x + dx * from) - 1) * HALF_WIDTH,
-        y1: (2 * (start.y + dy * from) - 1) * HALF_DEPTH,
-        x2: (2 * (start.x + dx * to) - 1) * HALF_WIDTH,
-        y2: (2 * (start.y + dy * to) - 1) * HALF_DEPTH,
-      });
-    }
-  }
-  return segments;
-}
-
-function drawParcelBoundary(ctx, project, segments, model) {
-  if (!segments.length) return;
-  ctx.save();
-  ctx.beginPath();
-  for (const [index, { cell, x1, y1, x2, y2 }] of segments.entries()) {
-    const height = model?.gridPoints[cell]?.insidePolygon ? model.normalizedHeights[cell] : 0;
-    const start = project(x1, y1, height);
-    const end = project(x2, y2, height);
-    if (index === 0) ctx.moveTo(start.x, start.y);
-    else ctx.lineTo(start.x, start.y);
-    ctx.lineTo(end.x, end.y);
-  }
-  ctx.closePath();
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#11283a';
-  ctx.lineWidth = 5;
-  ctx.stroke();
-  ctx.strokeStyle = '#7dd3fc';
-  ctx.lineWidth = 2.5;
-  ctx.stroke();
-  ctx.restore();
-}
-
-function fillPolygon(ctx, points, fillColor, strokeColor) {
-  ctx.beginPath();
-  ctx.moveTo(points[0].x, points[0].y);
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x, points[i].y);
-  }
-  ctx.closePath();
-  ctx.fillStyle = fillColor;
-  ctx.fill();
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-}
-
-function syncCanvasSize(canvas, wrapper) {
-  const dpr = window.devicePixelRatio || 1;
-  const width = wrapper.clientWidth;
-  const height = wrapper.clientHeight;
-  canvas.width = Math.max(1, Math.floor(width * dpr));
-  canvas.height = Math.max(1, Math.floor(height * dpr));
-}
-
-function findCrop(cropId) {
-  return VISUAL_CROPS.find((crop) => crop.id === cropId) ?? VISUAL_CROPS[0];
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
 }
