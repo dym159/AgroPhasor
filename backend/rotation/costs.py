@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 from backend.services.coupled_model import advance_day, incorporate_residue
-from backend.core.edo4_engine import execute_harvest_event
+from backend.core.edo4_engine import execute_harvest_event, execute_partial_cut
 from backend.core.edo2_engine import compute_soil_limits
 from backend.core.edo3_engine import compute_liebig_factor
 from backend.core.edo5_engine import compute_soil_pareto_metric_f2
@@ -40,10 +40,18 @@ class PeriodSimulator:
         stress, dry = 0., 0
         duration = crop.duration_days
         harvest = None
+        partial_yield = 0.0
+        is_multi = getattr(crop, "is_multiple_harvest", False)
+        t_start_cut = getattr(crop, "t_harvest_start_days", duration)
+        cut_interval = getattr(crop, "harvest_interval_days", 0)
         for offset in range(duration + self.transition):
             growing = offset < duration
+            if growing and is_multi and cut_interval > 0 and offset >= t_start_cut and (offset - t_start_cut) % cut_interval == 0:
+                cut_y, rem_b = execute_partial_cut(state[3], crop)
+                partial_yield += cut_y
+                state = (*state[:3], rem_b, state[4])
             if offset == duration:
-                harvest = execute_harvest_event(state[3], crop, self.residue)
+                harvest = execute_harvest_event(state[3], crop, self.residue, partial_yield_accumulated_t_ha=partial_yield)
                 state = (*state[:3], harvest.residue_left_t_ha, state[4])
             day = start + timedelta(days=offset)
             weather_key = (2,28) if (day.month,day.day) == (2,29) else (day.month,day.day)
@@ -58,7 +66,7 @@ class PeriodSimulator:
             if reason:
                 return PeriodResult((*state, om), (0,0,None,0), reason)
         if harvest is None:
-            harvest = execute_harvest_event(state[3], crop, self.residue)
+            harvest = execute_harvest_event(state[3], crop, self.residue, partial_yield_accumulated_t_ha=partial_yield)
             state = (*state[:3], harvest.residue_left_t_ha, state[4])
         price, cost = self.prices.get(key), self.costs.get(key)
         economic = None if price is None or cost is None else (

@@ -23,13 +23,13 @@ from backend.core.edo2_engine import (
 )
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JSON_PATH = os.path.join(BASE_DIR, "gemini-code-1794737993920.json")
+JSON_PATH = os.path.join(BASE_DIR, "gemini-code.json")
 
 
 class TestEDO2Engine(unittest.TestCase):
 
     def test_json_catalog_validation_success(self):
-        """Verifica que el archivo gemini-code-1794737993920.json sea 100% válido para EDO 2."""
+        """Verifica que el archivo gemini-code.json sea 100% válido para EDO 2."""
         self.assertTrue(os.path.exists(JSON_PATH), f"No existe el archivo {JSON_PATH}")
         
         result = validate_edo2_catalog(JSON_PATH)

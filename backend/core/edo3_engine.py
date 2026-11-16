@@ -184,10 +184,10 @@ def solve_edo3_step(
     f_fix = crop.F_fix if is_crop else 0.0
     f_sol = crop.F_sol if is_crop else 0.0
 
-    # Tasas de absorción radicular vegetal (calibradas para balance diario)
-    ka_n = 0.008
-    ka_p = 0.00010
-    ka_k = 0.005
+    # Tasas de absorción radicular vegetal por cultivo (gemini-code.json)
+    ka_n = float(getattr(crop, "ka_N", 0.00018))
+    ka_p = float(getattr(crop, "ka_P", 0.00012))
+    ka_k = float(getattr(crop, "ka_K", 0.00015))
 
     # -------------------- 1. VECTOR DE FUENTES S(t) --------------------
     # Nitrógeno: SN = FN_fert + Ffix,c * B + kmin0 * OM * (W/Wcc) * fT

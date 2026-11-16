@@ -1,114 +1,283 @@
 {
-  "constantes_globales": {
-    "lambda_ev_J_kg": 2450000.0,
-    "Gamma_C_m": 0.0065,
-    "Q10": 2.0,
-    "E_suelo0_mm_dia": 4.2,
-    "lambda_B_ha_t": 0.45,
-    "k_min0_dia": 0.0018,
-    "k_lN": 0.035,
-    "k_lK": 0.015,
-    "beta_K": 0.65,
-    "k_dec_dia": 0.025,
-    "k_er_cultivo": 0.0004,
-    "k_er_labranza": 0.0035,
-    "xi_N": 0.004,
-    "xi_P": 0.008,
-    "xi_K": 0.003
+  "configuracion_y_constantes_globales": {
+    "numericos": {
+      "dt_simulacion_seg": 86400.0,
+      "dt_lissajous_seg": 3600.0,
+      "dt_macro_astar_dias": 10.0,
+      "epsilon_regularizador": 1e-6,
+      "umbral_taylor_phi1": 1e-8,
+      "tau_aviso_riego_dias": 3.0,
+      "kappa_z_visual": 1.0,
+      "kappa_er_visual": 0.05
+    },
+    "fisicos_universales": {
+      "lambda_ev_J_kg": 2450000.0,
+      "Gamma_adiabatico_C_m": 0.0065,
+      "Q10_enzimatico": 2.0,
+      "T_ref_Q10_C": 20.0,
+      "tetens_c1_kPa": 0.6108,
+      "tetens_c2": 17.27,
+      "tetens_c3_C": 237.3
+    }
   },
-  "suelo_desnudo_transicion": {
-    "nombre": "Suelo Desnudo / Transición",
-    "familia_botanica": "None",
-    "Cp_suelo": 18000.0,
-    "alpha_suelo": 0.72,
-    "h_suelo": 24.0,
-    "gamma_max": 0.0,
-    "T_opt": 20.0,
-    "dT_tol": 15.0,
-    "T_helada": -5.0,
-    "T_letal": 50.0
+  "parametros_terreno_y_suelo": {
+    "transicion_suelo_desnudo": {
+      "dt_trans_dias": 15,
+      "Cp_suelo_J_m2C": 18000.0,
+      "alpha_suelo": 0.72,
+      "h_suelo_W_m2C": 24.0,
+      "gamma_max_mm_dia_kPa": 0.0
+    },
+    "hidrologia_por_clase_drenaje_ssurgo": {
+      "excessively_drained": 0.16,
+      "well_drained": 0.09,
+      "moderately_well_drained": 0.06,
+      "somewhat_poorly_drained": 0.03,
+      "poorly_drained": 0.01,
+      "default": 0.08
+    },
+    "respaldo_hidrico_por_textura": {
+      "arenoso": { "theta_fc": 0.14, "theta_wp": 0.06, "mult_erodabilidad": 0.75 },
+      "franco": { "theta_fc": 0.27, "theta_wp": 0.12, "mult_erodabilidad": 1.00 },
+      "arcilloso": { "theta_fc": 0.39, "theta_wp": 0.21, "mult_erodabilidad": 0.85 },
+      "limoso": { "theta_fc": 0.32, "theta_wp": 0.14, "mult_erodabilidad": 1.35 }
+    },
+    "umbrales_quimicos_phi_pH_EC": {
+      "pH_optimo_min": 5.8,
+      "pH_optimo_max": 7.2,
+      "pH_critico_min": 4.2,
+      "pH_critico_max": 8.8,
+      "EC_sin_estres_dS_m": 2.0,
+      "EC_letal_dS_m": 12.0
+    },
+    "cinetica_edafica_global": {
+      "E_suelo0_mm_dia": 4.2,
+      "lambda_B_ha_t": 0.45,
+      "k_er_cultivo_base": 0.0004,
+      "k_er_labranza_base": 0.0035,
+      "k_min0_dia": 0.0018,
+      "k_lN_cmolc_kg_mm": 0.035,
+      "k_lK_cmolc_kg_mm": 0.015,
+      "beta_K_rastrojo": 0.65,
+      "k_dec_rastrojo_dia": 0.025,
+      "xi_N_mm_inv": 0.004,
+      "xi_P_mm_inv": 0.008,
+      "xi_K_mm_inv": 0.003
+    }
   },
-  "cultivos": {
+  "manejo_y_pareto_default": {
+    "eficiencia_riego_por_metodo": {
+      "secano": 0.0,
+      "gravedad": 0.55,
+      "aspersion": 0.75,
+      "goteo": 0.90
+    },
+    "r_res_rastrojo_default": 0.30,
+    "costo_riego_usd_mm_ha": 1.20,
+    "pareto_f2_peso_suelo_omega_H": 0.50,
+    "pareto_f2_peso_nutrientes_omega_N": 0.50
+  },
+  "guia_calibracion_satelital": {
+    "edo1_termica": {
+      "parametros_ajustables": ["h_c_W_m2C", "Cp_c_J_m2C", "h_suelo_W_m2C"],
+      "fuente_observacion": "ECOSTRESS (LST) y NASA POWER (TS)",
+      "metodo": "Minimos cuadrados no lineales sobre ventana historica de 30-60 dias"
+    },
+    "edo2_hidrologica": {
+      "parametros_ajustables": ["hidrologia_por_clase_drenaje_ssurgo", "E_suelo0_mm_dia"],
+      "fuente_observacion": "SMAP (humedad superficial) y OpenET (ET real)",
+      "metodo": "Ajuste de tasa de secado post-lluvia tras eventos GPM/IMERG"
+    },
+    "edo4_biomasa": {
+      "parametros_ajustables": ["kp_c_t_ha_MJ_m2"],
+      "fuente_observacion": "Sentinel-2 y Landsat (series temporales NDVI/EVI)",
+      "metodo": "Escalamiento de curva normalizada B(t)/B_max frente a vigor satelital"
+    }
+  },
+  "catalogo_cultivos": {
     "Maiz_Zea_mays": {
-      "nombre": "Maíz",
       "familia_botanica": "Poaceae",
-      "duracion_dias": 120,
-      "Cp_c": 48000.0,
-      "alpha_c": 0.80,
-      "h_c": 28.0,
-      "gamma_max": 0.00015,
-      "Zr_mm": 1000.0,
-      "p_agotamiento": 0.55,
-      "T_opt": 25.0,
-      "dT_tol": 14.0,
-      "T_helada": 0.0,
-      "T_letal": 42.0,
-      "kp_c": 0.018,
-      "B_max_t_ha": 22.0,
-      "B0_t_ha": 0.25,
-      "km_c_dia": 0.008,
-      "HI": 0.48,
-      "F_fix": 0.0,
-      "F_sol": 0.02,
-      "K_N": 35.0,
-      "K_P": 18.0,
-      "K_K": 45.0,
-      "precio_usd_t": 220.0,
-      "costo_base_usd_ha": 650.0
+      "ciclo_y_cosecha": {
+        "duracion_vida_productiva_dias": 120,
+        "es_cosecha_multiple": false,
+        "t_inicio_cosecha_dias": 120,
+        "intervalo_corte_dias": 0,
+        "f_corte_parcial": 0.0,
+        "HI_indice_cosecha_final": 0.48
+      },
+      "termodinamica_edo1": {
+        "Cp_c_J_m2C": 48000.0,
+        "alpha_c": 0.80,
+        "h_c_W_m2C": 28.0,
+        "T_opt_C": 25.0,
+        "dT_tol_C": 14.0,
+        "T_helada_C": 0.0,
+        "T_letal_C": 42.0
+      },
+      "hidrologia_edo2_edo4": {
+        "gamma_max_mm_dia_kPa": 12.96,
+        "Zr_mm": 1000.0,
+        "p_agotamiento": 0.55,
+        "K_W_mm": 45.0
+      },
+      "nutrientes_edo3_edo4": {
+        "F_fix_kg_t_dia": 0.0,
+        "F_sol_kg_t_dia": 0.02,
+        "ka_N_mm_inv_dia": 0.00018,
+        "ka_P_mm_inv_dia": 0.00012,
+        "ka_K_mm_inv_dia": 0.00015,
+        "K_N_kg_ha": 35.0,
+        "K_P_kg_ha": 18.0,
+        "K_K_kg_ha": 45.0
+      },
+      "biomasa_edo4": {
+        "kp_c_t_ha_MJ_m2": 0.018,
+        "B_max_t_ha": 22.0,
+        "B0_t_ha": 0.25,
+        "km0_c_dia": 0.008
+      },
+      "economia_pareto_f3": {
+        "precio_mercado_usd_t": 220.0,
+        "costo_insumos_usd_ha": 650.0
+      }
     },
     "Frijol_Phaseolus_vulgaris": {
-      "nombre": "Frijol",
       "familia_botanica": "Fabaceae",
-      "duracion_dias": 90,
-      "Cp_c": 36000.0,
-      "alpha_c": 0.78,
-      "h_c": 26.0,
-      "gamma_max": 0.00014,
-      "Zr_mm": 600.0,
-      "p_agotamiento": 0.45,
-      "T_opt": 22.0,
-      "dT_tol": 11.0,
-      "T_helada": 2.0,
-      "T_letal": 37.0,
-      "kp_c": 0.013,
-      "B_max_t_ha": 7.5,
-      "B0_t_ha": 0.20,
-      "km_c_dia": 0.009,
-      "HI": 0.42,
-      "F_fix": 0.14,
-      "F_sol": 0.05,
-      "K_N": 20.0,
-      "K_P": 22.0,
-      "K_K": 35.0,
-      "precio_usd_t": 850.0,
-      "costo_base_usd_ha": 520.0
+      "ciclo_y_cosecha": {
+        "duracion_vida_productiva_dias": 90,
+        "es_cosecha_multiple": false,
+        "t_inicio_cosecha_dias": 90,
+        "intervalo_corte_dias": 0,
+        "f_corte_parcial": 0.0,
+        "HI_indice_cosecha_final": 0.42
+      },
+      "termodinamica_edo1": {
+        "Cp_c_J_m2C": 36000.0,
+        "alpha_c": 0.78,
+        "h_c_W_m2C": 26.0,
+        "T_opt_C": 22.0,
+        "dT_tol_C": 11.0,
+        "T_helada_C": 2.0,
+        "T_letal_C": 37.0
+      },
+      "hidrologia_edo2_edo4": {
+        "gamma_max_mm_dia_kPa": 12.10,
+        "Zr_mm": 600.0,
+        "p_agotamiento": 0.45,
+        "K_W_mm": 35.0
+      },
+      "nutrientes_edo3_edo4": {
+        "F_fix_kg_t_dia": 0.14,
+        "F_sol_kg_t_dia": 0.05,
+        "ka_N_mm_inv_dia": 0.00010,
+        "ka_P_mm_inv_dia": 0.00014,
+        "ka_K_mm_inv_dia": 0.00013,
+        "K_N_kg_ha": 20.0,
+        "K_P_kg_ha": 22.0,
+        "K_K_kg_ha": 35.0
+      },
+      "biomasa_edo4": {
+        "kp_c_t_ha_MJ_m2": 0.013,
+        "B_max_t_ha": 7.5,
+        "B0_t_ha": 0.20,
+        "km0_c_dia": 0.009
+      },
+      "economia_pareto_f3": {
+        "precio_mercado_usd_t": 850.0,
+        "costo_insumos_usd_ha": 520.0
+      }
+    },
+    "Fresa_Fragaria_ananassa": {
+      "familia_botanica": "Rosaceae",
+      "ciclo_y_cosecha": {
+        "duracion_vida_productiva_dias": 270,
+        "es_cosecha_multiple": true,
+        "t_inicio_cosecha_dias": 75,
+        "intervalo_corte_dias": 12,
+        "f_corte_parcial": 0.18,
+        "HI_indice_cosecha_final": 0.20
+      },
+      "termodinamica_edo1": {
+        "Cp_c_J_m2C": 32000.0,
+        "alpha_c": 0.77,
+        "h_c_W_m2C": 25.0,
+        "T_opt_C": 20.0,
+        "dT_tol_C": 10.0,
+        "T_helada_C": -1.5,
+        "T_letal_C": 34.0
+      },
+      "hidrologia_edo2_edo4": {
+        "gamma_max_mm_dia_kPa": 11.80,
+        "Zr_mm": 350.0,
+        "p_agotamiento": 0.35,
+        "K_W_mm": 28.0
+      },
+      "nutrientes_edo3_edo4": {
+        "F_fix_kg_t_dia": 0.0,
+        "F_sol_kg_t_dia": 0.03,
+        "ka_N_mm_inv_dia": 0.00014,
+        "ka_P_mm_inv_dia": 0.00016,
+        "ka_K_mm_inv_dia": 0.00020,
+        "K_N_kg_ha": 28.0,
+        "K_P_kg_ha": 20.0,
+        "K_K_kg_ha": 42.0
+      },
+      "biomasa_edo4": {
+        "kp_c_t_ha_MJ_m2": 0.011,
+        "B_max_t_ha": 6.5,
+        "B0_t_ha": 0.18,
+        "km0_c_dia": 0.008
+      },
+      "economia_pareto_f3": {
+        "precio_mercado_usd_t": 1450.0,
+        "costo_insumos_usd_ha": 1800.0
+      }
     },
     "Papa_Solanum_tuberosum": {
-      "nombre": "Papa",
       "familia_botanica": "Solanaceae",
-      "duracion_dias": 130,
-      "Cp_c": 32000.0,
-      "alpha_c": 0.82,
-      "h_c": 30.0,
-      "gamma_max": 0.00016,
-      "Zr_mm": 650.0,
-      "p_agotamiento": 0.35,
-      "T_opt": 17.0,
-      "dT_tol": 7.5,
-      "T_helada": 1.5,
-      "T_letal": 35.0,
-      "kp_c": 0.016,
-      "B_max_t_ha": 15.0,
-      "B0_t_ha": 0.22,
-      "km_c_dia": 0.007,
-      "HI": 0.75,
-      "F_fix": 0.0,
-      "F_sol": 0.03,
-      "K_N": 30.0,
-      "K_P": 25.0,
-      "K_K": 40.0,
-      "precio_usd_t": 350.0,
-      "costo_base_usd_ha": 750.0
+      "ciclo_y_cosecha": {
+        "duracion_vida_productiva_dias": 110,
+        "es_cosecha_multiple": false,
+        "t_inicio_cosecha_dias": 110,
+        "intervalo_corte_dias": 0,
+        "f_corte_parcial": 0.0,
+        "HI_indice_cosecha_final": 0.72
+      },
+      "termodinamica_edo1": {
+        "Cp_c_J_m2C": 40000.0,
+        "alpha_c": 0.79,
+        "h_c_W_m2C": 27.0,
+        "T_opt_C": 18.0,
+        "dT_tol_C": 10.0,
+        "T_helada_C": -1.0,
+        "T_letal_C": 32.0
+      },
+      "hidrologia_edo2_edo4": {
+        "gamma_max_mm_dia_kPa": 12.50,
+        "Zr_mm": 500.0,
+        "p_agotamiento": 0.35,
+        "K_W_mm": 32.0
+      },
+      "nutrientes_edo3_edo4": {
+        "F_fix_kg_t_dia": 0.0,
+        "F_sol_kg_t_dia": 0.02,
+        "ka_N_mm_inv_dia": 0.00016,
+        "ka_P_mm_inv_dia": 0.00013,
+        "ka_K_mm_inv_dia": 0.00022,
+        "K_N_kg_ha": 30.0,
+        "K_P_kg_ha": 20.0,
+        "K_K_kg_ha": 48.0
+      },
+      "biomasa_edo4": {
+        "kp_c_t_ha_MJ_m2": 0.016,
+        "B_max_t_ha": 16.0,
+        "B0_t_ha": 0.30,
+        "km0_c_dia": 0.008
+      },
+      "economia_pareto_f3": {
+        "precio_mercado_usd_t": 340.0,
+        "costo_insumos_usd_ha": 1150.0
+      }
     }
   }
 }

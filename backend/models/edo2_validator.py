@@ -8,6 +8,8 @@ import json
 import os
 from typing import Dict, Any, List, Optional, Union, Tuple
 
+from backend.models.crop_parameters import normalize_catalog_dict
+
 
 class EDO2ValidationError(ValueError):
     """Excepción para errores críticos de validación agrofísica en EDO 2."""
@@ -46,6 +48,8 @@ def validate_edo2_catalog(
         data = source
     else:
         raise TypeError("source debe ser una ruta de archivo (str) o un diccionario.")
+
+    data = normalize_catalog_dict(data)
 
     errors: List[str] = []
     warnings: List[str] = []
@@ -131,6 +135,12 @@ def validate_edo2_catalog(
             if b_0 <= 0 or b_0 > b_max:
                 crop_errors.append(f"{crop_id}: 'B0_t_ha' ({b_0}) debe ser > 0 y <= B_max_t_ha ({b_max}).")
 
+            k_w = c.get("K_W_mm")
+            if k_w is not None:
+                k_w = float(k_w)
+                if k_w <= 0:
+                    crop_errors.append(f"{crop_id}: 'K_W_mm' ({k_w}) debe ser > 0.")
+
             if crop_errors:
                 errors.extend(crop_errors)
             else:
@@ -142,13 +152,14 @@ def validate_edo2_catalog(
                 taw = round(w_cc - w_pmp, 2)
                 
                 # Conversión de conductancia diaria: kg/(m2*s*kPa) -> mm/(kPa*dia)
-                gamma_daily_mm = round(g_max * 86400.0, 3)
+                gamma_daily_mm = round(float(c.get("gamma_max_mm_dia_kPa", g_max * 86400.0)), 3)
 
                 crops_summary[crop_id] = {
                     "nombre": c.get("nombre", crop_id),
                     "familia_botanica": c.get("familia_botanica", "Desconocida"),
                     "Zr_mm": zr,
                     "p_agotamiento": p_agot,
+                    "K_W_mm": k_w if k_w is not None else round(0.5 * (w_crit - w_pmp), 2),
                     "gamma_max_raw": g_max,
                     "gamma_max_mm_per_kpa_day": gamma_daily_mm,
                     "W_cc_mm": w_cc,

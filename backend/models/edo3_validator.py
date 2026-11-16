@@ -8,6 +8,8 @@ import json
 import os
 from typing import Dict, Any, List, Optional, Union, Tuple
 
+from backend.models.crop_parameters import normalize_catalog_dict
+
 
 class EDO3ValidationError(ValueError):
     """Excepción para errores críticos de validación agrofísica en EDO 3."""
@@ -47,6 +49,8 @@ def validate_edo3_catalog(
         data = source
     else:
         raise TypeError("source debe ser una ruta de archivo (str) o un diccionario.")
+
+    data = normalize_catalog_dict(data)
 
     errors: List[str] = []
     warnings: List[str] = []
@@ -132,6 +136,12 @@ def validate_edo3_catalog(
                     if k_val <= 0.0:
                         crop_errors.append(f"{crop_id}: '{k_nut}' ({k_val}) debe ser estrictamente positivo.")
 
+            # Tasas de absorción radicular ka_N, ka_P, ka_K (si están presentes en gemini-code.json)
+            for ka_nut in ["ka_N_mm_inv_dia", "ka_P_mm_inv_dia", "ka_K_mm_inv_dia"]:
+                ka_val = c.get(ka_nut)
+                if ka_val is not None and float(ka_val) <= 0.0:
+                    crop_errors.append(f"{crop_id}: '{ka_nut}' ({ka_val}) debe ser estrictamente positivo.")
+
             # B_max_t_ha y HI
             b_max = float(c.get("B_max_t_ha", 15.0))
             hi = float(c.get("HI", 0.45))
@@ -154,6 +164,9 @@ def validate_edo3_catalog(
                     "es_fijador_N": f_fix > 0.0,
                     "F_fix": f_fix,
                     "F_sol": f_sol,
+                    "ka_N_mm_inv_dia": float(c.get("ka_N_mm_inv_dia", 0.00018)),
+                    "ka_P_mm_inv_dia": float(c.get("ka_P_mm_inv_dia", 0.00012)),
+                    "ka_K_mm_inv_dia": float(c.get("ka_K_mm_inv_dia", 0.00015)),
                     "Liebig_K_N": k_n,
                     "Liebig_K_P": k_p,
                     "Liebig_K_K": k_k,
@@ -179,7 +192,7 @@ def validate_edo3_catalog(
 
 if __name__ == "__main__":
     import sys
-    test_file = sys.argv[1] if len(sys.argv) > 1 else "gemini-code-1794737993920.json"
+    test_file = sys.argv[1] if len(sys.argv) > 1 else "gemini-code.json"
     result = validate_edo3_catalog(test_file)
     print("Resultado de Validación EDO 3 para:", test_file)
     print(f"Estado: {'VÁLIDO ✅' if result['valid'] else 'INVÁLIDO ❌'}")

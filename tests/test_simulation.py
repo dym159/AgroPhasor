@@ -202,8 +202,8 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         from backend.services.parcel_edo4 import ParcelEDO4Service
         from backend.models.edo4_validator import validate_edo4_catalog
 
-        # 1. Validación de catálogo oficial gemini-code-179
-        val = validate_edo4_catalog("gemini-code-1794737993920.json")
+        # 1. Validación de catálogo oficial gemini-code.json
+        val = validate_edo4_catalog("gemini-code.json")
         self.assertTrue(val["valid"])
 
         # 2. Simulación de ciclo

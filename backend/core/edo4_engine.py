@@ -262,10 +262,12 @@ def solve_edo4_step(
     
     w_pmp = getattr(crop, "W_pmp", 20.0)
     w_crit = getattr(crop, "W_crit", 50.0)
+    k_w = getattr(crop, "K_W_mm", None)
     eta_W = water_limitation_factor(
         soil_water_mm=soil_water_mm,
         w_pmp_mm=w_pmp,
-        w_crit_mm=w_crit
+        w_crit_mm=w_crit,
+        k_w_mm=k_w
     )
     
     eta_N, limiting_nut = liebig_nutrient_efficiency(
@@ -339,15 +341,32 @@ def solve_edo4_step(
     )
 
 
+def execute_partial_cut(
+    biomass_current_t_ha: float,
+    crop: CropParameters
+) -> Tuple[float, float]:
+    """
+    Ejecuta un corte parcial intermedio en cultivos de cosecha múltiple (ej. Fresa).
+    Retorna (rendimiento_corte_t_ha, biomasa_remanente_t_ha).
+    """
+    b_curr = max(0.0, float(biomass_current_t_ha))
+    if not getattr(crop, "is_multiple_harvest", False):
+        return 0.0, b_curr
+    f_cut = max(0.0, min(1.0, float(getattr(crop, "partial_cut_fraction", 0.0))))
+    cut_yield = f_cut * b_curr
+    return cut_yield, b_curr - cut_yield
+
+
 def execute_harvest_event(
     biomass_pre_harvest_t_ha: float,
     crop: CropParameters,
     residue_fraction_rres: Optional[float] = None,
-    market_price_usd_t: Optional[float] = None
+    market_price_usd_t: Optional[float] = None,
+    partial_yield_accumulated_t_ha: float = 0.0
 ) -> EDO4HarvestResult:
     """
     Ejecuta el salto discreto de cosecha (PDF Sec. 3.4 y 1.1):
-    1. Rendimiento comercial cosechable: Y_k = HI * (1 - r_res) * B(t_s^-)
+    1. Rendimiento comercial cosechable: Y_k = Y_parcial_acum + HI * (1 - r_res) * B(t_s^-)
     2. Rastrojo protector remanente en campo: B(t_s^+) = r_res * B(t_s^-)
     3. Valoración económica basada en precios USDA AMS Market News.
     """
@@ -360,7 +379,7 @@ def execute_harvest_event(
     base_cost = getattr(crop, "base_cost_usd_ha", 600.0)
 
     b_pre = max(0.0, biomass_pre_harvest_t_ha)
-    commercial_yield = hi * (1.0 - r_res) * b_pre
+    commercial_yield = max(0.0, partial_yield_accumulated_t_ha) + hi * (1.0 - r_res) * b_pre
     residue_left = r_res * b_pre
     
     gross_revenue = commercial_yield * price

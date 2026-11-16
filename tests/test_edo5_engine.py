@@ -27,13 +27,13 @@ from backend.core.edo5_engine import (
 from backend.services.parcel_edo5 import ParcelEDO5Service
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JSON_PATH = os.path.join(BASE_DIR, "gemini-code-1794737993920.json")
+JSON_PATH = os.path.join(BASE_DIR, "gemini-code.json")
 
 
 class TestEDO5Engine(unittest.TestCase):
 
     def test_json_catalog_validation_success(self):
-        """Verifica que el archivo gemini-code-1794737993920.json sea 100% válido para EDO 5."""
+        """Verifica que el archivo gemini-code.json sea 100% válido para EDO 5."""
         self.assertTrue(os.path.exists(JSON_PATH), f"No existe el archivo {JSON_PATH}")
         
         result = validate_edo5_catalog(JSON_PATH)
