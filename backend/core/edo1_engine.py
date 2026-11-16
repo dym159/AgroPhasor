@@ -125,7 +125,7 @@ def compute_lissajous_shield_index(
     area = max(0.0, float(lissajous_area))
     if a_l_max is not None and a_l_max > 0:
         return round(max(0.0, min(1.0, area / float(a_l_max))), 4)
-    ref = float(a_l_ref if a_l_ref is not None else GLOBAL_CONSTANTS.get("A_L_ref_C2", 4.0))
+    ref = float(a_l_ref if a_l_ref is not None else GLOBAL_CONSTANTS.get("A_L_ref_C2", 2.0))
     ref = max(1e-4, ref)
     return round(max(0.0, min(1.0, area / (area + ref))), 4)
 
@@ -159,7 +159,7 @@ def compute_shield_state_and_color(
         omega_l = float(
             omega_lissajous
             if omega_lissajous is not None
-            else GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.55)
+            else GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.65)
         )
         omega_l = max(0.0, min(1.0, omega_l))
         psi_clamped = max(0.0, min(1.0, float(psi_environmental)))

@@ -2,12 +2,12 @@
 const SINK_PER_MM = 0.0006;
 const RAIN_SINK_PER_MM = 0.0012;
 
-export function lissajousShieldScore(lissajousArea, psi = null, aLRef = 4.0, omegaL = 0.55) {
+export function lissajousShieldScore(lissajousArea, psi = null, aLRef = 2.0, omegaL = 0.65) {
   const area = Math.max(0, Number(lissajousArea) || 0);
-  const ref = Math.max(1e-4, Number(aLRef) || 4.0);
+  const ref = Math.max(1e-4, Number(aLRef) || 2.0);
   const etaL = area / (area + ref);
   if (psi === null || psi === undefined) return Math.max(0, Math.min(1, etaL));
-  const wL = Math.max(0, Math.min(1, Number(omegaL) || 0.55));
+  const wL = Math.max(0, Math.min(1, Number(omegaL) || 0.65));
   const psiClamped = Math.max(0, Math.min(1, Number(psi) || 0));
   return Math.max(0, Math.min(1, wL * etaL + (1 - wL) * psiClamped));
 }
