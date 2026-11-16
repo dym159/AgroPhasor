@@ -1,9 +1,9 @@
 /* ==============================================================================
- * AgroPhasor - Personalización de Leaflet-Geoman
- * Controles táctiles ampliados (min 44px) y alto contraste
+ * AgroPhasor - Leaflet-Geoman Customization
+ * Enlarged touch controls (min 44px) and high contrast
  * ============================================================================== */
 
-/* Botones de la barra de Geoman */
+/* Geoman toolbar buttons */
 .leaflet-pm-toolbar .leaflet-buttons-control-button {
   width: 44px !important;
   height: 44px !important;
@@ -22,7 +22,7 @@
   border-color: #10b981 !important;
 }
 
-/* Estado activo del botón de Geoman */
+/* Active state for Geoman button */
 .leaflet-pm-toolbar .leaflet-buttons-control-button.active {
   background-color: #10b981 !important;
   border-color: #059669 !important;
@@ -37,7 +37,7 @@
   filter: invert(0) brightness(0.2);
 }
 
-/* Vértices y marcadores de edición en pantalla táctil */
+/* Touchscreen vertices and edit markers */
 .marker-icon.leaflet-pm-draggable {
   border: 2px solid #ffffff !important;
   background-color: #10b981 !important;
@@ -49,7 +49,7 @@
   margin-top: -7px !important;
 }
 
-/* Control de zoom estándar de Leaflet */
+/* Standard Leaflet zoom control */
 .leaflet-control-zoom a {
   background-color: #1e293b !important;
   color: #f8fafc !important;
@@ -68,7 +68,7 @@
   color: #10b981 !important;
 }
 
-/* Atribución de Leaflet */
+/* Leaflet attribution */
 .leaflet-container .leaflet-control-attribution {
   background: rgba(15, 23, 42, 0.8) !important;
   color: #94a3b8 !important;

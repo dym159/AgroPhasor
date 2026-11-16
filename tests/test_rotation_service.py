@@ -49,3 +49,25 @@ class TestRotationRecommendation(TestCase):
         result, status = rotation_response({**self.payload, "crop_id": "quinua"})
         self.assertEqual(status, 422)
         self.assertIn("error", result)
+
+    def test_moving_knobs_updates_route_ranking_and_exposes_candidates(self):
+        eco_res, status_eco = rotation_response({
+            **self.payload,
+            "weights": dict(w1=100, w2=0, w3=0, w4=0),
+        })
+        soil_res, status_soil = rotation_response({
+            **self.payload,
+            "weights": dict(w1=0, w2=100, w3=0, w4=0),
+        })
+        profit_res, status_profit = rotation_response({
+            **self.payload,
+            "weights": dict(w1=0, w2=0, w3=100, w4=0),
+        })
+        self.assertEqual((status_eco, status_soil, status_profit), (200, 200, 200))
+        self.assertEqual(len(eco_res.get("candidates", [])), 4)
+        self.assertIn("bounds", eco_res)
+        self.assertNotEqual(eco_res["routes"][0]["id"], soil_res["routes"][0]["id"])
+        self.assertNotEqual(
+            [r["id"] for r in eco_res["routes"]],
+            [r["id"] for r in profit_res["routes"]],
+        )

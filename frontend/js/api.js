@@ -1,6 +1,6 @@
 /**
- * AgroPhasor - Cliente de API y Resiliencia
- * Manejo de peticiones de simulación, errores de red y modo de respaldo offline.
+ * AgroPhasor - API & Resilience Client
+ * Handles simulation requests, network errors, and offline fallback mode.
  */
 
 import { CONFIG } from './config.js';
@@ -10,11 +10,11 @@ export class ApiService {
     this.baseUrl = CONFIG.API.BASE_URL;
     this.isServerOnline = false;
     this.lastSimulationResult = null;
-    this.forceFailureForTesting = false; // Permite probar la resiliencia en la UI
+    this.forceFailureForTesting = false; // Enables UI resilience failure testing
   }
 
   /**
-   * Verificar conectividad con el servidor backend
+   * Check connectivity with the backend server
    */
   async checkHealth() {
     try {
@@ -36,14 +36,14 @@ export class ApiService {
   }
 
   /**
-   * Enviar GeoJSON y parámetros al servidor para ejecutar la simulación
-   * Si falla la simulación o no hay red, SE CONSERVA LA SELECCIÓN DEL LOTE.
+   * Send GeoJSON and parameters to the server to run the simulation.
+   * If the simulation fails or the network is offline, THE LOT SELECTION IS PRESERVED.
    */
   async runSimulation(payload, options = {}) {
-    // Si el usuario activó la casilla de prueba de error
+    // If the user enabled the test failure checkbox
     if (this.forceFailureForTesting) {
       await new Promise(r => setTimeout(r, 600));
-      const error = new Error("Error inducido de prueba: El servidor de simulación rechazó la solicitud (Simulación fallida).");
+      const error = new Error("Induced test error: The simulation server rejected the request (Simulation failed).");
       error.isSimulatedTest = true;
       error.retainedLoteId = payload.lote_seleccionado_id;
       throw error;
@@ -67,7 +67,7 @@ export class ApiService {
 
       if (!response.ok) {
         const errorBody = await response.text().catch(() => "");
-        const error = new Error(`Error del servidor (${response.status}): ${errorBody || response.statusText}`);
+        const error = new Error(`Server error (${response.status}): ${errorBody || response.statusText}`);
         error.status = response.status;
         error.retainedLoteId = payload.lote_seleccionado_id;
         throw error;
@@ -79,12 +79,12 @@ export class ApiService {
       return result;
 
     } catch (networkError) {
-      // Registrar que el backend no respondió
+      // Record that the backend did not respond
       this.isServerOnline = false;
 
-      // Si las opciones permiten usar respaldo offline, devolver datos sintéticos realistas
+      // If options allow offline fallback, return realistic synthetic data
       if (options.useOfflineFallback) {
-        console.warn("API inaccesible. Generando respuesta de contingencia (Respaldo local según CC-02)...", networkError);
+        console.warn("API unreachable. Generating fallback contingency response (Local backup per CC-02)...", networkError);
         const fallbackResult = this.generateRealisticMockResponse(payload);
         this.lastSimulationResult = fallbackResult;
         fallbackResult._is_fallback = true;
@@ -92,7 +92,7 @@ export class ApiService {
         return fallbackResult;
       }
 
-      // Propagar el error preservando la información del lote seleccionado
+      // Propagate the error while preserving selected lot information
       networkError.retainedLoteId = payload.lote_seleccionado_id;
       networkError.isNetworkError = true;
       throw networkError;
@@ -108,14 +108,14 @@ export class ApiService {
     });
     const data = await response.json().catch(() => null);
     if (!response.ok || !data) {
-      throw new Error(data?.error || 'El servidor no pudo calcular la temperatura del dosel.');
+      throw new Error(data?.error || 'The server could not compute canopy temperature.');
     }
     return data;
   }
 
   /**
-   * Generar respuesta sintética basada en los parámetros acordados con Física y Matemática
-   * (Contrato CC-02 y Plan Maestro)
+   * Generate a synthetic fallback response aligned with Physics & Math parameters
+   * (CC-02 Contract and Master Plan)
    */
   generateRealisticMockResponse(payload) {
     const loteId = payload.lote_seleccionado_id;
@@ -124,64 +124,64 @@ export class ApiService {
     return {
       status: "success",
       meta: {
-        engine: "AgroPhasor-ODE-Solver-v1.0 (Modo Contingencia Local)",
+        engine: "AgroPhasor-ODE-Solver-v1.0 (Local Contingency Mode)",
         nasa_power_source: "POWER/AG Climatology (1991-2023)",
         timestamp: new Date().toISOString(),
         lote_id: loteId,
         elevation_m: 3250
       },
-      // Indicadores físicos acordados por celda
+      // Physical indicators agreed per cell
       indicadores: {
         humedad_radicular_W: {
           valor: 142.5,
           unidad: "mm",
-          estado: "Adecuado",
+          estado: "Adequate",
           color: "#10b981",
-          descripcion: "Humedad en zona de raíces suficiente para tubérculos y leguminosas."
+          descripcion: "Root-zone moisture sufficient for tubers and legumes."
         },
         temperatura_dosel_T: {
           valor: 16.8,
           unidad: "°C",
-          estado: "Óptimo",
+          estado: "Optimal",
           color: "#3b82f6",
-          descripcion: "Sin estrés térmico ni riesgo inmediato de helada severa."
+          descripcion: "No thermal stress and no immediate severe frost risk."
         },
         nutrientes_NPK: {
-          N: { valor: 88, unidad: "kg/ha", nivel: "Medio" },
-          P: { valor: 34, unidad: "kg/ha", nivel: "Alto" },
-          K: { valor: 195, unidad: "kg/ha", nivel: "Óptimo" },
-          estado_general: "Fértil"
+          N: { valor: 88, unidad: "kg/ha", nivel: "Medium" },
+          P: { valor: 34, unidad: "kg/ha", nivel: "High" },
+          K: { valor: 195, unidad: "kg/ha", nivel: "Optimal" },
+          estado_general: "Fertile"
         },
         biomasa_aerea_B: {
           valor: 11.8,
           unidad: "t/ha",
-          estado: "Crecimiento vigoroso"
+          estado: "Vigorous growth"
         },
         espesor_fertil_H: {
           valor: 278,
           unidad: "mm",
-          tasa_erosion: "0.28 mm/año (Baja)",
-          estado: "Protegido"
+          tasa_erosion: "0.28 mm/year (Low)",
+          estado: "Protected"
         },
         escudo_ambiental: {
           indice: 87,
           max: 100,
-          calificacion: "Alta Resiliencia",
+          calificacion: "High Resilience",
           color: "#10b981"
         }
       },
-      // Comparador de rotaciones (Plan actual vs Sugerencia de Pareto)
+      // Rotation comparator (Current plan vs Pareto suggestion)
       rotacion_recomendada: {
         plan_actual: [
-          { periodo: "P1 (Ene-May)", cultivo: "Papa Canchán", familia: "Solanáceas", rendimiento_est: "13.2 t/ha" },
-          { periodo: "P2 (Jun-Dic)", cultivo: "Papa Canchán (Monocultivo)", familia: "Solanáceas", alerta: "Riesgo de plagas y agotamiento de K" }
+          { periodo: "P1 (Jan-May)", cultivo: "Canchan Potato", familia: "Solanaceae", rendimiento_est: "13.2 t/ha" },
+          { periodo: "P2 (Jun-Dec)", cultivo: "Canchan Potato (Monoculture)", familia: "Solanaceae", alerta: "Pest risk and K depletion" }
         ],
         sugerencia_optimizada: [
-          { periodo: "P1 (Ene-May)", cultivo: "Papa Canchán", familia: "Solanáceas", rendimiento_est: "14.1 t/ha" },
-          { periodo: "P2 (Jun-Dic)", cultivo: "Habas Verdes / Serranas", familia: "Leguminosas", ventaja: "Fijación biológica de N (+45 kg/ha) y corte de ciclo de plagas" },
-          { periodo: "P3 (Futuro)", cultivo: "Quinua o Cebada", familia: "Gramíneas / Cobertura", ventaja: "Aporte de rastrojo y cobertura contra erosión" }
+          { periodo: "P1 (Jan-May)", cultivo: "Canchan Potato", familia: "Solanaceae", rendimiento_est: "14.1 t/ha" },
+          { periodo: "P2 (Jun-Dec)", cultivo: "Green Fava Beans", familia: "Fabaceae", ventaja: "Biological N fixation (+45 kg/ha) and pest cycle break" },
+          { periodo: "P3 (Future)", cultivo: "Quinoa or Barley", familia: "Poaceae / Cover", ventaja: "Crop residue input and anti-erosion cover" }
         ],
-        motivo_agronomico: "La rotación de Papa con Habas Verdes restaura el nitrógeno agotado, previene la incidencia de nematodos y ahorra hasta 25% de fertilización química en la siguiente siembra.",
+        motivo_agronomico: "Rotating Potato with Green Fava Beans restores depleted nitrogen, suppresses nematodes, and saves up to 25% of chemical fertilizer on the next planting.",
         metricas_comparativas: {
           ahorro_agua_pct: 18,
           aumento_fertilidad_pct: 32,

@@ -1,39 +1,39 @@
 /**
- * AgroPhasor - Configuración General
+ * AgroPhasor - General Configuration
  * NASA Space Apps Challenge 2026 - Field Shift
  */
 
 export const CONFIG = {
-  // Parcela demo por defecto (Valle del Mantaro, Junín, Perú)
+  // Default demo parcel (Mantaro Valley, Junin, Peru)
   DEFAULT_LOCATION: {
-    name: "Valle del Mantaro - Lote Base",
-    department: "Junín",
-    country: "Perú",
+    name: "Mantaro Valley - Base Lot",
+    department: "Junin",
+    country: "Peru",
     latitude: -12.0600,
     longitude: -75.2100,
     elevation_m: 3250,
     zoom: 16
   },
 
-  // Capas de mapas satelitales y vectoriales
+  // Satellite and vector map layers
   MAP_LAYERS: {
     esriSatellite: {
-      name: "Satélite Esri (HD)",
+      name: "Esri Satellite (HD)",
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      attribution: '<a href="https://goto.arcgisonline.com/maps/World_Imagery">Esri World Imagery</a> · Esri, Vantor, Earthstar Geographics y la comunidad GIS',
+      attribution: '<a href="https://goto.arcgisonline.com/maps/World_Imagery">Esri World Imagery</a> · Esri, Vantor, Earthstar Geographics and the GIS community',
       maxNativeZoom: 19,
       maxZoom: 21
     },
     esriLabels: {
-      name: "Etiquetas y Caminos",
+      name: "Labels and Roads",
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
       attribution: "&copy; Esri",
       maxZoom: 19
     },
     osm: {
-      name: "OpenStreetMap (Mapa de Calles)",
+      name: "OpenStreetMap (Street Map)",
       url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      attribution: "&copy; Colaboradores de OpenStreetMap",
+      attribution: "&copy; OpenStreetMap contributors",
       maxZoom: 19
     },
     nasaHls: {
@@ -46,7 +46,7 @@ export const CONFIG = {
     }
   },
 
-  // Configuración de API
+  // API configuration
   API: {
     BASE_URL: "",
     SIMULATION_ENDPOINT: "/api/v1/simular",
@@ -56,7 +56,7 @@ export const CONFIG = {
     TIMEOUT_MS: 15000
   },
 
-  // Almacenamiento local para resiliencia offline
+  // Local storage for offline resilience
   STORAGE_KEYS: {
     LOTES: "agrophasor_lotes",
     SELECTED_ID: "agrophasor_selected_id",
@@ -65,77 +65,77 @@ export const CONFIG = {
     OFFLINE_BACKUP_ENABLED: "agrophasor_offline_backup"
   },
 
-  // Límites según especificación del plan maestro
+  // Limits per master plan specification
   LIMITS: {
-    MAX_LOTES: 2, // Empezar con 1 y permitir hasta 2 zonas según plan
+    MAX_LOTES: 2, // Start with 1 and allow up to 2 zones per plan
     MIN_POLYGON_VERTICES: 3
   },
 
-  // Catálogo inicial acordado para la zona andina (Junín / Mantaro)
+  // Initial crop catalog calibrated for the Andean region (Junin / Mantaro)
   CROP_CATALOG: [
     {
       id: "papa_canchan",
-      name: "Papa Canchán",
+      name: "Canchan Potato",
       scientific: "Solanum tuberosum",
-      family: "Solanáceas",
+      family: "Solanaceae",
       cycle_days: 140,
       biomass_max_t_ha: 14.5,
       harvest_index: 0.68,
-      water_need: "Media-Alta",
+      water_need: "Medium-High",
       icon: "🥔",
-      soil_impact: "Extractor de Potasio, cobertura moderada",
+      soil_impact: "Potassium extractor, moderate canopy cover",
       color: "#f59e0b"
     },
     {
       id: "maiz_amilaceo",
-      name: "Maíz Blanco Cuzco / Amiláceo",
+      name: "Cusco White / Amylaceous Maize",
       scientific: "Zea mays",
-      family: "Gramíneas",
+      family: "Poaceae",
       cycle_days: 180,
       biomass_max_t_ha: 18.0,
       harvest_index: 0.45,
-      water_need: "Alta",
+      water_need: "High",
       icon: "🌽",
-      soil_impact: "Gran aporte de rastrojo superficial, demanda Nitrógeno",
+      soil_impact: "Large surface stover input, demands Nitrogen",
       color: "#eab308"
     },
     {
       id: "habas_verdes",
-      name: "Habas Verdes / Serranas",
+      name: "Green Fava Beans",
       scientific: "Vicia faba",
-      family: "Leguminosas",
+      family: "Fabaceae",
       cycle_days: 150,
       biomass_max_t_ha: 9.0,
       harvest_index: 0.52,
-      water_need: "Baja-Media",
+      water_need: "Low-Medium",
       icon: "🌱",
-      soil_impact: "Fijación biológica de Nitrógeno (+45 kg/ha), recupera suelo",
+      soil_impact: "Biological Nitrogen fixation (+45 kg/ha), restores soil",
       color: "#10b981"
     },
     {
       id: "quinua_pasankalla",
-      name: "Quinua Pasankalla",
+      name: "Pasankalla Quinoa",
       scientific: "Chenopodium quinoa",
-      family: "Amarantáceas",
+      family: "Amaranthaceae",
       cycle_days: 160,
       biomass_max_t_ha: 7.5,
       harvest_index: 0.40,
-      water_need: "Baja (Alta resiliencia a heladas)",
+      water_need: "Low (High frost resilience)",
       icon: "🌾",
-      soil_impact: "Tolerante a salinidad y sequía, bajo consumo hídrico",
+      soil_impact: "Salinity- and drought-tolerant, low water consumption",
       color: "#ec4899"
     },
     {
       id: "avena_forrajera",
-      name: "Avena Forrajera / Vicia",
+      name: "Forage Oat / Vetch",
       scientific: "Avena sativa",
-      family: "Gramíneas / Cobertura",
+      family: "Poaceae / Cover",
       cycle_days: 110,
       biomass_max_t_ha: 12.0,
       harvest_index: 0.80,
-      water_need: "Media",
+      water_need: "Medium",
       icon: "🌿",
-      soil_impact: "Excelente cobertura contra erosión hídrica en pendiente",
+      soil_impact: "Excellent cover against water erosion on slopes",
       color: "#06b6d4"
     }
   ]

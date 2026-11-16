@@ -1,19 +1,19 @@
 """
-AgroPhasor - Motor Agrofísico EDO 5: Erosión Hídrica de la Capa Fértil
-======================================================================
-Ecuación diferencial ordinaria (Agrophasor.pdf, Sec 3.2.5):
+AgroPhasor - ODE 5 Agro-Physical Engine: Topsoil Water Erosion
+=============================================================
+Ordinary differential equation (Agrophasor.pdf, Sec 3.2.5):
     d H_i,j / dt = - k_er(q) * P_0(t) * sin(theta_i,j) * exp(-lambda_B * B_i,j(t))
 
-Donde H_i,j(t) in [0, H_i,j(0)] representa el espesor fértil del suelo (mm).
+Where H_i,j(t) in [0, H_i,j(0)] denotes fertile topsoil depth (mm).
 
-Calibración Multisensor y Fusión de Datos Satelitales:
-  - NASA GPM & IMERG / NASA POWER: Precipitación diaria y eventos extremos P0(t) (mm/día).
-  - SRTM (zi,j, theta_i,j): Topografía 2.5D, pendiente local theta y cota zi,j.
-  - Landsat 8/9, Sentinel-2 & MODIS: Vigor vegetal, NDVI/EVI y biomasa protectora B_i,j(t) (t/ha).
-  - USDA NRCS SSURGO / Web Soil Survey (WSS) / STATSGO2: Espesor fértil basal H0, theta_fc, theta_wp.
-  - USDA CDL (CropScape) & Ag Data Commons: Calendario de cultivo y ventanas de transición q(t).
+Multi-Sensor Calibration & Satellite Data Fusion:
+  - NASA GPM & IMERG / NASA POWER: Daily rainfall and storm extremes P0(t) (mm/day).
+  - SRTM (z_i,j, theta_i,j): 2.5D topography, local slope theta and elevation z_i,j.
+  - Landsat 8/9, Sentinel-2 & MODIS: Crop vigor, NDVI/EVI and protective biomass B_i,j(t) (t/ha).
+  - USDA NRCS SSURGO / Web Soil Survey (WSS) / STATSGO2: Baseline topsoil thickness H0, theta_fc, theta_wp.
+  - USDA CDL (CropScape) & Ag Data Commons: Cropping calendar and transition windows q(t).
 
-Solución analítica exacta por paso temporal dt (Sec 3.2.5):
+Exact analytical solution over time step dt (Sec 3.2.5):
     H_i,j(t + dt) = max(0, H_i,j(t) - k_er(q) * P_0(t) * sin(theta_i,j) * exp(-lambda_B * B_i,j(t)) * dt)
 """
 
@@ -24,21 +24,21 @@ from typing import Dict, Any, List, Optional, Tuple
 
 class AgroPhasorEDO5:
     """
-    Motor físico especializado para la simulación y validación de EDO 5.
+    Specialized physics engine for ODE 5 simulation and validation.
     """
     def __init__(
         self,
-        h0_mm: float = 400.0,            # Espesor inicial de horizonte orgánico (SSURGO/WSS)
-        slope_deg: float = 12.0,          # Inclinación de ladera SRTM (grados)
-        theta_fc: float = 0.30,           # Capacidad de campo volumétrica (SSURGO/WSS)
-        theta_wp: float = 0.14,           # Punto de marchitez volumétrico (SSURGO/WSS)
-        k_er_cultivo: float = 0.0004,     # Erodibilidad con cultivo vivo (AgroPhasor JSON)
-        k_er_labranza: float = 0.0035,    # Erodibilidad en labranza/transición (AgroPhasor JSON)
-        lambda_b: float = 0.45,           # Atenuación foliar por biomasa (ha/t)
-        xi_n: float = 0.004,              # Arrastre de N por erosión
-        xi_p: float = 0.008,              # Arrastre de P por erosión
-        xi_k: float = 0.003,              # Arrastre de K por erosión
-        kappa_er: float = 0.001           # Factor de deformación de malla 3D (m/mm)
+        h0_mm: float = 400.0,            # Initial organic horizon thickness (SSURGO/WSS)
+        slope_deg: float = 12.0,          # SRTM hillside slope angle (degrees)
+        theta_fc: float = 0.30,           # Volumetric field capacity (SSURGO/WSS)
+        theta_wp: float = 0.14,           # Volumetric permanent wilting point (SSURGO/WSS)
+        k_er_cultivo: float = 0.0004,     # Living-crop erodibility (AgroPhasor JSON)
+        k_er_labranza: float = 0.0035,    # Tillage/transition erodibility (AgroPhasor JSON)
+        lambda_b: float = 0.45,           # Leaf biomass attenuation factor (ha/t)
+        xi_n: float = 0.004,              # Erosion N drag coefficient
+        xi_p: float = 0.008,              # Erosion P drag coefficient
+        xi_k: float = 0.003,              # Erosion K drag coefficient
+        kappa_er: float = 0.001           # 3D mesh subsidence scaling factor (m/mm)
     ):
         self.h0_mm = float(h0_mm)
         self.h_current_mm = float(h0_mm)
@@ -67,7 +67,7 @@ class AgroPhasorEDO5:
         dt_days: float = 1.0
     ) -> Dict[str, Any]:
         """
-        Ejecuta un paso de integración dt de EDO 5.
+        Execute one dt integration step of ODE 5.
         """
         if self.h_current_mm <= 0.0:
             return {
@@ -96,11 +96,11 @@ class AgroPhasorEDO5:
         self.h_current_mm = h_next
         accum_loss = self.h0_mm - h_next
         
-        # Retroalimentación edáfica
+        # Edaphic feedback
         w_cc = self.theta_fc * h_next
         w_pmp = self.theta_wp * h_next
         
-        # Retroalimentación bioquímica (Fósforo)
+        # Biochemical feedback (Phosphorus)
         p_drag = 0.0
         if current_nutrients and "P" in current_nutrients:
             p_drag = self.xi_p * loss_step * max(0.0, current_nutrients["P"])

@@ -9,12 +9,12 @@ export function createKnobsPanel(container, initialKnobs, onKnobChange, onToggle
   const lockButton = createElement('button', {
     type: 'button',
     className: 'btn',
-    text: 'Bloquear',
-    attrs: { 'aria-label': 'Bloquear perillas', 'aria-pressed': false },
+    text: 'Lock',
+    attrs: { 'aria-label': 'Lock priority knobs', 'aria-pressed': false },
     onClick: onToggleLock,
   });
   const header = createElement('div', { className: 'panel-header' }, [
-    createElement('h2', { className: 'panel-title', text: 'Perillas' }),
+    createElement('h2', { className: 'panel-title', text: 'Priority Knobs' }),
     lockButton,
   ]);
 
@@ -62,7 +62,7 @@ export function createKnobsPanel(container, initialKnobs, onKnobChange, onToggle
   container.append(header, list);
 
   function update(knobsState, locked) {
-    lockButton.textContent = locked ? 'Desbloquear' : 'Bloquear';
+    lockButton.textContent = locked ? 'Unlock' : 'Lock';
     lockButton.classList.toggle('btn-active', locked);
     lockButton.setAttribute('aria-pressed', String(locked));
     for (const [id, controls] of controlsById.entries()) {

@@ -1,8 +1,8 @@
 """
-Servicio espacial de simulación de EDO 5 sobre parcelas discretizadas 2.5D (M x L celdas).
-Conecta el modelo digital de elevaciones SRTM (zi,j, theta_i,j), las bases edáficas SSURGO/WSS (H0, theta_fc)
-y las series meteorológicas de precipitación GPM/IMERG/NASA POWER para mapear la vulnerabilidad
-espacial a la erosión hídrica en cada celda del lote.
+Spatial simulation service for ODE 5 over 2.5D discretized parcels (M x L cells).
+Connects SRTM digital elevation models (z_i,j, theta_i,j), SSURGO/WSS soil data (H0, theta_fc),
+and GPM/IMERG/NASA POWER precipitation time series to map spatial water-erosion vulnerability
+across every cell of the parcel.
 """
 
 from typing import List, Dict, Any, Optional
@@ -23,14 +23,14 @@ class ParcelEDO5Service:
         theta_wp: float = 0.14
     ) -> Dict[str, Any]:
         """
-        Ejecuta la simulación de erosión para cada celda de la malla 2.5D.
+        Runs erosion simulation for each cell of the 2.5D grid.
         
-        Cada celda contiene:
-        - cell_id: Identificador
-        - altitude_m: Cota SRTM
-        - slope_deg: Inclinación SRTM (theta)
-        - aspect_deg: Orientación
-        - h0_mm: Espesor fértil inicial opcional
+        Each cell contains:
+        - cell_id: Cell identifier
+        - altitude_m: SRTM elevation
+        - slope_deg: SRTM slope inclination (theta)
+        - aspect_deg: Aspect orientation
+        - h0_mm: Optional initial fertile depth
         """
         results = []
         total_loss_accum = 0.0

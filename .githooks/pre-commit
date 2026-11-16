@@ -1,72 +1,72 @@
 #!/bin/sh
 # ==============================================================================
-# Git Pre-Commit Hook Ã¢â‚¬â€ AgroPhasor (Nasa_AgroFarm)
-# Basado en la arquitectura de seguridad de Quippu y la tarea Linear CC-01.
-# 1. Verifica archivos sensibles staged (.env, credenciales GCP, .netrc, claves).
-# 2. Bloquea marcadores de conflicto de merge residuales.
-# 3. Escanea archivos staged con Gitleaks (--redact).
-# 4. Avisa si se realiza commit directo en la rama principal.
+# Git Pre-Commit Hook — AgroPhasor (Nasa_AgroFarm)
+# Based on Quippu security architecture and Linear task CC-01.
+# 1. Checks staged sensitive files (.env, GCP credentials, .netrc, private keys).
+# 2. Blocks residual merge conflict markers.
+# 3. Scans staged files with Gitleaks (--redact).
+# 4. Warns when committing directly to the main branch.
 # ==============================================================================
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-echo "Ã°Å¸â€Â [pre-commit] Iniciando validaciones de seguridad..."
+echo "🔒 [pre-commit] Starting security checks..."
 
 # ------------------------------------------------------------------------------
-# 1. VerificaciÃƒÂ³n de archivos confidenciales por nombre de archivo
+# 1. Confidential filename check
 # ------------------------------------------------------------------------------
 SENSITIVE_FILES=$(git diff --cached --name-only | grep -E '(\.env$|\.env\.|\.netrc$|\.pem$|\.key$|id_rsa|.*gcp.*\.json$|.*credentials.*\.json$|.*service_account.*\.json$|client_secret.*\.json$)' | grep -v '\.env\.example$' || true)
 
 if [ -n "$SENSITIVE_FILES" ]; then
-    echo "Ã¢ÂÅ’ ERROR [pre-commit]: Se detectaron archivos sensibles preparados para commit:"
+    echo "❌ ERROR [pre-commit]: Sensitive files detected in staging area:"
     echo "$SENSITIVE_FILES"
     echo ""
-    echo "(!) Por seguridad y cumplimiento de CC-01, nunca debes versionar archivos .env, credenciales de GCP ni claves privadas."
-    echo "    AsegÃƒÂºrate de que estÃƒÂ©n listados en .gitignore."
-    echo "    Si es un falso positivo justificado, usa: git commit --no-verify"
+    echo "(!) For security and CC-01 compliance, never commit .env files, GCP credentials, or private keys."
+    echo "    Ensure they are listed in .gitignore."
+    echo "    If this is a justified false positive, use: git commit --no-verify"
     exit 1
 fi
 
 # ------------------------------------------------------------------------------
-# 2. VerificaciÃƒÂ³n de marcadores de conflicto de merge
+# 2. Merge conflict marker check
 # ------------------------------------------------------------------------------
 MERGE_CONFLICTS=$(git diff --cached --check 2>/dev/null | grep 'conflict marker' || true)
 
 if [ -n "$MERGE_CONFLICTS" ]; then
-    echo "Ã¢ÂÅ’ ERROR [pre-commit]: Se encontraron marcadores de conflicto de merge (<<<<<<< / ======= / >>>>>>>):"
+    echo "❌ ERROR [pre-commit]: Merge conflict markers found (<<<<<<< / ======= / >>>>>>>):"
     echo "$MERGE_CONFLICTS"
-    echo "Por favor, resuelve los conflictos antes de continuar."
+    echo "Please resolve all conflicts before continuing."
     exit 1
 fi
 
 # ------------------------------------------------------------------------------
-# 3. Escaneo con Gitleaks de archivos en staged
+# 3. Gitleaks scan on staged files
 # ------------------------------------------------------------------------------
 if command -v gitleaks >/dev/null 2>&1; then
-    echo "Ã°Å¸â€ºÂ¡Ã¯Â¸Â  [pre-commit] Escaneando archivos staged con Gitleaks..."
+    echo "🛡️  [pre-commit] Scanning staged files with Gitleaks..."
     gitleaks protect --staged -v --redact
-    echo "Ã¢Å“â€œ [pre-commit] NingÃƒÂºn secreto detectado por Gitleaks."
+    echo "✓ [pre-commit] No secrets detected by Gitleaks."
 elif command -v docker >/dev/null 2>&1; then
-    echo "Ã°Å¸â€ºÂ¡Ã¯Â¸Â  [pre-commit] Escaneando con Gitleaks (Docker)..."
+    echo "🛡️  [pre-commit] Scanning with Gitleaks (Docker)..."
     docker run --rm -v "$REPO_ROOT:/repo" zricethezav/gitleaks:latest \
         protect --staged --source /repo -v --redact
-    echo "Ã¢Å“â€œ [pre-commit] NingÃƒÂºn secreto detectado por Gitleaks."
+    echo "✓ [pre-commit] No secrets detected by Gitleaks."
 else
-    echo "Ã¢Å¡Â Ã¯Â¸Â  [pre-commit] Gitleaks no estÃƒÂ¡ en el PATH." >&2
-    echo "   Para proteger tus secretos, instÃƒÂ¡lalo con: winget install Gitleaks.Gitleaks" >&2
+    echo "⚠️  [pre-commit] Gitleaks is not in PATH." >&2
+    echo "   To protect your secrets, install it with: winget install Gitleaks.Gitleaks" >&2
 fi
 
 # ------------------------------------------------------------------------------
-# 4. Aviso de buenas prÃƒÂ¡cticas en rama principal
+# 4. Main branch best-practice warning
 # ------------------------------------------------------------------------------
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 
 if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
-    echo "Ã¢Å¡Â Ã¯Â¸Â  AVISO [pre-commit]: EstÃƒÂ¡s haciendo commit directamente en la rama principal ('$BRANCH')."
-    echo "   RecomendaciÃƒÂ³n: Considera crear una rama de trabajo (ej: git checkout -b feature/mi-tarea)."
+    echo "⚠️  WARNING [pre-commit]: You are committing directly to the main branch ('$BRANCH')."
+    echo "   Recommendation: Consider creating a feature branch (e.g., git checkout -b feature/my-task)."
 fi
 
-echo "Ã¢Å“â€¦ [pre-commit] Verificaciones completadas exitosamente."
+echo "✅ [pre-commit] Checks completed successfully."
 exit 0

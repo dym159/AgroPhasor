@@ -1,9 +1,9 @@
 ﻿# ==============================================================================
-# Script de Validación Local de CI (AgroPhasor - Windows PowerShell)
-# Cumplimiento de la tarea Linear CC-01.
-# 1. Gitleaks (Detección de secretos si está disponible)
-# 2. Auditoría de archivos sensibles versionados y verificación de .env.example
-# 3. Verificación de código y pruebas unitarias (Python unittest / pytest)
+# Local CI Validation Script (AgroPhasor - Windows PowerShell)
+# Compliance with Linear task CC-01.
+# 1. Gitleaks (Secret detection if available)
+# 2. Tracked sensitive file audit and .env.example verification
+# 3. Code verification and unit tests (Python unittest / Node)
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
@@ -11,13 +11,13 @@ $repoRoot = git rev-parse --show-toplevel
 Set-Location $repoRoot
 
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host " [CI Local] Validador Pre-Push / Pre-PR — AgroPhasor (Windows)   " -ForegroundColor Cyan
+Write-Host " [Local CI] Pre-Push / Pre-PR Validator — AgroPhasor (Windows)  " -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 
 # ------------------------------------------------------------------------------
-# 1. GITLEAKS (Detección de Secretos en commits)
+# 1. GITLEAKS (Secret detection in commits)
 # ------------------------------------------------------------------------------
-Write-Host "`n[1/3] Verificando secretos y credenciales..." -ForegroundColor Yellow
+Write-Host "`n[1/3] Checking for secrets and credentials..." -ForegroundColor Yellow
 
 $targetBase = "origin/main"
 $hasRemote = git rev-parse --verify $targetBase 2>$null
@@ -39,49 +39,49 @@ if ($gitleaksCmd) {
 }
 
 if ($gitleaksExe) {
-    Write-Host "   Ejecutando Gitleaks ($gitleaksExe)..." -ForegroundColor Gray
+    Write-Host "   Running Gitleaks ($gitleaksExe)..." -ForegroundColor Gray
     if ($commitsCount -gt 0) {
         & $gitleaksExe detect --source $repoRoot -v --redact --log-opts="$targetBase..HEAD"
     } else {
         & $gitleaksExe detect --source $repoRoot -v --redact --log-opts="HEAD~3..HEAD"
     }
-    Write-Host "[OK] Gitleaks: Cero secretos detectados." -ForegroundColor Green
+    Write-Host "[OK] Gitleaks: Zero secrets detected." -ForegroundColor Green
 } else {
-    Write-Host "   (Gitleaks no esta instalado en PATH; recomendacion: winget install Gitleaks.Gitleaks)" -ForegroundColor DarkGray
-    Write-Host "[OK] Omitiendo escaneo binario de Gitleaks." -ForegroundColor Green
+    Write-Host "   (Gitleaks is not installed in PATH; recommended: winget install Gitleaks.Gitleaks)" -ForegroundColor DarkGray
+    Write-Host "[OK] Skipping Gitleaks binary scan." -ForegroundColor Green
 }
 
 # ------------------------------------------------------------------------------
-# 2. AUDITORÍA DE ARCHIVOS SENSIBLES Y .env.example
+# 2. SENSITIVE FILES AUDIT AND .env.example CHECK
 # ------------------------------------------------------------------------------
-Write-Host "`n[2/3] Verificando que no haya archivos privados en el indice de Git..." -ForegroundColor Yellow
+Write-Host "`n[2/3] Checking that no private files are tracked in Git index..." -ForegroundColor Yellow
 
 $trackedFiles = git ls-files
 $sensitiveRegex = '(\.env$|\.env\.|\.netrc$|\.pem$|\.key$|id_rsa|.*gcp.*\.json$|.*credentials.*\.json$|.*service_account.*\.json$)'
 $sensitiveFiles = $trackedFiles | Where-Object { $_ -match $sensitiveRegex -and $_ -notmatch '\.env\.example$' }
 
 if ($sensitiveFiles) {
-    Write-Host "ERROR: Se encontraron archivos sensibles rastreados por Git:" -ForegroundColor Red
+    Write-Host "ERROR: Sensitive files found tracked by Git:" -ForegroundColor Red
     $sensitiveFiles | ForEach-Object { Write-Host "   - $_" -ForegroundColor Red }
-    Write-Host "Eliminalos del repositorio y registralos en .gitignore." -ForegroundColor Red
+    Write-Host "Remove them from the repository and register them in .gitignore." -ForegroundColor Red
     exit 1
 }
 
 if (-not (Test-Path "$repoRoot/.env.example")) {
-    Write-Host "ADVERTENCIA: No se encontro el archivo .env.example en la raiz del proyecto." -ForegroundColor Yellow
+    Write-Host "WARNING: .env.example file was not found in project root." -ForegroundColor Yellow
 } else {
-    Write-Host "[OK] Archivo .env.example presente y seguro." -ForegroundColor Green
+    Write-Host "[OK] .env.example file present and safe." -ForegroundColor Green
 }
-Write-Host "[OK] Archivos sensibles: Ninguno detectado en el indice de Git." -ForegroundColor Green
+Write-Host "[OK] Sensitive files: None detected in Git index." -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
-# 3. VERIFICACIÓN DE CÓDIGO Y PRUEBAS (Backend Python / Frontend)
+# 3. CODE AND TEST VERIFICATION (Python Backend / Frontend)
 # ------------------------------------------------------------------------------
-Write-Host "`n[3/3] Verificacion de codigo y pruebas del proyecto..." -ForegroundColor Yellow
+Write-Host "`n[3/3] Verifying project code and running tests..." -ForegroundColor Yellow
 
-# Backend Python
+# Python Backend
 if ((Test-Path "$repoRoot/backend") -or (Test-Path "$repoRoot/requirements.txt")) {
-    Write-Host "   Ejecutando suite de pruebas de Python..." -ForegroundColor Gray
+    Write-Host "   Running Python test suite..." -ForegroundColor Gray
     $pythonExe = $null
     $candidates = @(
         "C:\Users\Krishna\AppData\Local\Programs\Python\Python313\python.exe",
@@ -105,23 +105,23 @@ if ((Test-Path "$repoRoot/backend") -or (Test-Path "$repoRoot/requirements.txt")
     if ($pythonExe) {
         & $pythonExe -m unittest discover tests
         if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Fallaron las pruebas unitarias de Python." -ForegroundColor Red
+            Write-Host "ERROR: Python unit tests failed." -ForegroundColor Red
             exit 1
         }
-        Write-Host "[OK] Pruebas unitarias de Python aprobadas." -ForegroundColor Green
+        Write-Host "[OK] Python unit tests passed." -ForegroundColor Green
     } else {
-        Write-Host "   (Python no encontrado para ejecutar pruebas)" -ForegroundColor DarkGray
+        Write-Host "   (Python not found to run tests)" -ForegroundColor DarkGray
     }
 }
 
 # Frontend
 if (Test-Path "$repoRoot/package.json") {
-    Write-Host "   Validando archivos de Frontend..." -ForegroundColor Gray
+    Write-Host "   Validating Frontend files..." -ForegroundColor Gray
     if (Test-Path "$repoRoot/frontend/index.html") {
-        Write-Host "[OK] Estructura Frontend (HTML, CSS, JS) verificada." -ForegroundColor Green
+        Write-Host "[OK] Frontend structure (HTML, CSS, JS) verified." -ForegroundColor Green
     }
 }
 
 Write-Host "`n================================================================" -ForegroundColor Green
-Write-Host " [EXITO] CI LOCAL APROBADO: El codigo esta listo para envio     " -ForegroundColor Green
+Write-Host " [SUCCESS] LOCAL CI PASSED: Code is ready to push               " -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green

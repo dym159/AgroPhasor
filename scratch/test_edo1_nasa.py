@@ -19,43 +19,43 @@ def run_test():
     rad = params['ALLSKY_SFC_SW_DWN']
     rh2m = params['RH2M']
     
-    # Parametros fisiologicos de cultivo (ej. Papa / Maiz en Mantaro)
-    Cp = 25000.0        # J / (m2 * C) -> masa termica foliar
-    hc = 25.0           # W / (m2 * C) -> coeficiente convectivo (viento moderado)
-    alpha = 0.8         # absortividad solar de vegetacion
-    # Factor latente: transpiracion activa
-    lambda_gamma_max = 85.0 # W / (m2 * kPa) -> refrigeracion transpiratoria tipica
-    tau = Cp / hc       # 1000 segundos (~16.6 min)
-    dt_sec = 3600.0     # 1 hora
+    # Crop physiological parameters (e.g. Potato / Maize in Mantaro)
+    Cp = 25000.0        # J / (m2 * C) -> leaf thermal mass
+    hc = 25.0           # W / (m2 * C) -> convective coefficient (moderate wind)
+    alpha = 0.8         # vegetation solar absorptivity
+    # Latent cooling factor: active transpiration
+    lambda_gamma_max = 85.0 # W / (m2 * kPa) -> typical transpirational cooling
+    tau = Cp / hc       # 1000 seconds (~16.6 min)
+    dt_sec = 3600.0     # 1 hour
 
-    timestamps = sorted(t2m.keys())[:24] # Primeras 24 horas
+    timestamps = sorted(t2m.keys())[:24] # First 24 hours
     
     T_water = t2m[timestamps[0]]
     T_drought = t2m[timestamps[0]]
     
     print("=" * 95)
-    print("SIMULACIÓN DE EDO 1 FORZADA CON DATOS REALES DE NASA POWER (VALLE DEL MANTARO)")
+    print("ODE 1 SIMULATION FORCED WITH REAL NASA POWER DATA (MANTARO VALLEY)")
     print("=" * 95)
-    print(f"{'Hora':<7} | {'T_aire':<8} | {'Rad (W/m2)':<12} | {'RH (%)':<7} | {'T_agua (°C)':<12} | {'T_sequía (°C)':<13} | {'ΔT Sequía-Agua':<16} | {'Diagnóstico':<12}")
+    print(f"{'Hour':<7} | {'T_air':<8} | {'Rad (W/m2)':<12} | {'RH (%)':<7} | {'T_water (°C)':<12} | {'T_drought (°C)':<14} | {'ΔT Drought-Water':<16} | {'Diagnostic':<12}")
     print("-" * 95)
     
     for ts in timestamps:
         Text = t2m[ts]
         frad_mj = rad[ts]
-        frad = frad_mj * (1e6 / 3600.0) # Convertir MJ/hr a W/m2!
+        frad = frad_mj * (1e6 / 3600.0) # Convert MJ/hr to W/m2
         rh = rh2m[ts]
         
-        # Presion de vapor del aire (ea en kPa)
+        # Air vapor pressure (ea in kPa)
         es_air = 0.6108 * math.exp((17.27 * Text) / (Text + 237.3))
         ea = es_air * (rh / 100.0)
         
-        # --- Caso Con Agua (gamma_c = 1.0) ---
+        # --- Well-Watered Case (gamma_c = 1.0) ---
         es_k_w = 0.6108 * math.exp((17.27 * T_water) / (T_water + 237.3))
         vpd_k_w = max(0.0, es_k_w - ea)
         T_eq_w = Text + (alpha * frad - lambda_gamma_max * 1.0 * vpd_k_w) / hc
         T_water = T_eq_w + (T_water - T_eq_w) * math.exp(-dt_sec / tau)
         
-        # --- Caso Sequía (gamma_c = 0.0, estomas cerrados) ---
+        # --- Drought Case (gamma_c = 0.0, closed stomata) ---
         T_eq_d = Text + (alpha * frad - 0.0) / hc
         T_drought = T_eq_d + (T_drought - T_eq_d) * math.exp(-dt_sec / tau)
         
@@ -64,14 +64,14 @@ def run_test():
         
         if frad > 50:
             if T_water <= Text + 1.0:
-                diag = "Confort / Oasis"
+                diag = "Comfort / Oasis"
             else:
-                diag = "Cálido"
+                diag = "Warm"
             if diff > 5.0:
-                diag += " | FIEBRE"
+                diag += " | FEVER"
         else:
-            diag = "Noche / Equil"
+            diag = "Night / Equil"
             
-        print(f"{hour_str:<7} | {Text:<8.1f} | {frad:<12.1f} | {rh:<7.1f} | {T_water:<12.1f} | {T_drought:<13.1f} | {diff:<+16.1f} | {diag:<12}")
+        print(f"{hour_str:<7} | {Text:<8.1f} | {frad:<12.1f} | {rh:<7.1f} | {T_water:<12.1f} | {T_drought:<14.1f} | {diff:<+16.1f} | {diag:<12}")
 
 run_test()

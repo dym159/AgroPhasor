@@ -2,16 +2,16 @@ import { parcelFootprint } from './parcel-geometry.js';
 import { metersPerWorldPixel, exaggerateRelief } from './terrain.js';
 
 /**
- * AgroPhasor - Visor Isométrico 2.5D "Cerros en Cuadrado + Escudo Plano"
- * Sincronizado en tiempo real con el modelo físico:
- * - Hundimiento físico de la tierra por erosión (H)
- * - Transición de color del suelo: Marrón fértil <-> Gris rocoso degradado
- * - Altura del dosel según biomasa aérea (B)
- * - 4 Estados del Escudo:
- *     1. Azul Cobalto (Psi -> 1)
- *     2. Violeta / Ámbar (Psi ~ 0.5)
- *     3. Rojo Intenso (Psi -> 0)
- *     4. Escudo Desactivado (q = Transición, suelo desnudo)
+ * AgroPhasor - 2.5D Isometric Viewer "Square Hills + Flat Shield"
+ * Synchronized in real time with the physical model:
+ * - Physical topsoil subsidence from erosion (H)
+ * - Soil color transition: Fertile brown <-> Degraded rocky gray
+ * - Canopy height driven by aboveground biomass (B)
+ * - 4 Shield States:
+ *     1. Cobalt Blue (Psi -> 1)
+ *     2. Violet / Amber (Psi ~ 0.5)
+ *     3. Deep Red (Psi -> 0)
+ *     4. Shield Deactivated (q = Transition, bare soil)
  */
 
 export class Escudo3DViewer {
@@ -20,7 +20,7 @@ export class Escudo3DViewer {
     if (!this.canvas) return;
     this.ctx = this.canvas.getContext('2d');
 
-    // Estado físico sincronizado
+    // Synchronized physical state
     this.state = {
       W: 142.5,
       T: 16.8,
@@ -35,17 +35,17 @@ export class Escudo3DViewer {
         hex: "#262c1c"
       },
       eta_nutrientes: 0.78,
-      limitingNutrient: "Nitrógeno (N)",
+      limitingNutrient: "Nitrogen (N)",
       Psi: 0.85,
       shieldState: "azul_cobalto", // "azul_cobalto" | "violeta_ambar" | "rojo_intenso" | "desactivado"
       shieldColor: "#2563eb",
-      shieldName: "Azul Cobalto (Óptima Resiliencia)",
+      shieldName: "Cobalt Blue (Optimal Resilience)",
       stage: "cultivo",
-      cropName: "Papa Canchán"
+      cropName: "Canchan Potato"
     };
 
-    // Parámetros de proyección isométrica
-    this.angle = Math.PI / 6; // 30 grados
+    // Isometric projection parameters
+    this.angle = Math.PI / 6; // 30 degrees
     this.scale = 1.0;
     this.rotation = 0;
     this.animTime = 0;
@@ -109,7 +109,7 @@ export class Escudo3DViewer {
   }
 
   /**
-   * Actualizar el estado completo desde el motor de física
+   * Update complete state from the physics engine
    */
   updatePhysicsState(physData) {
     if (!physData) return;
@@ -125,20 +125,20 @@ export class Escudo3DViewer {
     const generation = this.terrainGeneration = (this.terrainGeneration || 0) + 1;
     const label = document.getElementById('terrain-status');
     if (!f || !this.terrain) {
-      if (label) label.textContent = 'Selecciona una parcela para ver el relieve';
+      if (label) label.textContent = 'Select a parcel to view terrain relief';
       return;
     }
-    if (label) label.textContent = 'Cargando elevación del terreno…';
+    if (label) label.textContent = 'Loading terrain elevation…';
     const pad = Math.max(f.width, f.height) / 16;
     this.terrain.loadBounds(f.minX - pad, f.minY - pad, f.minX + f.width + pad, f.minY + f.height + pad)
       .then(complete => {
         if (generation !== this.terrainGeneration) return;
         this.heightCache = new Map();
         if (label) label.textContent = complete
-          ? 'Relieve visual ×4 · pendiente simulada · erosión base ×250'
-          : 'Elevación no disponible o incompleta · sin inventar relieve';
+          ? 'Visual relief ×4 · simulated slope · baseline erosion ×250'
+          : 'Elevation unavailable or incomplete · no synthetic relief generated';
       }).catch(() => {
-        if (generation === this.terrainGeneration && label) label.textContent = 'Elevación no disponible';
+        if (generation === this.terrainGeneration && label) label.textContent = 'Elevation unavailable';
       });
   }
 
@@ -193,7 +193,7 @@ export class Escudo3DViewer {
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    // Misma posición y separación que las celdas del mapa, recortadas al contorno.
+    // Same position and spacing as map cells, clipped to the parcel contour.
     const line = (x1, y1, x2, y2) => {
       const segments = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 4);
       for (let i = 0; i <= segments; i++) {
@@ -287,10 +287,10 @@ export class Escudo3DViewer {
     ctx.restore();
   }
 
-  // Transformación isométrica 3D -> 2D con rotación interactiva
+  // 3D -> 2D isometric projection with interactive rotation
   isoProject(x, y, z, originX, originY, followTerrain = true) {
     if (followTerrain) z += this.terrainOffset(x, y);
-    // Centro del bloque
+    // Block center
     const cx = x - 95;
     const cy = y - 65;
     const rx = cx * Math.cos(this.rotation) - cy * Math.sin(this.rotation);
@@ -313,21 +313,21 @@ export class Escudo3DViewer {
     const originY = h * 0.58;
     this.animTime += 0.025;
 
-    // Dimensiones del bloque cuadrado de tierra
+    // Square soil block dimensions
     const slabW = 190;
     const slabL = 130;
     
-    // 1. HUNDIMIENTO DE LA TIERRA POR EROSIÓN
-    // A mayor erosión (erosionSinkingMm), el sustrato se hunde en el eje Z
-    const visualSinkingZ = 0; // La erosión ya se aplica por vértice en TerrainSurface.
-    const baseHeight = 26; // Espesor visual
+    // 1. SOIL SUBSIDENCE DUE TO EROSION
+    // Higher erosion (erosionSinkingMm) sinks the substrate along the Z axis
+    const visualSinkingZ = 0; // Erosion is already applied per vertex in TerrainSurface.
+    const baseHeight = 26; // Visual slab thickness
     const effectiveSlabH = Math.max(8, baseHeight - visualSinkingZ);
 
-    // 2. ALTURA DEL ESCUDO PLANO
-    // Depende de la biomasa B (dosel vegetal). En transición baja cerca al suelo
+    // 2. FLAT SHIELD HEIGHT
+    // Depends on biomass B (canopy). During transition it drops close to the soil surface
     let shieldHeight = 75;
     if (this.state.stage === "transicion") {
-      shieldHeight = 35; // Colapsado en barbecho/suelo desnudo
+      shieldHeight = 35; // Collapsed during fallow/bare soil
     } else {
       const biomassOffset = Math.min(25, (this.state.B || 10) * 1.5);
       shieldHeight = 55 + biomassOffset + Math.sin(this.animTime * 1.5) * 2;
@@ -337,29 +337,29 @@ export class Escudo3DViewer {
       ctx.fillStyle = '#94a3b8';
       ctx.font = '14px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Selecciona o dibuja una parcela en el mapa', originX, originY);
+      ctx.fillText('Select or draw a parcel on the map', originX, originY);
       return;
     }
     this.drawParcel(ctx, originX, originY, effectiveSlabH, visualSinkingZ, shieldHeight);
 
-    // 6. HUD Y ETIQUETA EN VIVO DEL ESCUDO
+    // 6. TOP HUD AND LIVE SHIELD LABEL
     this.drawHUD(ctx, originX, originY, slabW, slabL, shieldHeight);
   }
 
   /**
-   * 1. Losa cuadrada de tierra: Marrón fértil <-> Gris rocoso y hundimiento
+   * 1. Square soil slab: Fertile brown <-> Rocky gray and subsidence
    */
   drawSquareSlab(ctx, ox, oy, sw, sl, sh, sinkingZ) {
     const topZ = -sinkingZ;
     const botZ = -sinkingZ - sh;
 
-    // Vértices inferiores
+    // Lower vertices
     const b0 = this.isoProject(0, 0, botZ, ox, oy);
     const b1 = this.isoProject(sw, 0, botZ, ox, oy);
     const b2 = this.isoProject(sw, sl, botZ, ox, oy);
     const b3 = this.isoProject(0, sl, botZ, ox, oy);
 
-    // Vértices superiores (con hundimiento)
+    // Upper vertices (with subsidence)
     const t0 = this.isoProject(0, 0, topZ, ox, oy);
     const t1 = this.isoProject(sw, 0, topZ, ox, oy);
     const t2 = this.isoProject(sw, sl, topZ, ox, oy);
@@ -371,7 +371,7 @@ export class Escudo3DViewer {
       side: "#12160e"
     };
 
-    // Cara frontal izquierda
+    // Front-left face
     ctx.beginPath();
     ctx.moveTo(t3.x, t3.y);
     ctx.lineTo(t2.x, t2.y);
@@ -384,7 +384,7 @@ export class Escudo3DViewer {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Franja de humedad radicular W en el perfil
+    // Root-zone moisture W band along profile
     const moistureFrac = Math.min(1.0, this.state.W / 180);
     const mwHeight = sh * moistureFrac * 0.7;
     const mwTop = this.isoProject(0, sl, botZ + mwHeight, ox, oy);
@@ -396,10 +396,10 @@ export class Escudo3DViewer {
     ctx.lineTo(b2.x, b2.y);
     ctx.lineTo(b3.x, b3.y);
     ctx.closePath();
-    ctx.fillStyle = "rgba(56, 189, 248, 0.22)"; // Azul humedad radicular
+    ctx.fillStyle = "rgba(56, 189, 248, 0.22)"; // Root-zone moisture blue
     ctx.fill();
 
-    // Cara frontal derecha
+    // Front-right face
     ctx.beginPath();
     ctx.moveTo(t1.x, t1.y);
     ctx.lineTo(t2.x, t2.y);
@@ -410,7 +410,7 @@ export class Escudo3DViewer {
     ctx.fill();
     ctx.stroke();
 
-    // Superficie Superior (Suelo cultivable)
+    // Top surface (arable topsoil)
     ctx.beginPath();
     ctx.moveTo(t0.x, t0.y);
     ctx.lineTo(t1.x, t1.y);
@@ -423,7 +423,7 @@ export class Escudo3DViewer {
     ctx.lineWidth = 1.2;
     ctx.stroke();
 
-    // Si el suelo se ha hundido por erosión, dibujar marcas de escorrentía/grietas rocosas
+    // If topsoil has subsided due to erosion, draw runoff scars / rocky cracks
     if (sinkingZ > 6) {
       ctx.strokeStyle = "rgba(100, 116, 139, 0.4)";
       ctx.setLineDash([3, 4]);
@@ -438,12 +438,12 @@ export class Escudo3DViewer {
   }
 
   /**
-   * 2. Cerros y andenes en cuadrado (Terrazas escalonadas como en el boceto)
+   * 2. Square hills and terraces (stepped agricultural benches as in the sketch)
    */
   drawSquareTerraces(ctx, ox, oy, sh, sinkingZ) {
     const topZ = -sinkingZ;
 
-    // Terraza 1 (Elevada en la ladera)
+    // Terrace 1 (Elevated along the hillside)
     const tx = 55;
     const ty = 30;
     const tw = 75;
@@ -471,7 +471,7 @@ export class Escudo3DViewer {
   }
 
   /**
-   * 3. Cultivos agrícolas (Biomasa B verde)
+   * 3. Agricultural crops (Green biomass B)
    */
   drawCrops(ctx, ox, oy, sh, sw, sl, sinkingZ) {
     const topZ = -sinkingZ;
@@ -491,15 +491,15 @@ export class Escudo3DViewer {
         ctx.save();
         ctx.translate(pos.x, pos.y);
 
-        // Tallo
+        // Stem
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(0, -11 * growthScale);
-        ctx.strokeStyle = this.state.Psi < 0.38 ? "#eab308" : "#10b981"; // Amarillo si estrés crítico
+        ctx.strokeStyle = this.state.Psi < 0.38 ? "#eab308" : "#10b981"; // Yellow under critical stress
         ctx.lineWidth = 1.4;
         ctx.stroke();
 
-        // Hojas
+        // Leaves
         ctx.beginPath();
         ctx.arc(-3.5 * growthScale, -9 * growthScale, 3 * growthScale, 0, Math.PI * 2);
         ctx.arc(3.5 * growthScale, -10 * growthScale, 3 * growthScale, 0, Math.PI * 2);
@@ -512,7 +512,7 @@ export class Escudo3DViewer {
   }
 
   /**
-   * 3.1 Rastrojo / suelo en transición (Suelo desnudo con restos secos)
+   * 3.1 Stubble / transition soil (Bare soil with dry residues)
    */
   drawStubbleResidue(ctx, ox, oy, sh, sw, sl, sinkingZ) {
     const topZ = -sinkingZ;
@@ -532,7 +532,7 @@ export class Escudo3DViewer {
   }
 
   /**
-   * 4. Pilares de anclaje (con líneas discontinuas)
+   * 4. Anchor pillars (dashed lines)
    */
   drawShieldPilars(ctx, ox, oy, sw, sl, sz, sinkingZ) {
     const topZ = -sinkingZ;
@@ -557,7 +557,7 @@ export class Escudo3DViewer {
       ctx.lineTo(top.x, top.y);
       ctx.stroke();
 
-      // Nodo de anclaje
+      // Anchor node
       ctx.beginPath();
       ctx.arc(bot.x, bot.y, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = ctx.strokeStyle;
@@ -568,19 +568,19 @@ export class Escudo3DViewer {
   }
 
   /**
-   * 5. ESCUDO PLANO SUSPENDIDO CON 4 ESTADOS
+   * 5. SUSPENDED FLAT SHIELD WITH 4 STATES
    */
   drawFlatShield(ctx, ox, oy, sw, sl, sz) {
     const state = this.state.shieldState; // "azul_cobalto" | "violeta_ambar" | "rojo_intenso" | "desactivado"
 
-    // Vértices del plano de protección
+    // Protection plane vertices
     const g0 = this.isoProject(0, 0, sz, ox, oy);
     const g1 = this.isoProject(sw, 0, sz, ox, oy);
     const g2 = this.isoProject(sw, sl, sz, ox, oy);
     const g3 = this.isoProject(0, sl, sz, ox, oy);
 
     // =========================================================================
-    // ESTADO 4: ESCUDO DESACTIVADO (q = Transición / Suelo Desnudo)
+    // STATE 4: SHIELD DEACTIVATED (q = Transition / Bare Soil)
     // =========================================================================
     if (state === "desactivado") {
       ctx.beginPath();
@@ -597,33 +597,33 @@ export class Escudo3DViewer {
       return;
     }
 
-    // Configuración según el estado activo:
-    // 1. Azul Cobalto (Psi -> 1): #2563eb / #1d4ed8
-    // 2. Violeta / Ámbar (Psi ~ 0.5): #8b5cf6 / #d97706
-    // 3. Rojo Intenso (Psi -> 0): #dc2626 / #ef4444
+    // Configuration per active state:
+    // 1. Cobalt Blue (Psi -> 1): #2563eb / #1d4ed8
+    // 2. Violet / Amber (Psi ~ 0.5): #8b5cf6 / #d97706
+    // 3. Deep Red (Psi -> 0): #dc2626 / #ef4444
     let baseColor = "#2563eb";
     let glowRgba = "rgba(37, 99, 235, 0.28)";
     let pulseSpeed = 1.0;
 
     if (state === "azul_cobalto") {
-      baseColor = "#2563eb"; // Azul Cobalto
+      baseColor = "#2563eb"; // Cobalt Blue
       glowRgba = "rgba(37, 99, 235, 0.35)";
       pulseSpeed = 1.0;
     } else if (state === "violeta_ambar") {
-      baseColor = "#8b5cf6"; // Violeta con destellos ámbar
+      baseColor = "#8b5cf6"; // Violet with amber highlights
       glowRgba = "rgba(139, 92, 246, 0.32)";
       pulseSpeed = 1.8;
     } else if (state === "rojo_intenso") {
-      baseColor = "#dc2626"; // Rojo Intenso crítico
+      baseColor = "#dc2626"; // Critical Deep Red
       glowRgba = "rgba(220, 38, 38, 0.45)";
-      pulseSpeed = 3.5; // Parpadeo rápido de alarma
+      pulseSpeed = 3.5; // Fast alarm pulse
     }
 
-    // Pulsación de respiración del escudo
+    // Shield breathing pulse
     const pulseFactor = Math.sin(this.animTime * pulseSpeed * 2);
     const alphaPulse = Math.max(0.15, Math.min(0.65, 0.30 + pulseFactor * 0.15));
 
-    // Plano translúcido
+    // Translucent plane
     ctx.beginPath();
     ctx.moveTo(g0.x, g0.y);
     ctx.lineTo(g1.x, g1.y);
@@ -633,7 +633,7 @@ export class Escudo3DViewer {
     ctx.fillStyle = glowRgba.replace(/[\d\.]+\)$/, `${alphaPulse})`);
     ctx.fill();
 
-    // Malla cuadriculada del escudo plano
+    // Flat shield wireframe grid
     const cols = 5;
     const rows = 4;
     ctx.strokeStyle = baseColor;
@@ -661,7 +661,7 @@ export class Escudo3DViewer {
   }
 
   /**
-   * 6. HUD superior con indicador de Estado y Psi
+   * 6. Top HUD with State and Psi indicator
    */
   drawHUD(ctx, ox, oy, sw, sl, sz) {
     const centerTop = this.isoProject(sw / 2, sl / 2, sz + 18, ox, oy, false);
@@ -690,16 +690,16 @@ export class Escudo3DViewer {
 
     switch (this.state.shieldState) {
       case "azul_cobalto":
-        stateLabel = `🔵 Azul Cobalto (Ψ=${this.state.Psi})`;
+        stateLabel = `🔵 Cobalt Blue (Ψ=${this.state.Psi})`;
         break;
       case "violeta_ambar":
-        stateLabel = `🟣 Violeta/Ámbar (Ψ=${this.state.Psi})`;
+        stateLabel = `🟣 Violet/Amber (Ψ=${this.state.Psi})`;
         break;
       case "rojo_intenso":
-        stateLabel = `🔴 Rojo Intenso (Ψ=${this.state.Psi})`;
+        stateLabel = `🔴 Deep Red (Ψ=${this.state.Psi})`;
         break;
       default:
-        stateLabel = `⚪ Escudo Desactivado (Transición)`;
+        stateLabel = `⚪ Shield Deactivated (Transition)`;
     }
 
     ctx.fillText(`${stateLabel}`, centerTop.x, by + 18);

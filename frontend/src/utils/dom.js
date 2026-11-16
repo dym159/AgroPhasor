@@ -1,4 +1,4 @@
-// Utilidades DOM compartidas para evitar duplicación al construir vistas.
+// Shared DOM utilities to avoid duplication when building views.
 
 export function clearChildren(element) {
   if (!element) return;

@@ -1,6 +1,6 @@
 /**
- * AgroPhasor - Interfaz de Usuario y Recorrido del Agricultor
- * Pasos: 1. Parcela -> 2. Calendario -> 3. Cultivos -> 4. Diagnóstico -> 5. Rotación
+ * AgroPhasor - User Interface & Farmer Workflow
+ * Steps: 1. Parcel -> 2. Calendar -> 3. Crops -> 4. Diagnostics -> 5. Rotation
  */
 
 import { CONFIG } from './config.js';
@@ -15,11 +15,11 @@ export class UIManager {
     this.physicsEngine = new AgroPhysicsEngine();
 
     this.activeStep = 1;
-    this.activeTab = "map"; // Para móvil: "map" | "panel"
+    this.activeTab = "map"; // For mobile: "map" | "panel"
     this.activePeriod = "P1";
     this.activePriorityMode = "balance_optimo"; // "maxima_resiliencia" | "balance_optimo" | "mayor_ganancia"
 
-    // Controles interactivos What-If del modelo físico
+    // Interactive What-If physical model controls
     this.whatIfControls = {
       deltaP0: 0,
       deltaText: 0,
@@ -32,10 +32,10 @@ export class UIManager {
       stage: "cultivo"
     };
 
-    // Modo de auto-equilibrio interactivo entre perillas
+    // Interactive auto-balance mode across sliders
     this.autoBalance = true;
 
-    // Elementos DOM
+    // DOM elements
     this.elements = {};
   }
 
@@ -50,7 +50,7 @@ export class UIManager {
     this.setupWhatIfControls();
     this.recalculatePhysicalModel();
 
-    // Actualizar iconos Lucide si están presentes
+    // Initialize Lucide icons if loaded
     if (window.lucide) {
       window.lucide.createIcons();
     }
@@ -58,16 +58,16 @@ export class UIManager {
 
   cacheDOMElements() {
     this.elements = {
-      // Navegación de pasos
+      // Step navigation
       stepTabs: document.querySelectorAll('.step-tab'),
       stepContents: document.querySelectorAll('.step-content'),
       
-      // Contenedores móviles
+      // Mobile containers
       viewToggleButtons: document.querySelectorAll('.mobile-view-toggle button'),
       mapContainer: document.getElementById('map-wrapper'),
       panelContainer: document.getElementById('panel-wrapper'),
       
-      // Panel de lotes
+      // Lots panel
       lotesList: document.getElementById('lotes-list'),
       btnAddLote: document.getElementById('btn-add-lote'),
       btnConfirmLote: document.getElementById('btn-confirm-lote'),
@@ -77,7 +77,7 @@ export class UIManager {
       btnStep1Shield: document.getElementById('btn-step1-shield'),
       btnMapShield: document.getElementById('btn-map-shield'),
       
-      // Estadísticas del lote activo
+      // Active lot stats
       statLoteName: document.getElementById('stat-lote-name'),
       statLoteAreaHa: document.getElementById('stat-lote-area-ha'),
       statLoteAreaM2: document.getElementById('stat-lote-area-m2'),
@@ -85,36 +85,36 @@ export class UIManager {
       statLoteStatusBadge: document.getElementById('stat-lote-status-badge'),
       statLoteCentroid: document.getElementById('stat-lote-centroid'),
 
-      // Simulación & Envío
+      // Simulation & submission
       btnSimulate: document.getElementById('btn-simulate'),
       checkSimulateError: document.getElementById('check-simulate-error'),
       btnViewGeojson: document.getElementById('btn-view-geojson'),
       backendStatusBadge: document.getElementById('backend-status-badge'),
       
-      // Modal GeoJSON
+      // GeoJSON modal
       geojsonModal: document.getElementById('geojson-modal'),
       geojsonCode: document.getElementById('geojson-code'),
       btnCloseModal: document.getElementById('btn-close-modal'),
       btnCopyGeojson: document.getElementById('btn-copy-geojson'),
 
-      // Calendario & Periodos
+      // Calendar & periods
       periodsContainer: document.getElementById('periods-container'),
       btnAddPeriod: document.getElementById('btn-add-period'),
 
-      // Catálogo de cultivos
+      // Crop catalog
       cropCatalogContainer: document.getElementById('crop-catalog-container'),
 
-      // Modos de simulación
+      // Simulation modes
       priorityButtons: document.querySelectorAll('.priority-btn'),
 
-      // Indicadores
+      // Indicators
       indicatorW: document.getElementById('ind-humedad-w'),
       indicatorT: document.getElementById('ind-temp-t'),
       indicatorNPK: document.getElementById('ind-npk'),
       indicatorH: document.getElementById('ind-espesor-h'),
       indicatorShield: document.getElementById('ind-escudo'),
 
-      // Perillas What-If del modelo físico
+      // What-If physical model sliders
       checkAutoBalance: document.getElementById('check-auto-balance'),
       sliderDeltaP: document.getElementById('slider-delta-p'),
       valDeltaP: document.getElementById('val-delta-p'),
@@ -141,7 +141,7 @@ export class UIManager {
       valStageText: document.getElementById('val-stage-text'),
       visorStageTag: document.getElementById('visor-stage-tag'),
 
-      // Salud química Liebig
+      // Liebig chemical health
       valLiebigPct: document.getElementById('val-liebig-pct'),
       liebigBarFill: document.getElementById('liebig-bar-fill'),
       liebigLimitingBadge: document.getElementById('liebig-limiting-badge'),
@@ -149,7 +149,7 @@ export class UIManager {
       pillNpkP: document.getElementById('pill-npk-p'),
       pillNpkK: document.getElementById('pill-npk-k'),
 
-      // Alertas de Riego
+      // Irrigation alerts
       irrigationAlertCard: document.getElementById('irrigation-alert-card'),
       badgeIrrigationStatus: document.getElementById('badge-irrigation-status'),
       valWcrit: document.getElementById('val-wcrit'),
@@ -157,19 +157,19 @@ export class UIManager {
       valIsugerido: document.getElementById('val-isugerido'),
       btnApplyIrrigationSuggested: document.getElementById('btn-apply-irrigation-suggested'),
 
-      // Confianza Montecarlo y Estados del Escudo
+      // Monte Carlo confidence and shield states
       valMontecarloConf: document.getElementById('val-montecarlo-conf'),
       pillAzul: document.getElementById('pill-azul'),
       pillVioleta: document.getElementById('pill-violeta'),
       pillRojo: document.getElementById('pill-rojo'),
       pillDesactivado: document.getElementById('pill-desactivado'),
 
-      // Rotación
+      // Rotation
       rotationTableBody: document.getElementById('rotation-table-body'),
       rotationReason: document.getElementById('rotation-reason'),
       btnApplySuggestion: document.getElementById('btn-apply-suggestion'),
 
-      // Notificaciones y alertas
+      // Notifications and alerts
       toastContainer: document.getElementById('toast-container'),
       locationInfo: document.getElementById('location-info'),
       btnLocateMe: document.getElementById('btn-locate-me'),
@@ -178,7 +178,7 @@ export class UIManager {
   }
 
   bindEvents() {
-    // 1. Navegación por pasos
+    // 1. Step navigation
     this.elements.stepTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         const step = parseInt(tab.dataset.step, 10);
@@ -186,7 +186,7 @@ export class UIManager {
       });
     });
 
-    // 2. Alternar vista móvil (Mapa vs Panel)
+    // 2. Mobile view toggle (Map vs Panel)
     this.elements.viewToggleButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         const view = btn.dataset.view;
@@ -194,17 +194,17 @@ export class UIManager {
       });
     });
 
-    // 3. Botones de gestión de lotes
+    // 3. Lot management buttons
     if (this.elements.btnAddLote) {
       this.elements.btnAddLote.addEventListener('click', () => {
         try {
           if (this.lotesManager.getAll().length >= CONFIG.LIMITS.MAX_LOTES) {
-            this.showToast(`Límite de zonas alcanzado (máximo ${CONFIG.LIMITS.MAX_LOTES} zonas para esta entrega).`, "warning");
+            this.showToast(`Zone limit reached (maximum ${CONFIG.LIMITS.MAX_LOTES} zones for this release).`, "warning");
             return;
           }
           this.mapManager.startDrawPolygon();
           this.switchMobileView("map");
-          this.showToast("Dibuja tu parcela en el mapa tocando los puntos del terreno.", "info");
+          this.showToast("Draw your parcel on the map by tapping field boundary points.", "info");
         } catch (e) {
           this.showToast(e.message, "error");
         }
@@ -215,11 +215,11 @@ export class UIManager {
       this.elements.btnConfirmLote.addEventListener('click', () => {
         const selected = this.lotesManager.getSelected();
         if (!selected) {
-          this.showToast("Primero dibuja o selecciona una parcela en el mapa.", "warning");
+          this.showToast("First draw or select a parcel on the map.", "warning");
           return;
         }
         this.lotesManager.confirmLote(selected.id);
-        this.showToast(`¡Contorno de "${selected.name}" confirmado exitosamente!`, "success");
+        this.showToast(`Boundary of "${selected.name}" confirmed successfully!`, "success");
       });
     }
 
@@ -227,7 +227,7 @@ export class UIManager {
       this.elements.btnEditLote.addEventListener('click', () => {
         this.mapManager.startEditMode();
         this.switchMobileView("map");
-        this.showToast("Modo edición activado: arrastra los vértices para ajustar el contorno.", "info");
+        this.showToast("Edit mode enabled: drag vertices to adjust the boundary.", "info");
       });
     }
 
@@ -235,9 +235,9 @@ export class UIManager {
       this.elements.btnDeleteLote.addEventListener('click', () => {
         const selected = this.lotesManager.getSelected();
         if (!selected) return;
-        if (confirm(`¿Estás seguro de eliminar "${selected.name}"?`)) {
+        if (confirm(`Are you sure you want to delete "${selected.name}"?`)) {
           this.lotesManager.removeLote(selected.id);
-          this.showToast("Lote eliminado.", "info");
+          this.showToast("Lot deleted.", "info");
         }
       });
     }
@@ -252,11 +252,11 @@ export class UIManager {
       });
     }
 
-    // Botones para ver el Escudo 2.5D
+    // Buttons to open the 2.5D Shield view
     const openEscudoView = () => {
       this.goToStep(4);
       this.switchMobileView("panel");
-      this.showToast("🛡️ Gemelo Digital 2.5D: Malla del escudo protector suspendida sobre tus cultivos.", "info");
+      this.showToast("🛡️ 2.5D Digital Twin: Protective shield mesh suspended over your crops.", "info");
     };
 
     if (this.elements.btnStep1Shield) {
@@ -267,22 +267,22 @@ export class UIManager {
       this.elements.btnMapShield.addEventListener('click', openEscudoView);
     }
 
-    // 4. Botón de Simulación principal (con Resiliencia de Selección ante fallos)
+    // 4. Primary simulation button (with strict selection preservation on failure)
     if (this.elements.btnSimulate) {
       this.elements.btnSimulate.addEventListener('click', () => this.handleSimulation());
     }
 
-    // Checkbox de forzar error para demostrar resiliencia
+    // Force-error checkbox to demonstrate resilience
     if (this.elements.checkSimulateError) {
       this.elements.checkSimulateError.addEventListener('change', (e) => {
         this.apiService.forceFailureForTesting = e.target.checked;
         if (e.target.checked) {
-          this.showToast("Modo de prueba de error activado: La siguiente simulación fallará para verificar que tu selección se conserva.", "warning");
+          this.showToast("Error test mode enabled: The next simulation will fail to verify your selection stays intact.", "warning");
         }
       });
     }
 
-    // 5. Modal de GeoJSON
+    // 5. GeoJSON modal
     if (this.elements.btnViewGeojson) {
       this.elements.btnViewGeojson.addEventListener('click', () => {
         const payload = this.lotesManager.toSimulationPayload({ mode: this.activePriorityMode });
@@ -300,64 +300,64 @@ export class UIManager {
     if (this.elements.btnCopyGeojson) {
       this.elements.btnCopyGeojson.addEventListener('click', () => {
         navigator.clipboard.writeText(this.elements.geojsonCode.textContent).then(() => {
-          this.showToast("GeoJSON copiado al portapapeles", "success");
+          this.showToast("GeoJSON copied to clipboard", "success");
         });
       });
     }
 
-    // 6. Botón de geolocalización
+    // 6. Geolocation button
     if (this.elements.btnLocateMe) {
       this.elements.btnLocateMe.addEventListener('click', () => {
-        this.showToast("Buscando tu ubicación… Si aparece una solicitud, selecciona «Permitir».", "info");
+        this.showToast("Looking up your location… If prompted, select «Allow».", "info");
         this.mapManager.locateUser(
           (coords) => {
             const acc = Number.isFinite(coords?.accuracy) ? ` (±${Math.ceil(coords.accuracy)} m)` : "";
-            this.showToast(`Ubicación encontrada en el mapa${acc}.`, "success");
+            this.showToast(`Location found on the map${acc}.`, "success");
           },
           (err) => {
-            this.showToast(err?.message || "No se pudo obtener la señal GPS; manteniéndote en Valle del Mantaro.", "warning", 6000);
+            this.showToast(err?.message || "Could not acquire GPS signal; keeping view on Mantaro Valley.", "warning", 6000);
           }
         );
       });
     }
 
-    // 7. Alternar capa satelital
+    // 7. Toggle satellite imagery layer
     if (this.elements.btnLayerToggle) {
       this.elements.btnLayerToggle.addEventListener('click', () => {
         const nextLayer = this.mapManager.activeBaseLayer === "esriSatellite" ? "osm" : "esriSatellite";
         this.mapManager.toggleBaseLayer(nextLayer);
-        this.elements.btnLayerToggle.textContent = nextLayer === "esriSatellite" ? "🛰️ Satélite" : "🗺️ Mapa Callejero";
+        this.elements.btnLayerToggle.textContent = nextLayer === "esriSatellite" ? "🛰️ Satellite" : "🗺️ Street Map";
       });
     }
 
-    // 8. Modos de prioridad
+    // 8. Priority modes
     this.elements.priorityButtons.forEach(btn => {
       btn.addEventListener('click', () => {
         this.elements.priorityButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.activePriorityMode = btn.dataset.mode;
-        this.showToast(`Modo cambiado a: ${btn.textContent.trim()}`, "info");
-        // Si ya hay simulación previa, reutilizarla sin re-simular según hito CC-08
+        this.showToast(`Mode switched to: ${btn.textContent.trim()}`, "info");
+        // Reuse existing simulation without re-running per milestone CC-08
         if (this.apiService.lastSimulationResult) {
           this.renderSimulationResults(this.apiService.lastSimulationResult);
         }
       });
     });
 
-    // 9. Aplicar rotación sugerida
+    // 9. Apply suggested rotation
     if (this.elements.btnApplySuggestion) {
       this.elements.btnApplySuggestion.addEventListener('click', () => {
         const selected = this.lotesManager.getSelected();
         if (selected) {
           selected.cultivo_asignado = "habas_verdes";
           this.lotesManager.updateLote(selected.id, { cultivo_asignado: "habas_verdes" });
-          this.showToast("¡Rotación sugerida aplicada a tu parcela!", "success");
-          this.goToStep(3); // Ir a ver cultivos
+          this.showToast("Suggested rotation applied to your parcel!", "success");
+          this.goToStep(3); // Go view crops
         }
       });
     }
 
-    // 10. Agregar periodo
+    // 10. Add period
     if (this.elements.btnAddPeriod) {
       this.elements.btnAddPeriod.addEventListener('click', () => {
         const selected = this.lotesManager.getSelected();
@@ -365,20 +365,20 @@ export class UIManager {
         const newPIndex = selected.periodos.length + 1;
         selected.periodos.push({
           id: `P${newPIndex}`,
-          name: `Campaña ${newPIndex}`,
+          name: `Season ${newPIndex}`,
           start: "Oct",
-          end: "Dic",
+          end: "Dec",
           cropId: "avena_forrajera"
         });
         this.lotesManager.updateLote(selected.id, { periodos: selected.periodos });
         this.renderPeriods();
-        this.showToast(`Periodo P${newPIndex} agregado al calendario.`, "success");
+        this.showToast(`Period P${newPIndex} added to the calendar.`, "success");
       });
     }
   }
 
   /**
-   * Configurar el buscador de localidades sobre el mapa (/api/places)
+   * Configure map place search (/api/places)
    */
   setupPlaceSearch() {
     const form = document.getElementById('place-search');
@@ -393,14 +393,14 @@ export class UIManager {
       if (button.disabled) return;
       const query = input.value.trim();
       if (query.length < 2) {
-        status.textContent = "Escribe al menos dos caracteres.";
+        status.textContent = "Enter at least two characters.";
         return;
       }
 
       button.disabled = true;
       results.replaceChildren();
       results.hidden = true;
-      status.textContent = "Buscando localidades…";
+      status.textContent = "Searching places…";
 
       try {
         const params = new URLSearchParams({ q: query });
@@ -425,10 +425,10 @@ export class UIManager {
 
         results.hidden = places.length === 0;
         status.textContent = places.length
-          ? "Elige una localidad para centrar el mapa."
-          : "No se encontraron localidades. Prueba agregando la región o el país.";
+          ? "Choose a place to center the map."
+          : "No places found. Try adding the region or country.";
       } catch {
-        status.textContent = "El buscador no está disponible por ahora. Puedes navegar por el mapa manualmente.";
+        status.textContent = "Place search is currently unavailable. You can pan the map manually.";
       } finally {
         button.disabled = false;
       }
@@ -436,13 +436,13 @@ export class UIManager {
   }
 
   /**
-   * Configurar escuchas de eventos en las perillas de control What-If
-   * con soporte de Auto-Equilibrio dinámico entre variables acopladas
+   * Bind event listeners on What-If control sliders
+   * with dynamic Auto-Balance support across coupled variables
    */
   setupWhatIfControls() {
     const el = this.elements;
 
-    // Checkbox de control de auto-equilibrio
+    // Auto-balance checkbox
     if (el.checkAutoBalance) {
       el.checkAutoBalance.addEventListener('change', (e) => {
         this.autoBalance = e.target.checked;
@@ -453,8 +453,8 @@ export class UIManager {
         }
         this.showToast(
           this.autoBalance
-            ? "⚖️ Auto-Equilibrio ACTIVADO: Las perillas se compensarán mutuamente."
-            : "Modo manual: Ajuste independiente por perilla.",
+            ? "⚖️ Auto-Balance ENABLED: Knobs will compensate each other automatically."
+            : "Manual mode: Independent adjustment per knob.",
           "info"
         );
       });
@@ -475,14 +475,14 @@ export class UIManager {
       });
     }
 
-    // Selector de régimen (Cultivo vs Suelo Desnudo)
+    // Regime selector (Active Crop vs Bare Soil)
     if (el.btnStageCrop && el.btnStageTrans) {
       el.btnStageCrop.addEventListener('click', () => {
         this.whatIfControls.stage = "cultivo";
         el.btnStageCrop.classList.add('active');
         el.btnStageTrans.classList.remove('active');
-        if (el.valStageText) el.valStageText.textContent = "Cultivo Activo";
-        if (el.visorStageTag) el.visorStageTag.textContent = "Cultivo Activo";
+        if (el.valStageText) el.valStageText.textContent = "Active Crop";
+        if (el.visorStageTag) el.visorStageTag.textContent = "Active Crop";
         this.recalculatePhysicalModel();
       });
 
@@ -490,13 +490,13 @@ export class UIManager {
         this.whatIfControls.stage = "transicion";
         el.btnStageTrans.classList.add('active');
         el.btnStageCrop.classList.remove('active');
-        if (el.valStageText) el.valStageText.textContent = "Suelo Desnudo (Transición)";
-        if (el.visorStageTag) el.visorStageTag.textContent = "q = Transición";
+        if (el.valStageText) el.valStageText.textContent = "Bare Soil (Transition)";
+        if (el.visorStageTag) el.visorStageTag.textContent = "q = Transition";
         this.recalculatePhysicalModel();
       });
     }
 
-    // Botón de aplicación de riego sugerido
+    // Apply suggested irrigation button
     if (el.btnApplyIrrigationSuggested) {
       el.btnApplyIrrigationSuggested.addEventListener('click', () => {
         const suggested = this.lastSuggestedIrrigation || 25;
@@ -505,12 +505,12 @@ export class UIManager {
           this.whatIfControls.irrigationI = suggested;
           if (el.valIrrigation) el.valIrrigation.textContent = `${suggested} mm`;
           this.recalculatePhysicalModel();
-          this.showToast(`💧 Riego sugerido de ${suggested} mm aplicado al escenario.`, "success");
+          this.showToast(`💧 Suggested irrigation depth of ${suggested} mm applied to the scenario.`, "success");
         }
       });
     }
 
-    // Clicks en las píldoras de los 4 estados para demostración rápida
+    // Quick-demo clicks on the 4 shield state pills
     if (el.pillAzul) {
       el.pillAzul.addEventListener('click', () => {
         this.whatIfControls.stage = "cultivo";
@@ -523,7 +523,7 @@ export class UIManager {
         this.whatIfControls.rRes = 0.50;
         this.syncSliderInputs();
         this.recalculatePhysicalModel();
-        this.showToast("Estado activado: 🔵 Azul Cobalto (Óptima Resiliencia, Ψ > 0.70)", "info");
+        this.showToast("State activated: 🔵 Cobalt Blue (Optimal Resilience, Ψ > 0.70)", "info");
       });
     }
 
@@ -536,7 +536,7 @@ export class UIManager {
         this.whatIfControls.irrigationI = 0;
         this.syncSliderInputs();
         this.recalculatePhysicalModel();
-        this.showToast("Estado activado: 🟣 Violeta / Ámbar (Estrés Moderado, Ψ ≈ 0.50)", "warning");
+        this.showToast("State activated: 🟣 Violet / Amber (Moderate Stress, Ψ ≈ 0.50)", "warning");
       });
     }
 
@@ -552,7 +552,7 @@ export class UIManager {
         this.whatIfControls.rRes = 0.05;
         this.syncSliderInputs();
         this.recalculatePhysicalModel();
-        this.showToast("Estado activado: 🔴 Rojo Intenso (Estrés Crítico / Colapso, Ψ < 0.38)", "error");
+        this.showToast("State activated: 🔴 Deep Red (Critical Stress / Collapse, Ψ < 0.38)", "error");
       });
     }
 
@@ -561,12 +561,12 @@ export class UIManager {
         this.whatIfControls.stage = "transicion";
         this.syncSliderInputs();
         this.recalculatePhysicalModel();
-        this.showToast("Estado activado: ⚪ Escudo Desactivado (q = Transición, suelo desnudo)", "info");
+        this.showToast("State activated: ⚪ Shield Deactivated (q = Transition, bare soil)", "info");
       });
     }
   }
 
-  // Compensar con manejo sin modificar el clima ni la pendiente elegidos.
+  // Compensate with management without changing the chosen climate or slope.
   balanceWhatIfControls(changed) {
     const c = this.whatIfControls;
     const set = (key, value, min, max, step) => {
@@ -607,16 +607,16 @@ export class UIManager {
     if (c.stage === "cultivo") {
       el.btnStageCrop?.classList.add('active');
       el.btnStageTrans?.classList.remove('active');
-      if (el.valStageText) el.valStageText.textContent = "Cultivo Activo";
+      if (el.valStageText) el.valStageText.textContent = "Active Crop";
     } else {
       el.btnStageTrans?.classList.add('active');
       el.btnStageCrop?.classList.remove('active');
-      if (el.valStageText) el.valStageText.textContent = "Suelo Desnudo (Transición)";
+      if (el.valStageText) el.valStageText.textContent = "Bare Soil (Transition)";
     }
   }
 
   /**
-   * Recalcular el modelo físico dinámico y sincronizar interfaz y visor 2.5D
+   * Recalculate the dynamic physical model and sync UI and 2.5D viewer
    */
   recalculatePhysicalModel() {
     const el = this.elements;
@@ -625,21 +625,21 @@ export class UIManager {
     if (this.mapManager.terrain) {
       this.mapManager.terrain.controls = { ...this.whatIfControls };
       this.mapManager.terrain.physics = phys;
-      // Agrupar eventos rápidos de las perillas en un único redibujado.
+      // Debounce rapid slider events into a single redraw.
       clearTimeout(this.terrainRedrawTimer);
       this.terrainRedrawTimer = setTimeout(() => this.mapManager.gridLayer?.redraw(), 80);
     }
 
-    // 1. Actualizar visor 2.5D de Cerros en Cuadrado + Escudo Plano
+    // 1. Update 2.5D Square Hills + Flat Shield viewer
     if (this.escudo3d) {
       this.escudo3d.updatePhysicsState(phys);
     }
 
-    // 2. Información de erosión y hundimiento
-    if (el.lblErosionRate) el.lblErosionRate.textContent = `${phys.erosionRateMmYear} mm/año`;
-    if (el.txtSinkingInfo) el.txtSinkingInfo.innerHTML = `Hundimiento por erosión: <strong>${phys.erosionSinkingMm} mm</strong>`;
+    // 2. Erosion and soil subsidence info
+    if (el.lblErosionRate) el.lblErosionRate.textContent = `${phys.erosionRateMmYear} mm/year`;
+    if (el.txtSinkingInfo) el.txtSinkingInfo.innerHTML = `Erosion subsidence: <strong>${phys.erosionSinkingMm} mm</strong>`;
 
-    // 3. Salud Química por Ley de Liebig
+    // 3. Liebig's Law chemical health
     if (el.valLiebigPct) el.valLiebigPct.textContent = `${Math.round(phys.eta_nutrientes * 100)}%`;
     if (el.liebigBarFill) {
       el.liebigBarFill.style.width = `${Math.round(phys.eta_nutrientes * 100)}%`;
@@ -647,10 +647,10 @@ export class UIManager {
     }
 
     if (el.liebigLimitingBadge) {
-      el.liebigLimitingBadge.innerHTML = `<span>⚠️ Crecimiento limitado por <strong>${phys.limitingNutrient}</strong> según Ley de Liebig</span>`;
+      el.liebigLimitingBadge.innerHTML = `<span>⚠️ Growth limited by <strong>${phys.limitingNutrient}</strong> per Liebig's Law</span>`;
     }
 
-    // Actualizar píldoras NPK
+    // Update NPK pills
     if (el.pillNpkN) {
       el.pillNpkN.textContent = `N: ${Math.round(phys.eta_N * 100)}%`;
       el.pillNpkN.className = `npk-pill ${phys.limitingNutrient.startsWith('N') ? 'limiting' : ''}`;
@@ -664,10 +664,10 @@ export class UIManager {
       el.pillNpkK.className = `npk-pill ${phys.limitingNutrient.startsWith('K') ? 'limiting' : ''}`;
     }
 
-    // 4. Alertas de Riego
+    // 4. Irrigation alerts
     this.lastSuggestedIrrigation = phys.irrigationAlert.Isugerido;
     if (el.valWcrit) el.valWcrit.textContent = `${phys.irrigationAlert.W_crit} mm`;
-    if (el.valTauAviso) el.valTauAviso.textContent = `${phys.irrigationAlert.tauAviso} días`;
+    if (el.valTauAviso) el.valTauAviso.textContent = `${phys.irrigationAlert.tauAviso} days`;
     if (el.valIsugerido) el.valIsugerido.textContent = `${phys.irrigationAlert.Isugerido} mm`;
 
     if (el.irrigationAlertCard) {
@@ -675,135 +675,135 @@ export class UIManager {
     }
     if (el.badgeIrrigationStatus) {
       if (phys.irrigationAlert.active) {
-        el.badgeIrrigationStatus.textContent = "⚠️ Estrés Hídrico Inminente";
+        el.badgeIrrigationStatus.textContent = "⚠️ Imminent Water Stress";
         el.badgeIrrigationStatus.className = "gap-badge gap-gap";
       } else {
-        el.badgeIrrigationStatus.textContent = "Humedad Adecuada";
+        el.badgeIrrigationStatus.textContent = "Adequate Moisture";
         el.badgeIrrigationStatus.className = "gap-badge gap-obs";
       }
     }
 
-    // 5. Confianza Montecarlo
+    // 5. Monte Carlo confidence
     if (el.valMontecarloConf) el.valMontecarloConf.textContent = `${phys.montecarloConfidence}%`;
 
-    // 6. Sincronizar Píldoras de los 4 Estados del Escudo
+    // 6. Sync 4 Shield State pills
     const s = phys.shieldState;
     el.pillAzul?.classList.toggle('active-azul', s === 'azul_cobalto');
     el.pillVioleta?.classList.toggle('active-violeta', s === 'violeta_ambar');
     el.pillRojo?.classList.toggle('active-rojo', s === 'rojo_intenso');
     el.pillDesactivado?.classList.toggle('active-desactivado', s === 'desactivado');
 
-    // 7. Actualizar Indicadores Escalares
+    // 7. Update scalar indicators
     if (el.indicatorW) {
       el.indicatorW.innerHTML = `
         <div class="stat-value" style="color: ${phys.W < 95 ? '#ef4444' : '#10b981'}">${phys.W} <small>mm</small></div>
-        <div class="stat-label">Humedad en raíces (W)</div>
-        <div class="stat-badge ${phys.W < 95 ? 'badge-amber' : 'badge-green'}">${phys.W < 95 ? 'Alerta estrés' : 'Adecuado'}</div>
+        <div class="stat-label">Root moisture (W)</div>
+        <div class="stat-badge ${phys.W < 95 ? 'badge-amber' : 'badge-green'}">${phys.W < 95 ? 'Stress alert' : 'Adequate'}</div>
       `;
     }
 
     if (el.indicatorT) {
       el.indicatorT.innerHTML = `
         <div class="stat-value" style="color: ${phys.T > 22 || phys.T < 10 ? '#f59e0b' : '#38bdf8'}">${phys.T} <small>°C</small></div>
-        <div class="stat-label">Temperatura dosel (T)</div>
-        <div class="stat-badge ${phys.T > 22 ? 'badge-amber' : 'badge-blue'}">${phys.T > 22 ? 'Estrés térmico' : 'Óptimo'}</div>
+        <div class="stat-label">Canopy temp (T)</div>
+        <div class="stat-badge ${phys.T > 22 ? 'badge-amber' : 'badge-blue'}">${phys.T > 22 ? 'Thermal stress' : 'Optimal'}</div>
       `;
     }
 
     if (el.indicatorH) {
       el.indicatorH.innerHTML = `
         <div class="stat-value">${phys.H} <small>mm</small></div>
-        <div class="stat-label">Capa fértil (H)</div>
-        <div class="stat-badge ${phys.erosionRateMmYear > 2 ? 'badge-amber' : 'badge-green'}">${phys.erosionRateMmYear} mm/año</div>
+        <div class="stat-label">Fertile topsoil (H)</div>
+        <div class="stat-badge ${phys.erosionRateMmYear > 2 ? 'badge-amber' : 'badge-green'}">${phys.erosionRateMmYear} mm/year</div>
       `;
     }
 
     if (el.indicatorNPK) {
       el.indicatorNPK.innerHTML = `
         <div class="stat-value">N:${this.whatIfControls.fertN} P:${this.whatIfControls.fertP} K:${this.whatIfControls.fertK}</div>
-        <div class="stat-label">Dosis NPK kg/ha</div>
+        <div class="stat-label">NPK Dose kg/ha</div>
         <div class="stat-badge badge-amber">${phys.limitingNutrient}</div>
       `;
     }
   }
 
   /**
-   * Ejecución de la simulación con preservación estricta de la selección
+   * Run simulation with strict preservation of active parcel selection
    */
   async handleSimulation() {
     const selected = this.lotesManager.getSelected();
     if (!selected) {
-      this.showToast("Selecciona o dibuja una parcela primero.", "warning");
+      this.showToast("Select or draw a parcel first.", "warning");
       this.goToStep(1);
       return;
     }
 
-    // 1. Marcar estado "Confirmado" si estaba en borrador
+    // 1. Mark status "confirmed" if still draft
     this.lotesManager.confirmLote(selected.id);
 
-    // 2. Preparar el payload de GeoJSON para el servidor
+    // 2. Build GeoJSON payload for the server
     const payload = this.lotesManager.toSimulationPayload({
       mode: this.activePriorityMode
     });
 
-    // 3. UI en estado de carga
+    // 3. Put UI in loading state
     this.elements.btnSimulate.disabled = true;
-    this.elements.btnSimulate.innerHTML = `<span class="spinner"></span> Simulando respuesta del terreno...`;
+    this.elements.btnSimulate.innerHTML = `<span class="spinner"></span> Simulating terrain response...`;
 
     const selectedIdBefore = selected.id;
 
     try {
-      this.showToast("Enviando coordenadas GeoJSON al servidor...", "info");
+      this.showToast("Sending GeoJSON coordinates to the server...", "info");
       
-      // Llamada al API (con opción de usar respaldo si el servidor no está en línea)
+      // Call API (with offline fallback option if server is unreachable)
       const results = await this.apiService.runSimulation(payload, {
         useOfflineFallback: true
       });
 
-      // Validar que se conserve la selección activa
+      // Verify active selection is preserved
       this.lotesManager.select(selectedIdBefore);
 
-      // Mostrar resultados
+      // Display results
       this.renderSimulationResults(results);
 
       if (results._is_fallback) {
-        this.showToast("⚠️ Servidor backend en desarrollo. Se utilizaron datos físicos de respaldo (NASA POWER Mantaro). Tu parcela sigue seleccionada.", "warning", 6000);
+        this.showToast("⚠️ Backend server unavailable. Using fallback physical data (NASA POWER Mantaro). Your parcel remains selected.", "warning", 6000);
       } else {
-        this.showToast("✅ Simulación completada con éxito.", "success");
+        this.showToast("✅ Simulation completed successfully.", "success");
       }
 
-      // Avanzar al paso 4 (Diagnóstico) para ver los resultados
+      // Advance to Step 4 (Diagnostics) to inspect results
       this.goToStep(4);
 
     } catch (err) {
-      console.error("Error en simulación:", err);
+      console.error("Simulation error:", err);
 
-      // REQUISITO CRÍTICO: CONSERVAR LA SELECCIÓN SI FALLA LA SIMULACIÓN
-      // Garantizar que el lote continúe seleccionado tanto en datos como en mapa
+      // CRITICAL REQUIREMENT: PRESERVE SELECTION WHEN SIMULATION FAILS
+      // Guarantee the lot stays selected both in state and on the map
       if (selectedIdBefore) {
         this.lotesManager.select(selectedIdBefore);
       }
 
       const isTest = err.isSimulatedTest;
       const errorTitle = isTest 
-        ? "⚠️ Prueba de Resiliencia: La simulación falló intencionalmente." 
-        : "⚠️ No se pudo completar la simulación en el servidor.";
+        ? "⚠️ Resilience Test: The simulation failed intentionally." 
+        : "⚠️ Could not complete the simulation on the server.";
       
-      const errorMessage = `${errorTitle} Tu parcela "${selected.name}" y sus coordenadas GeoJSON se conservaron seleccionadas e intactas en tu dispositivo.`;
+      const errorMessage = `${errorTitle} Your parcel "${selected.name}" and its GeoJSON coordinates were kept selected and intact on your device.`;
 
       this.showToast(errorMessage, "error", 7000);
       this.showPersistentErrorBanner(selected, err.message);
 
     } finally {
       this.elements.btnSimulate.disabled = false;
-      this.elements.btnSimulate.innerHTML = `<span>🚀 Simular Terreno</span>`;
-      // Re-verificar estado de selección
+      this.elements.btnSimulate.innerHTML = `<span>🚀 Simulate Terrain</span>`;
+      // Re-verify selection state
       this.updateLoteStats(this.lotesManager.getSelected());
     }
   }
 
   /**
-   * Banner de alerta persistente cuando ocurre un fallo
+   * Persistent alert banner when a simulation failure occurs
    */
   showPersistentErrorBanner(lote, reason) {
     const existing = document.getElementById('resilience-error-banner');
@@ -816,7 +816,7 @@ export class UIManager {
       <div class="banner-content">
         <span class="banner-icon">🛡️</span>
         <div class="banner-text">
-          <strong>Selección Protegida:</strong> La simulación falló (${reason}), pero el <strong>${lote.name}</strong> (${lote.area_ha} ha) sigue seleccionado y no se perdió ningún vértice.
+          <strong>Selection Protected:</strong> The simulation failed (${reason}), but <strong>${lote.name}</strong> (${lote.area_ha} ha) remains selected and no vertices were lost.
         </div>
         <button class="banner-close" onclick="this.parentElement.parentElement.remove()">✕</button>
       </div>
@@ -826,14 +826,14 @@ export class UIManager {
   }
 
   /**
-   * Renderizar resultados de la simulación en los indicadores
+   * Render simulation results into the diagnostic indicators
    */
   renderSimulationResults(data) {
     if (!data || !data.indicadores) return;
 
     const ind = data.indicadores;
 
-    // Actualizar el modelo visual 2.5D del Escudo
+    // Update the 2.5D Shield visual model
     if (this.escudo3d) {
       this.escudo3d.updateMetrics({
         humedad_W: ind.humedad_radicular_W?.valor,
@@ -844,61 +844,61 @@ export class UIManager {
       });
     }
 
-    // Humedad radicular W
+    // Root-zone moisture W
     if (this.elements.indicatorW) {
       this.elements.indicatorW.innerHTML = `
         <div class="stat-value" style="color: ${ind.humedad_radicular_W.color}">${ind.humedad_radicular_W.valor} <small>${ind.humedad_radicular_W.unidad}</small></div>
-        <div class="stat-label">Humedad en raíces (W)</div>
+        <div class="stat-label">Root moisture (W)</div>
         <div class="stat-badge badge-green">${ind.humedad_radicular_W.estado}</div>
       `;
     }
 
-    // Temperatura T
+    // Canopy temperature T
     if (this.elements.indicatorT) {
       this.elements.indicatorT.innerHTML = `
         <div class="stat-value" style="color: ${ind.temperatura_dosel_T.color}">${ind.temperatura_dosel_T.valor} <small>${ind.temperatura_dosel_T.unidad}</small></div>
-        <div class="stat-label">Temperatura dosel (T)</div>
+        <div class="stat-label">Canopy temp (T)</div>
         <div class="stat-badge badge-blue">${ind.temperatura_dosel_T.estado}</div>
       `;
     }
 
-    // Nutrientes NPK
+    // NPK nutrients
     if (this.elements.indicatorNPK) {
       const npk = ind.nutrientes_NPK;
       this.elements.indicatorNPK.innerHTML = `
         <div class="stat-value">N:${npk.N.valor} P:${npk.P.valor} K:${npk.K.valor}</div>
-        <div class="stat-label">Nutrientes kg/ha</div>
+        <div class="stat-label">Nutrients kg/ha</div>
         <div class="stat-badge badge-amber">${npk.estado_general}</div>
       `;
     }
 
-    // Espesor fértil H
+    // Fertile topsoil H
     if (this.elements.indicatorH) {
       this.elements.indicatorH.innerHTML = `
         <div class="stat-value">${ind.espesor_fertil_H.valor} <small>${ind.espesor_fertil_H.unidad}</small></div>
-        <div class="stat-label">Capa fértil (H)</div>
+        <div class="stat-label">Fertile topsoil (H)</div>
         <div class="stat-badge badge-green">${ind.espesor_fertil_H.tasa_erosion}</div>
       `;
     }
 
-    // Escudo ambiental
+    // Environmental shield
     if (this.elements.indicatorShield) {
       const shield = ind.escudo_ambiental;
       this.elements.indicatorShield.innerHTML = `
         <div class="stat-value" style="color: ${shield.color}">${shield.indice} <small>/ ${shield.max}</small></div>
-        <div class="stat-label">Escudo Ambiental</div>
+        <div class="stat-label">Environmental Shield</div>
         <div class="stat-badge badge-green">${shield.calificacion}</div>
       `;
     }
 
-    // Tabla de comparación de rotación
+    // Rotation comparison table
     if (data.rotacion_recomendada && this.elements.rotationTableBody) {
       const rot = data.rotacion_recomendada;
       this.elements.rotationTableBody.innerHTML = rot.sugerencia_optimizada.map(item => `
         <tr>
           <td><strong>${item.periodo}</strong></td>
           <td><span class="crop-pill">${item.cultivo}</span></td>
-          <td><small class="text-green">${item.ventaja || item.rendimiento_est || 'Plan base'}</small></td>
+          <td><small class="text-green">${item.ventaja || item.rendimiento_est || 'Base plan'}</small></td>
         </tr>
       `).join('');
 
@@ -909,7 +909,7 @@ export class UIManager {
   }
 
   /**
-   * Renderizar catálogo de cultivos inicial
+   * Render initial crop catalog
    */
   renderCropCatalog() {
     if (!this.elements.cropCatalogContainer) return;
@@ -919,14 +919,14 @@ export class UIManager {
         <div class="crop-icon">${crop.icon}</div>
         <div class="crop-info">
           <div class="crop-name">${crop.name}</div>
-          <div class="crop-meta">${crop.family} &bull; ${crop.cycle_days} días</div>
+          <div class="crop-meta">${crop.family} &bull; ${crop.cycle_days} days</div>
           <div class="crop-impact">${crop.soil_impact}</div>
         </div>
-        <button class="btn-select-crop" title="Asignar al periodo">Asignar</button>
+        <button class="btn-select-crop" title="Assign to period">Assign</button>
       </div>
     `).join('');
 
-    // Eventos de selección de cultivo
+    // Crop selection events
     this.elements.cropCatalogContainer.querySelectorAll('.crop-card').forEach(card => {
       card.addEventListener('click', () => {
         const cropId = card.dataset.cropId;
@@ -938,14 +938,14 @@ export class UIManager {
   assignCropToActivePeriod(cropId) {
     const selectedLote = this.lotesManager.getSelected();
     if (!selectedLote) {
-      this.showToast("Primero selecciona un lote.", "warning");
+      this.showToast("Select a lot first.", "warning");
       return;
     }
 
     const crop = CONFIG.CROP_CATALOG.find(c => c.id === cropId);
     if (!crop) return;
 
-    // Actualizar el periodo activo
+    // Update the active period
     const period = selectedLote.periodos.find(p => p.id === this.activePeriod);
     if (period) {
       period.cropId = cropId;
@@ -966,23 +966,23 @@ export class UIManager {
     }
 
     this.renderPeriods();
-    this.showToast(`"${crop.name}" asignado a ${this.activePeriod} de ${selectedLote.name}`, "success");
+    this.showToast(`"${crop.name}" assigned to ${this.activePeriod} of ${selectedLote.name}`, "success");
   }
 
   /**
-   * Renderizar el calendario con marcas de mes legibles
-   * "una marca por cada mes, con etiquetas como Ene · Feb · Mar"
+   * Render the calendar with readable month ticks
+   * "one tick per month, with labels like Jan · Feb · Mar"
    */
   renderPeriods() {
     if (!this.elements.periodsContainer) return;
 
     const selected = this.lotesManager.getSelected();
     const periods = selected ? selected.periodos : [
-      { id: "P1", name: "Campaña Chica", start: "Ene", end: "May", cropId: "papa_canchan" },
-      { id: "P2", name: "Campaña Grande", start: "Jun", end: "Dic", cropId: "habas_verdes" }
+      { id: "P1", name: "Short Season", start: "Jan", end: "May", cropId: "papa_canchan" },
+      { id: "P2", name: "Main Season", start: "Jun", end: "Dec", cropId: "habas_verdes" }
     ];
 
-    const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Set", "Oct", "Nov", "Dic"];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
     this.elements.periodsContainer.innerHTML = `
       <div class="months-timeline">
@@ -1007,18 +1007,18 @@ export class UIManager {
       </div>
     `;
 
-    // Eventos al tocar un periodo
+    // Period click handlers
     this.elements.periodsContainer.querySelectorAll('.period-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         this.activePeriod = chip.dataset.periodId;
         this.renderPeriods();
-        this.showToast(`Periodo activo: ${this.activePeriod}. Elige un cultivo para asignarlo.`, "info");
+        this.showToast(`Active period: ${this.activePeriod}. Pick a crop to assign it.`, "info");
       });
     });
   }
 
   /**
-   * Suscribirse a cambios en los lotes
+   * Subscribe to lot manager updates
    */
   setupLotesSubscription() {
     this.lotesManager.subscribe((lotes, selected) => {
@@ -1043,7 +1043,7 @@ export class UIManager {
     const status = document.getElementById('parcel-edo1-status');
     const retryButton = document.getElementById('btn-retry-parcel-edo1');
     retryButton.hidden = true;
-    status.textContent = selected ? 'Calculando la temperatura del dosel con NASA POWER y SRTM…' : '';
+    status.textContent = selected ? 'Computing canopy temperature from NASA POWER & SRTM…' : '';
     if (!selected) return;
 
     const request = new AbortController();
@@ -1053,11 +1053,11 @@ export class UIManager {
         const result = await this.apiService.runParcelEdo1(selected, request.signal);
         if (request.signal.aborted) return;
         this.mapManager.showParcelTemperatures(result.cells);
-        const crop = result.reference_crop_used ? `${result.crop} (cultivo de referencia)` : result.crop;
-        status.textContent = `EDO 1 · ${result.cells_count} celdas de 30 m · Media de dosel ${result.lot_mean_temp} °C · ${result.date} (hora solar local) · ${crop} · Agua radicular asumida: ${result.soil_water_mm} mm`;
+        const crop = result.reference_crop_used ? `${result.crop} (reference crop)` : result.crop;
+        status.textContent = `ODE 1 · ${result.cells_count} 30 m cells · Mean canopy ${result.lot_mean_temp} °C · ${result.date} (local solar time) · ${crop} · Assumed root water: ${result.soil_water_mm} mm`;
       } catch (error) {
         if (request.signal.aborted) return;
-        status.textContent = `EDO 1: ${error.name === 'TimeoutError' ? 'La consulta tardó demasiado.' : error.message}`;
+        status.textContent = `ODE 1: ${error.name === 'TimeoutError' ? 'The request took too long.' : error.message}`;
         retryButton.hidden = false;
       }
     }, 350);
@@ -1069,8 +1069,8 @@ export class UIManager {
     if (lotes.length === 0) {
       this.elements.lotesList.innerHTML = `
         <div class="empty-state">
-          <p>No hay lotes dibujados aún.</p>
-          <small>Toca el botón "+ Dibujar Lote" para trazar tu parcela con Geoman.</small>
+          <p>No lots drawn yet.</p>
+          <small>Tap "+ Draw Lot" to trace your parcel with Geoman.</small>
         </div>
       `;
       return;
@@ -1085,18 +1085,18 @@ export class UIManager {
           <div class="lote-card-top">
             <span class="lote-title">${lote.name}</span>
             <span class="status-pill ${isConfirmed ? 'pill-confirmed' : 'pill-draft'}">
-              ${isConfirmed ? 'Confirmado' : 'Borrador'}
+              ${isConfirmed ? 'Confirmed' : 'Draft'}
             </span>
           </div>
           <div class="lote-card-bottom">
             <span><strong>${lote.area_ha}</strong> ha (${lote.area_m2.toLocaleString()} m²)</span>
-            <button class="btn-micro-select" title="Seleccionar">${isSelected ? 'Activo' : 'Elegir'}</button>
+            <button class="btn-micro-select" title="Select">${isSelected ? 'Active' : 'Select'}</button>
           </div>
         </div>
       `;
     }).join('');
 
-    // Evento de selección de lote
+    // Lot selection click handler
     this.elements.lotesList.querySelectorAll('.lote-card').forEach(card => {
       card.addEventListener('click', () => {
         const id = card.dataset.loteId;
@@ -1108,12 +1108,12 @@ export class UIManager {
 
   updateLoteStats(selected) {
     if (!selected) {
-      if (this.elements.statLoteName) this.elements.statLoteName.textContent = "Ningún lote seleccionado";
+      if (this.elements.statLoteName) this.elements.statLoteName.textContent = "No lot selected";
       if (this.elements.statLoteAreaHa) this.elements.statLoteAreaHa.textContent = "0.00 ha";
       if (this.elements.statLoteAreaM2) this.elements.statLoteAreaM2.textContent = "0 m²";
       if (this.elements.statLotePerimeter) this.elements.statLotePerimeter.textContent = "0 m";
       if (this.elements.statLoteStatusBadge) {
-        this.elements.statLoteStatusBadge.textContent = "Sin parcela";
+        this.elements.statLoteStatusBadge.textContent = "No parcel";
         this.elements.statLoteStatusBadge.className = "status-badge badge-neutral";
       }
       return;
@@ -1130,7 +1130,7 @@ export class UIManager {
 
     if (this.elements.statLoteStatusBadge) {
       const isConfirmed = selected.status === "confirmed";
-      this.elements.statLoteStatusBadge.textContent = isConfirmed ? "Confirmado" : "Borrador (Sin confirmar)";
+      this.elements.statLoteStatusBadge.textContent = isConfirmed ? "Confirmed" : "Draft (Unconfirmed)";
       this.elements.statLoteStatusBadge.className = `status-badge ${isConfirmed ? 'badge-green' : 'badge-amber'}`;
     }
   }
@@ -1144,7 +1144,7 @@ export class UIManager {
       content.classList.toggle('active', parseInt(content.dataset.step, 10) === stepNumber);
     });
 
-    // En pantallas móviles, si es paso 1 podemos mostrar el mapa, en otros pasos mostrar panel
+    // On mobile screens, show the map in Step 1 and the panel in other steps
     if (window.innerWidth <= 768 && stepNumber !== 1) {
       this.switchMobileView("panel");
     }
@@ -1160,7 +1160,7 @@ export class UIManager {
       if (view === "map") {
         this.elements.mapContainer.classList.remove('mobile-hidden');
         this.elements.panelContainer.classList.add('mobile-hidden');
-        // Invalidar tamaño del mapa al volver a ser visible
+        // Invalidate map size when becoming visible again
         if (this.mapManager && this.mapManager.map) {
           setTimeout(() => this.mapManager.map.invalidateSize(), 150);
         }
@@ -1175,10 +1175,10 @@ export class UIManager {
     const isOnline = await this.apiService.checkHealth();
     if (this.elements.backendStatusBadge) {
       if (isOnline) {
-        this.elements.backendStatusBadge.innerHTML = `<span class="dot-online"></span> Backend Conectado`;
+        this.elements.backendStatusBadge.innerHTML = `<span class="dot-online"></span> Backend Connected`;
         this.elements.backendStatusBadge.className = "badge-server badge-online";
       } else {
-        this.elements.backendStatusBadge.innerHTML = `<span class="dot-offline"></span> Modo Respaldo / Offline`;
+        this.elements.backendStatusBadge.innerHTML = `<span class="dot-offline"></span> Backup / Offline Mode`;
         this.elements.backendStatusBadge.className = "badge-server badge-offline";
       }
     }

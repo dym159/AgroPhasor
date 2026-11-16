@@ -1,4 +1,4 @@
-// Coordenadas mundiales Web Mercator, iguales a las del mapa Leaflet.
+// Web Mercator world coordinates, matching Leaflet map coordinates.
 export function projectCoordinate([lng, lat]) {
   const sin = Math.sin(Math.max(-85.05112878, Math.min(85.05112878, lat)) * Math.PI / 180);
   return [(lng + 180) / 360 * 256,

@@ -1,12 +1,12 @@
 """
-Motor Agrofísico de Resolución de EDO 2: Balance Hidrológico Radicular (AgroPhasor).
-Implementa la dinámica diferencial de humedad del suelo, evaporación, transpiración del dosel,
-drenaje topográfico y alertas de riego de acuerdo con AgroPhasor.pdf (Secciones 3.2.2, 3.3 y 2.6.2).
+Agrophysical Solver Engine for ODE 2: Root-Zone Water Balance (AgroPhasor).
+Implements differential soil moisture dynamics, bare-soil evaporation, canopy transpiration,
+topographic drainage, and irrigation alerts per AgroPhasor.pdf (Sections 3.2.2, 3.3, and 2.6.2).
 
-Ecuación gobernante:
-dW/dt = P0(t)*cos(theta) + eta_riego*I(t) - ETc(T, W) - kd*sin(theta)*W
-con acotamiento físico: 0 <= W(t) <= Wcc(H)
-donde todo excedente hídrico sobre Wcc se convierte instantáneamente en escorrentía superficial.
+Governing equation:
+dW/dt = P0(t)*cos(theta) + eta_irrig*I(t) - ETc(T, W) - kd*sin(theta)*W
+with physical bounds: 0 <= W(t) <= Wcc(H)
+where any excess water above Wcc immediately becomes surface runoff.
 """
 
 from dataclasses import dataclass, field
@@ -19,34 +19,34 @@ from backend.models.crop_parameters import CropParameters, GLOBAL_CONSTANTS
 
 @dataclass
 class SoilHydraulicLimits:
-    """Límites hídricos del perfil radicular útil según SSURGO/WSS y el cultivo."""
-    theta_fc: float       # Contenido volumétrico a capacidad de campo [m³/m³]
-    theta_wp: float       # Contenido volumétrico al punto de marchitez [m³/m³]
-    zr_mm: float          # Profundidad radicular efectiva Zr [mm]
-    w_cc: float           # Capacidad de campo útil Wcc [mm]
-    w_pmp: float          # Punto de marchitez permanente Wpmp [mm]
-    w_crit: float         # Umbral crítico de confort hídrico Wcrit [mm]
-    raw: float            # Agua fácilmente disponible RAW = Wcc - Wcrit [mm]
-    taw: float            # Agua total disponible TAW = Wcc - Wpmp [mm]
+    """Hydraulic limits of the effective root-zone profile from SSURGO/WSS and crop properties."""
+    theta_fc: float       # Volumetric field capacity [m³/m³]
+    theta_wp: float       # Volumetric wilting point [m³/m³]
+    zr_mm: float          # Effective rooting depth Zr [mm]
+    w_cc: float           # Field capacity water Wcc [mm]
+    w_pmp: float          # Permanent wilting point Wpmp [mm]
+    w_crit: float         # Critical water comfort threshold Wcrit [mm]
+    raw: float            # Readily available water RAW = Wcc - Wcrit [mm]
+    taw: float            # Total available water TAW = Wcc - Wpmp [mm]
 
 
 @dataclass
 class EDO2StepOutput:
-    """Resultados de un paso de integración dt de EDO 2."""
-    soil_water_mm: float              # Humedad calculada en el paso W(t+dt) [mm]
-    dw_dt: float                      # Tasa neta de cambio dW/dt [mm/día]
-    etc_mm: float                     # Evapotranspiración total en el paso ETc [mm]
-    transpiration_mm: float           # Transpiración foliar del dosel [mm]
-    evaporation_soil_mm: float        # Evaporación directa del suelo sombreado [mm]
-    drainage_mm: float                # Drenaje gravitacional de ladera kd*sin(θ)*W [mm]
-    runoff_mm: float                  # Escorrentía superficial generada [mm]
-    infiltration_mm: float            # Infiltración efectiva (lluvia + riego) [mm]
-    gamma_c_relative: float           # Factor estomático relativo γc / γmax [0, 1]
-    vpd_kpa: float                    # Déficit de presión de vapor del aire VPD [kPa]
-    is_irrigation_needed: bool        # Alerta operativa: W <= Wcrit
-    suggested_irrigation_mm: float    # Lámina sugerida de reposición Isugerido [mm]
-    is_drying_warning: bool           # Alerta predictiva por tasa de secado
-    is_wilting: bool                  # Alerta crítica: W <= Wpmp (Escudo Rojo)
+    """Outputs of a single integration step dt of ODE 2."""
+    soil_water_mm: float              # Soil moisture at step end W(t+dt) [mm]
+    dw_dt: float                      # Net rate of change dW/dt [mm/day]
+    etc_mm: float                     # Total evapotranspiration during step ETc [mm]
+    transpiration_mm: float           # Canopy foliar transpiration [mm]
+    evaporation_soil_mm: float        # Direct evaporation from shaded soil [mm]
+    drainage_mm: float                # Hillslope gravitational drainage kd*sin(θ)*W [mm]
+    runoff_mm: float                  # Surface runoff generated [mm]
+    infiltration_mm: float            # Effective infiltration (rain + irrigation) [mm]
+    gamma_c_relative: float           # Relative stomatal conductance factor γc / γmax [0, 1]
+    vpd_kpa: float                    # Atmospheric vapor pressure deficit VPD [kPa]
+    is_irrigation_needed: bool        # Operational alert: W <= Wcrit
+    suggested_irrigation_mm: float    # Suggested replenishment irrigation depth [mm]
+    is_drying_warning: bool           # Predictive fast-drying rate alert
+    is_wilting: bool                  # Critical alert: W <= Wpmp (Red Shield)
 
 
 def compute_soil_limits(
@@ -55,7 +55,7 @@ def compute_soil_limits(
     theta_wp: float = 0.14,
     depth_mm: Optional[float] = None
 ) -> SoilHydraulicLimits:
-    """Calcula los límites hídricos del suelo para una especie dada."""
+    """Computes root-zone hydraulic limits for a given crop species."""
     zr = max(0.0, depth_mm) if depth_mm is not None else max(50.0, crop.Zr_mm)
     w_cc = theta_fc * zr
     w_pmp = theta_wp * zr
@@ -74,7 +74,7 @@ def compute_soil_limits(
 
 
 def relative_stomatal_conductance(w_mm: float, limits: SoilHydraulicLimits) -> float:
-    """Fracción de apertura estomática usada en el balance diario de EDO 2."""
+    """Relative stomatal opening fraction used in the daily ODE 2 balance."""
     if limits.w_cc <= 0:
         return 0.0
     if w_mm >= limits.w_crit:
@@ -105,26 +105,26 @@ def solve_edo2_step(
     canopy_temp_c: Optional[float] = None
 ) -> EDO2StepOutput:
     """
-    Integra un paso de tiempo dt de EDO 2 (Balance Hidrológico Radicular).
+    Integrates one time step dt of ODE 2 (Root-Zone Water Balance).
     
-    Parámetros:
-    - w_current_mm: Humedad en la zona de raíces al inicio del paso [mm].
-    - precip_mm: Precipitación incidente P0(t) [mm/día].
-    - t_air_c: Temperatura media del aire [°C].
-    - rh_pct: Humedad relativa del aire [%].
-    - slope_deg: Inclinación del terreno θ [grados] (SRTM).
-    - crop: Ficha técnica del cultivo o cobertura vegetal.
-    - irrigation_mm: Lámina externa de riego I(t) [mm/día].
-    - theta_fc: Contenido volumétrico a capacidad de campo (SSURGO/WSS).
-    - theta_wp: Contenido volumétrico a punto de marchitez (SSURGO/WSS).
-    - kd: Coeficiente de drenaje gravitacional dependiente de pendiente.
-    - eta_irrigation: Eficiencia del sistema de riego (goteo/aspersión).
-    - e_suelo0: Evaporación de suelo desnudo (mm/día). Si None, toma de constantes globales.
-    - lambda_b: Atenuación lumínica foliar. Si None, toma de constantes globales.
-    - biomass_t_ha: Biomasa del lote para sombreo. Si None, usa B_max o B0.
-    - dt_days: Paso de tiempo de integración [días].
-    - tau_warning_days: Ventana de anticipación para alerta de secado rápido [días].
-    - is_crop: True si q(t)=Cultivo, False si q(t)=Transición (sin transpiración).
+    Parameters:
+    - w_current_mm: Root-zone moisture at step start [mm].
+    - precip_mm: Incident precipitation P0(t) [mm/day].
+    - t_air_c: Mean air temperature [°C].
+    - rh_pct: Relative air humidity [%].
+    - slope_deg: Terrain slope θ [degrees] (SRTM).
+    - crop: Crop or vegetation cover parameter profile.
+    - irrigation_mm: External irrigation depth I(t) [mm/day].
+    - theta_fc: Volumetric field capacity (SSURGO/WSS).
+    - theta_wp: Volumetric wilting point (SSURGO/WSS).
+    - kd: Slope-dependent gravitational drainage coefficient.
+    - eta_irrigation: Irrigation application efficiency (drip/sprinkler).
+    - e_suelo0: Bare-soil basal evaporation (mm/day). Defaults to global constants.
+    - lambda_b: Foliar light attenuation factor. Defaults to global constants.
+    - biomass_t_ha: Parcel biomass for shading. Defaults to B_max or B0.
+    - dt_days: Integration time step [days].
+    - tau_warning_days: Look-ahead window for fast-drying alert [days].
+    - is_crop: True if q(t)=Crop, False if q(t)=Transition (no transpiration).
     """
     if e_suelo0 is None:
         e_suelo0 = float(GLOBAL_CONSTANTS.get("E_suelo0_mm_dia", 4.2))
@@ -138,34 +138,34 @@ def solve_edo2_step(
     w_pmp = limits.w_pmp
     w_crit = limits.w_crit
 
-    # 1. Trigonometría de pendiente (SRTM)
+    # 1. Slope trigonometry (SRTM)
     slope_rad = math.radians(max(0.0, min(80.0, slope_deg)))
     cos_theta = math.cos(slope_rad)
     sin_theta = math.sin(slope_rad)
 
-    # 2. Déficit de presión de vapor atmosférico VPD [kPa]
+    # 2. Atmospheric vapor pressure deficit VPD [kPa]
     ea_air = actual_vapor_pressure(t_air_c, rh_pct)
     es_air = saturation_vapor_pressure(t_air_c if canopy_temp_c is None else canopy_temp_c)
     vpd = max(0.0, es_air - ea_air)
 
-    # 3. Factor de conductancia estomática gamma_c(W) (AgroPhasor.pdf Sec. 3.3)
+    # 3. Stomatal conductance factor gamma_c(W) (AgroPhasor.pdf Sec. 3.3)
     eps = 1e-4
     gamma_rel = relative_stomatal_conductance(w_current_mm, limits) if is_crop and crop.gamma_max > 0 else 0.0
 
-    # Conductancia efectiva diaria: gamma_max_daily [mm / (kPa · día)]
-    # Si gamma_max está en kg/(m²·s·kPa), multiplicamos por 86400 s/día
+    # Daily effective conductance: gamma_max_daily [mm / (kPa · day)]
+    # If gamma_max is in kg/(m²·s·kPa), multiply by 86400 s/day
     gamma_daily_max = crop.gamma_max * 86400.0 if crop.gamma_max < 0.1 else crop.gamma_max
     gamma_effective = gamma_daily_max * gamma_rel
     transpiration = gamma_effective * vpd
 
-    # 4. Evaporación directa de suelo sombreado por biomasa (Sec. 3.3)
+    # 4. Direct evaporation from biomass-shaded soil (Sec. 3.3)
     soil_wetness_ratio = max(0.0, min(1.0, w_current_mm / max(eps, w_cc)))
     canopy_shading = math.exp(-lambda_b * max(0.0, biomass_t_ha))
     evap_soil = e_suelo0 * soil_wetness_ratio * canopy_shading
 
     etc = transpiration + evap_soil
 
-    # 5. Drenaje gravitacional y balance de flujos
+    # 5. Gravitational drainage and flux balance
     drainage = kd * sin_theta * max(0.0, w_current_mm)
     infil_precip = precip_mm * cos_theta
     infil_riego = eta_irrigation * max(0.0, irrigation_mm)
@@ -180,7 +180,7 @@ def solve_edo2_step(
     w_tentative = (w_current_mm * decay + source * (-math.expm1(-loss_rate * dt_days)) / loss_rate
                    if loss_rate > 0 else w_current_mm + source * dt_days)
 
-    # 6. Frontera física de saturación: corte Wcc y escorrentía superficial
+    # 6. Saturation upper bound: clip at Wcc and convert overflow to surface runoff
     runoff = 0.0
     if w_tentative > w_cc:
         runoff = w_tentative - w_cc
@@ -207,12 +207,12 @@ def solve_edo2_step(
     if active_time < dt_days:
         transpiration_total += total_infil * (dt_days - active_time)
 
-    # 7. Capa de Diagnóstico y Alertas Operativas (Sec. 2.6.2)
+    # 7. Diagnostics and Operational Alerts Layer (Sec. 2.6.2)
     is_irrigation = w_next <= w_crit
     is_wilting = w_next <= w_pmp
     suggested_irrigation = round(max(0.0, (w_cc - w_next) / max(eps, eta_irrigation)), 2) if is_irrigation else 0.0
     
-    # Alerta anticipada por secado rápido: W + tau * (dW/dt) <= Wcrit
+    # Look-ahead fast-drying alert: W + tau * (dW/dt) <= Wcrit
     projected_w = w_next + tau_warning_days * dw_dt
     is_drying_alert = projected_w <= w_crit
 
@@ -250,28 +250,28 @@ def simulate_edo2_timeseries(
     is_crop: bool = True
 ) -> Dict[str, Any]:
     """
-    Ejecuta una simulación temporal completa de EDO 2 a lo largo de una serie climática.
+    Runs a complete ODE 2 time-series simulation over a climate sequence.
     
-    Permite comparar secano (auto_irrigate=False) frente a riego inteligente automatizado
-    (auto_irrigate=True), registrando todas las trayectorias de estado y balances hídricos.
+    Compares rainfed farming (auto_irrigate=False) against automated smart irrigation
+    (auto_irrigate=True), recording all state trajectories and water balances.
     """
     n_steps = len(precip_series)
     if not (len(t_air_series) == n_steps and len(rh_series) == n_steps):
-        raise ValueError("Las series meteorológicas (precip, t_air, rh) deben tener la misma longitud.")
+        raise ValueError("Weather series (precip, t_air, rh) must have the same length.")
 
     limits = compute_soil_limits(crop, theta_fc, theta_wp)
     w_cc = limits.w_cc
     w_pmp = limits.w_pmp
     w_crit = limits.w_crit
 
-    # Inicialización de W(0)
+    # Initialize W(0)
     if w0_mm is not None:
         current_w = max(0.0, min(w_cc, float(w0_mm)))
     elif smap_root_wetness is not None:
         wetness = max(0.0, min(1.0, float(smap_root_wetness)))
         current_w = w_pmp + wetness * (w_cc - w_pmp)
     else:
-        # Por defecto al umbral crítico de confort
+        # Default to critical comfort threshold
         current_w = w_crit
 
     w_series = [round(current_w, 2)]

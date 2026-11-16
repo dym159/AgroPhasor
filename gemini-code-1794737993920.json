@@ -17,7 +17,7 @@
     "xi_K": 0.003
   },
   "suelo_desnudo_transicion": {
-    "nombre": "Suelo Desnudo / Transición",
+    "nombre": "Bare Soil / Transition",
     "familia_botanica": "None",
     "Cp_suelo": 18000.0,
     "alpha_suelo": 0.72,
@@ -30,7 +30,7 @@
   },
   "cultivos": {
     "Maiz_Zea_mays": {
-      "nombre": "Maíz",
+      "nombre": "Maize",
       "familia_botanica": "Poaceae",
       "duracion_dias": 120,
       "Cp_c": 48000.0,
@@ -57,7 +57,7 @@
       "costo_base_usd_ha": 650.0
     },
     "Frijol_Phaseolus_vulgaris": {
-      "nombre": "Frijol",
+      "nombre": "Dry Bean",
       "familia_botanica": "Fabaceae",
       "duracion_dias": 90,
       "Cp_c": 36000.0,
@@ -84,7 +84,7 @@
       "costo_base_usd_ha": 520.0
     },
     "Papa_Solanum_tuberosum": {
-      "nombre": "Papa",
+      "nombre": "Potato",
       "familia_botanica": "Solanaceae",
       "duracion_dias": 130,
       "Cp_c": 32000.0,

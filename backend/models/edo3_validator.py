@@ -1,7 +1,7 @@
 """
-Validador agrofísico del catálogo JSON específicamente para EDO 3 (Dinámica Vectorial de Macronutrientes).
-Verifica la presencia, tipos, unidades y rangos biofísicos de los parámetros necesarios
-para la evolución de N_i,j(t) = [N, P, K]^T según AgroPhasor.pdf (Secciones 3.2.3, 3.3, 1.2 y 2.5).
+Agrophysical JSON catalog validator specifically for ODE 3 (Macronutrient Vector Dynamics).
+Verifies presence, types, units, and biophysical ranges of parameters required
+for the evolution of N_i,j(t) = [N, P, K]^T per AgroPhasor.pdf (Sections 3.2.3, 3.3, 1.2, and 2.5).
 """
 
 import json
@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional, Union, Tuple
 
 
 class EDO3ValidationError(ValueError):
-    """Excepción para errores críticos de validación agrofísica en EDO 3."""
+    """Exception raised for critical agrophysical validation errors in ODE 3."""
     pass
 
 
@@ -18,48 +18,48 @@ def validate_edo3_catalog(
     source: Union[str, Dict[str, Any]]
 ) -> Dict[str, Any]:
     """
-    Valida que un archivo o diccionario JSON cumpla con todos los requisitos para EDO 3:
+    Validates that a JSON file or dictionary satisfies all ODE 3 requirements:
     
     1. constantes_globales:
-       - k_min0_dia > 0: Mineralización microbiana basal de OM (1/día).
-       - Q10 >= 1.0: Coeficiente térmico enzimático Q10 (típico 2.0).
-       - k_lN > 0: Tasa de lixiviación vertical de Nitrógeno (1/día o dependiente de CIC).
-       - k_lK > 0: Tasa de lixiviación vertical de Potasio (1/día o dependiente de CIC).
-       - beta_K > 0: Contenido y factor de reciclaje de Potasio en rastrojos.
-       - k_dec_dia > 0: Tasa de descomposición de rastrojo en transición (1/día).
-       - xi_N, xi_P, xi_K > 0: Coeficientes de pérdida por arrastre de suelo erosionado (dH/dt).
+       - k_min0_dia > 0: Basal microbial OM mineralization rate (1/day).
+       - Q10 >= 1.0: Enzymatic thermal coefficient Q10 (typical 2.0).
+       - k_lN > 0: Vertical Nitrogen leaching rate (1/day or CEC-dependent).
+       - k_lK > 0: Vertical Potassium leaching rate (1/day or CEC-dependent).
+       - beta_K > 0: Stover Potassium content and recycling factor.
+       - k_dec_dia > 0: Transition stover decomposition rate (1/day).
+       - xi_N, xi_P, xi_K > 0: Erosion-driven nutrient drag coefficients (dH/dt).
        
     2. cultivos:
-       Para cada cultivo:
-       - F_fix >= 0: Fijación biológica de N (> 0 para Fabaceae / leguminosas).
-       - F_sol >= 0: Solubilización radicular de P.
-       - K_N, K_P, K_K > 0: Constantes de semi-saturación de la Ley de Liebig (kg/ha).
-       - familia_botanica: Clasificación taxonómica (para ruptura de ciclos fitosanitarios).
-       - B_max_t_ha > 0: Biomasa máxima para producción de rastrojo y fijación.
-       - HI en (0, 1): Índice de cosecha para calcular residuo de biomasa post-cosecha.
+       For each crop:
+       - F_fix >= 0: Biological N fixation (> 0 for Fabaceae / legumes).
+       - F_sol >= 0: Root P solubilization.
+       - K_N, K_P, K_K > 0: Liebig's Law half-saturation constants (kg/ha).
+       - familia_botanica: Taxonomic family (for pest-cycle breaking constraints).
+       - B_max_t_ha > 0: Maximum biomass for stover production and N fixation.
+       - HI in (0, 1): Harvest Index for computing post-harvest biomass residue.
     """
     if isinstance(source, str):
         if not os.path.exists(source):
-            raise FileNotFoundError(f"No se encontró el archivo JSON: {source}")
+            raise FileNotFoundError(f"JSON file not found: {source}")
         with open(source, "r", encoding="utf-8") as f:
             data = json.load(f)
     elif isinstance(source, dict):
         data = source
     else:
-        raise TypeError("source debe ser una ruta de archivo (str) o un diccionario.")
+        raise TypeError("source must be a file path (str) or a dictionary.")
 
     errors: List[str] = []
     warnings: List[str] = []
     crops_summary: Dict[str, Any] = {}
 
-    # 1. Validar constantes_globales
+    # 1. Validate constantes_globales
     globales = data.get("constantes_globales")
     if not isinstance(globales, dict):
-        errors.append("Falta la sección obligatoria 'constantes_globales' en el JSON.")
+        errors.append("Missing required 'constantes_globales' section in JSON.")
         extracted_globals = {}
     else:
         extracted_globals = {}
-        # Lista de parámetros requeridos para EDO 3
+        # Required parameters for ODE 3
         req_globals = {
             "k_min0_dia": (0.0001, 0.1),
             "Q10": (1.0, 4.0),
@@ -74,76 +74,76 @@ def validate_edo3_catalog(
         
         for p_name, (min_val, max_val) in req_globals.items():
             if p_name not in globales:
-                errors.append(f"Falta '{p_name}' en 'constantes_globales' (requerido para cinéticas de EDO 3).")
+                errors.append(f"Missing '{p_name}' in 'constantes_globales' (required for ODE 3 kinetics).")
             else:
                 try:
                     val = float(globales[p_name])
                     if not (min_val <= val <= max_val):
-                        warnings.append(f"Parámetro '{p_name}' ({val}) fuera del rango agrofísico típico [{min_val}, {max_val}].")
+                        warnings.append(f"Parameter '{p_name}' ({val}) outside typical agrophysical range [{min_val}, {max_val}].")
                     extracted_globals[p_name] = val
                 except (ValueError, TypeError):
-                    errors.append(f"'{p_name}' en 'constantes_globales' debe ser numérico.")
+                    errors.append(f"'{p_name}' in 'constantes_globales' must be numeric.")
 
-    # 2. Validar cultivos
+    # 2. Validate cultivos
     cultivos = data.get("cultivos")
     if not isinstance(cultivos, dict) or len(cultivos) == 0:
-        errors.append("Falta la sección 'cultivos' o no contiene ninguna especie.")
+        errors.append("Missing 'cultivos' section or no crops defined.")
     else:
         has_legume = False
         for crop_id, c in cultivos.items():
             crop_errors = []
             
-            # Familia botánica
+            # Botanical family
             familia = c.get("familia_botanica")
             if not familia:
-                crop_errors.append(f"{crop_id}: falta 'familia_botanica' (requerido para restricciones A* de plagas).")
+                crop_errors.append(f"{crop_id}: missing 'familia_botanica' (required for A* pest-rotation constraints).")
             
-            # F_fix (Fijación de Nitrógeno)
+            # F_fix (Nitrogen fixation)
             f_fix = c.get("F_fix")
             if f_fix is None:
-                crop_errors.append(f"{crop_id}: falta 'F_fix' (fijación simbiótica de N).")
+                crop_errors.append(f"{crop_id}: missing 'F_fix' (symbiotic N fixation).")
                 f_fix = 0.0
             else:
                 f_fix = float(f_fix)
                 if f_fix < 0.0:
-                    crop_errors.append(f"{crop_id}: 'F_fix' no puede ser negativo.")
+                    crop_errors.append(f"{crop_id}: 'F_fix' cannot be negative.")
                 if f_fix > 0.0:
                     has_legume = True
                     if familia and "fab" not in familia.lower() and "legum" not in familia.lower():
-                        warnings.append(f"{crop_id}: F_fix > 0 ({f_fix}) pero familia '{familia}' no es Fabaceae/Leguminosa.")
+                        warnings.append(f"{crop_id}: F_fix > 0 ({f_fix}) but family '{familia}' is not Fabaceae/Legume.")
 
-            # F_sol (Solubilización de Fósforo)
+            # F_sol (Phosphorus solubilization)
             f_sol = c.get("F_sol")
             if f_sol is None:
-                crop_errors.append(f"{crop_id}: falta 'F_sol' (solubilización radicular de P).")
+                crop_errors.append(f"{crop_id}: missing 'F_sol' (root P solubilization).")
                 f_sol = 0.0
             else:
                 f_sol = float(f_sol)
                 if f_sol < 0.0:
-                    crop_errors.append(f"{crop_id}: 'F_sol' no puede ser negativo.")
+                    crop_errors.append(f"{crop_id}: 'F_sol' cannot be negative.")
 
-            # Constantes de semi-saturación de Liebig K_N, K_P, K_K
+            # Liebig half-saturation constants K_N, K_P, K_K
             for k_nut in ["K_N", "K_P", "K_K"]:
                 k_val = c.get(k_nut)
                 if k_val is None:
-                    crop_errors.append(f"{crop_id}: falta constante de Liebig '{k_nut}'.")
+                    crop_errors.append(f"{crop_id}: missing Liebig constant '{k_nut}'.")
                 else:
                     k_val = float(k_val)
                     if k_val <= 0.0:
-                        crop_errors.append(f"{crop_id}: '{k_nut}' ({k_val}) debe ser estrictamente positivo.")
+                        crop_errors.append(f"{crop_id}: '{k_nut}' ({k_val}) must be strictly positive.")
 
-            # B_max_t_ha y HI
+            # B_max_t_ha and HI
             b_max = float(c.get("B_max_t_ha", 15.0))
             hi = float(c.get("HI", 0.45))
             if b_max <= 0:
-                crop_errors.append(f"{crop_id}: 'B_max_t_ha' debe ser > 0.")
+                crop_errors.append(f"{crop_id}: 'B_max_t_ha' must be > 0.")
             if not (0.05 <= hi <= 0.90):
-                crop_errors.append(f"{crop_id}: 'HI' ({hi}) fuera de rango agronómico [0.05, 0.90].")
+                crop_errors.append(f"{crop_id}: 'HI' ({hi}) outside agronomic range [0.05, 0.90].")
 
             if crop_errors:
                 errors.extend(crop_errors)
             else:
-                # Fracción de residuo / rastrojo remanente en campo tras cosecha
+                # Fraction of post-harvest residue / stover remaining in the field
                 r_res = round(1.0 - hi, 3)
                 k_n = float(c.get("K_N", 30.0))
                 k_p = float(c.get("K_P", 20.0))
@@ -163,7 +163,7 @@ def validate_edo3_catalog(
                 }
 
         if not has_legume:
-            warnings.append("El catálogo no contiene ninguna especie fijadora de N (F_fix > 0). Las rutas de 'Hospital de Suelo' y 'Resiliencia' no podrán recargar nitrógeno biológicamente.")
+            warnings.append("Catalog contains no N-fixing species (F_fix > 0). Soil recovery and resilience rotations will lack biological nitrogen recharge.")
 
     is_valid = len(errors) == 0
 
@@ -181,16 +181,16 @@ if __name__ == "__main__":
     import sys
     test_file = sys.argv[1] if len(sys.argv) > 1 else "gemini-code-1794737993920.json"
     result = validate_edo3_catalog(test_file)
-    print("Resultado de Validación EDO 3 para:", test_file)
-    print(f"Estado: {'VÁLIDO ✅' if result['valid'] else 'INVÁLIDO ❌'}")
+    print("ODE 3 Validation Result for:", test_file)
+    print(f"Status: {'VALID ✅' if result['valid'] else 'INVALID ❌'}")
     if result["errors"]:
-        print("Errores encontrados:")
+        print("Errors found:")
         for err in result["errors"]:
             print(f"  - {err}")
     if result["warnings"]:
-        print("Advertencias:")
+        print("Warnings:")
         for w in result["warnings"]:
             print(f"  - {w}")
-    print("\nResumen de Cultivos:")
+    print("\nCrop Summary:")
     for cid, info in result["crops_summary"].items():
-        print(f"  [{cid}] Familia: {info['familia_botanica']} | Fijador N: {info['es_fijador_N']} (F_fix={info['F_fix']}) | Liebig: KN={info['Liebig_K_N']}, KP={info['Liebig_K_P']}, KK={info['Liebig_K_K']}")
+        print(f"  [{cid}] Family: {info['familia_botanica']} | N-fixer: {info['es_fijador_N']} (F_fix={info['F_fix']}) | Liebig: KN={info['Liebig_K_N']}, KP={info['Liebig_K_P']}, KK={info['Liebig_K_K']}")

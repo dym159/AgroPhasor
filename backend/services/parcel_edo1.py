@@ -1,4 +1,4 @@
-"""Simula las cinco EDO y deriva las salidas visuales de la parcela."""
+"""Simulates all five ODEs and derives visual outputs for the parcel."""
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -26,17 +26,17 @@ class ParcelDataError(RuntimeError):
 
 def _build_grid_pure_python(geometry):
     if not isinstance(geometry, dict) or geometry.get("type") not in {"Polygon", "MultiPolygon"}:
-        raise ValueError("Selecciona un terreno con un contorno poligonal.")
+        raise ValueError("Select a parcel with a polygon boundary.")
     coords_list = geometry.get("coordinates", [])
     if not coords_list:
-        raise ValueError("Las coordenadas de la parcela están vacías.")
+        raise ValueError("Parcel coordinates are empty.")
     ring = coords_list[0] if geometry.get("type") == "Polygon" else coords_list[0][0]
     lons = [float(c[0]) for c in ring]
     lats = [float(c[1]) for c in ring]
     west, east = min(lons), max(lons)
     south, north = min(lats), max(lats)
     if not (-180 <= west < east <= 180 and -56 < south < north < 60 and east - west < 180):
-        raise ValueError("La parcela está fuera de la cobertura compatible de SRTM.")
+        raise ValueError("The parcel is outside supported SRTM coverage.")
 
     center_lon = (west + east) / 2.0
     center_lat = (south + north) / 2.0
@@ -49,7 +49,7 @@ def _build_grid_pure_python(geometry):
     cols = max(1, math.ceil((east - west) / d_lon))
     rows = max(1, math.ceil((north - south) / d_lat))
     if cols * rows > MAX_CELLS * 20:
-        raise ValueError(f"La parcela supera el límite de {MAX_CELLS} celdas de 30 m.")
+        raise ValueError(f"The parcel exceeds the {MAX_CELLS} 30 m cell limit.")
 
     def point_in_poly(x, y):
         n = len(ring)
@@ -103,10 +103,10 @@ def _build_grid_pure_python(geometry):
                     (c_lon, c_lat + half_lat)
                 ]
                 if len(cells) > MAX_CELLS:
-                    raise ValueError(f"La parcela supera el límite de {MAX_CELLS} celdas de 30 m.")
+                    raise ValueError(f"The parcel exceeds the {MAX_CELLS} 30 m cell limit.")
 
     if not cells:
-        # Si el polígono es muy estrecho, incluir al menos la celda central
+        # If the polygon is very narrow, include at least the center cell
         cells.append({
             "cell_id": "0_0",
             "longitude": center_lon,
@@ -134,16 +134,16 @@ def build_grid(geometry):
         return _build_grid_pure_python(geometry)
 
     if not isinstance(geometry, dict) or geometry.get("type") not in {"Polygon", "MultiPolygon"}:
-        raise ValueError("Selecciona un terreno con un contorno poligonal.")
+        raise ValueError("Select a parcel with a polygon boundary.")
     try:
         parcel = shape(geometry)
     except (TypeError, ValueError, AttributeError, IndexError) as exc:
-        raise ValueError("Las coordenadas de la parcela no son válidas.") from exc
+        raise ValueError("Parcel coordinates are invalid.") from exc
     if parcel.is_empty or not parcel.is_valid:
-        raise ValueError("Corrige el contorno de la parcela antes de simular.")
+        raise ValueError("Fix the parcel boundary before simulating.")
     west, south, east, north = parcel.bounds
     if not (-180 <= west < east <= 180 and -56 < south < north < 60 and east - west < 180):
-        raise ValueError("La parcela está fuera de la cobertura compatible de SRTM.")
+        raise ValueError("The parcel is outside supported SRTM coverage.")
 
     center = parcel.centroid
     if not parcel.covers(center):
@@ -156,7 +156,7 @@ def build_grid(geometry):
     left, bottom, right, top = footprint.bounds
     cols, rows = math.ceil((right - left) / CELL_M), math.ceil((top - bottom) / CELL_M)
     if cols * rows > MAX_CELLS * 20 or footprint.area > MAX_CELLS * CELL_M ** 2:
-        raise ValueError(f"La parcela supera el límite de {MAX_CELLS} celdas de 30 m.")
+        raise ValueError(f"The parcel exceeds the {MAX_CELLS} 30 m cell limit.")
 
     cells = []
     samples = {}
@@ -190,7 +190,7 @@ def build_grid(geometry):
                 unproject(point.x, point.y + half),
             ]
             if len(cells) > MAX_CELLS:
-                raise ValueError(f"La parcela supera el límite de {MAX_CELLS} celdas de 30 m.")
+                raise ValueError(f"The parcel exceeds the {MAX_CELLS} 30 m cell limit.")
     return cells, samples, (lon, lat)
 
 
@@ -209,7 +209,7 @@ def load_power(longitude, latitude, latest_day):
         "format": "JSON",
     }
     try:
-        # Las series meteorológicas y solares pueden tener distintos retrasos.
+        # Meteorological and solar series can have different publication lags.
         for first_offset, last_offset in ((0, 44), (45, 364)):
             start = latest_day - timedelta(days=last_offset)
             end = latest_day - timedelta(days=first_offset)
@@ -227,16 +227,16 @@ def load_power(longitude, latitude, latest_day):
                     elif key in POWER_PARAMETERS:
                         series[key] = {hour: float(fill) for hour in hours}
 
-                # Validamos que al menos los parámetros obligatorios de EDO 1 estén completos
+                # Ensure at least the mandatory ODE 1 parameters are complete
                 if all(
                     math.isfinite(value) and value != fill
                     for key in POWER_PARAMETERS
                     for value in series.get(key, {}).values()
                 ):
                     return day, series, radiation_uses_mj(response)
-        raise ValueError("Serie incompleta")
+        raise ValueError("Incomplete time series")
     except (OSError, KeyError, TypeError, ValueError) as exc:
-        raise ParcelDataError("NASA POWER no devolvió las 24 horas requeridas para la simulación.") from exc
+        raise ParcelDataError("NASA POWER did not return the 24 hourly records required for simulation.") from exc
 
 
 def radiation_uses_mj(response):
@@ -246,11 +246,11 @@ def radiation_uses_mj(response):
         return False
     if "mj" in units or units in {"mj/m2", "mj/m2/hr", "mj/m2/hour", "mj/hr"}:
         return True
-    raise ValueError(f"Unidad de radiación desconocida: {units}")
+    raise ValueError(f"Unknown radiation unit: {units}")
 
 
 def load_root_wetness(longitude, latitude, day):
-    """Lee la humedad radicular diaria si el servicio la tiene disponible."""
+    """Reads daily root-zone wetness if available from the service."""
     date_key = day.strftime("%Y%m%d")
     params = {
         "parameters": "GWETROOT", "community": "AG",
@@ -267,7 +267,7 @@ def load_root_wetness(longitude, latitude, day):
 
 def load_elevations(points):
     global last_srtm_call
-    # Redondear también permite reutilizar las muestras compartidas entre celdas.
+    # Rounding also allows reusing shared samples across neighboring cells.
     locations = list(dict.fromkeys(f"{lat:.7f},{lon:.7f}" for lon, lat in points))
     heights = {}
     try:
@@ -280,19 +280,19 @@ def load_elevations(points):
                 data = read_json(Request(SRTM_URL, data=body))
             results = data["results"]
             if data["status"] != "OK" or len(results) != len(batch):
-                raise ValueError("Respuesta incompleta")
+                raise ValueError("Incomplete elevation response")
             for location, result in zip(batch, results):
                 height = float(result["elevation"])
                 if not math.isfinite(height):
-                    raise ValueError("Elevación inválida")
+                    raise ValueError("Invalid elevation value")
                 heights[location] = height
     except (OSError, KeyError, TypeError, ValueError) as exc:
-        raise ParcelDataError("SRTM no devolvió elevaciones válidas para toda la parcela.") from exc
+        raise ParcelDataError("SRTM did not return valid elevations for the entire parcel.") from exc
     return [heights[f"{lat:.7f},{lon:.7f}"] for lon, lat in points]
 
 
 def _format_hourly_t2m_blocks(t2m_series):
-    """Agrupa las 24 horas de T2M en filas de 6 horas con etiqueta clara."""
+    """Groups the 24 hourly T2M values into clearly labeled 6-hour rows."""
     items = [f"{stamp[-2:]}:00 = {temp:5.2f} °C" for stamp, temp in sorted(t2m_series.items())]
     return [
         "      " + " | ".join(items[idx:idx + 6])
@@ -301,7 +301,7 @@ def _format_hourly_t2m_blocks(t2m_series):
 
 
 def log_parcel_telemetry(day, reference, series, ref_altitude_m, result):
-    """Imprime en la consola del servidor un reporte ordenado con el nombre de cada valor."""
+    """Prints a structured telemetry summary to the server console."""
     t2m_series = series.get("T2M", {})
     cells = result.get("cells", [])
     if not t2m_series or not cells:
@@ -318,66 +318,66 @@ def log_parcel_telemetry(day, reference, series, ref_altitude_m, result):
     max_preview = 15
     cell_lines = [
         (
-            f"      - Celda {cell.get('cell_id', idx + 1):>3}: "
-            f"Latitud={cell['latitude']:.5f}° | "
-            f"Longitud={cell['longitude']:.5f}° | "
-            f"Altitud SRTM={cell['altitude_m']:.1f} m | "
-            f"Pendiente={cell['slope_deg']:.2f}° | "
-            f"Orientación={cell['aspect_deg']:.1f}° | "
-            f"Temp. Dosel={cell['mean_canopy_temp']:.2f} °C"
+            f"      - Cell {cell.get('cell_id', idx + 1):>3}: "
+            f"Latitude={cell['latitude']:.5f}° | "
+            f"Longitude={cell['longitude']:.5f}° | "
+            f"SRTM Altitude={cell['altitude_m']:.1f} m | "
+            f"Slope={cell['slope_deg']:.2f}° | "
+            f"Aspect={cell['aspect_deg']:.1f}° | "
+            f"Canopy Temp={cell['mean_canopy_temp']:.2f} °C"
         )
         for idx, cell in enumerate(cells[:max_preview])
     ]
     if len(cells) > max_preview:
-        cell_lines.append(f"      ... (+{len(cells) - max_preview} celdas adicionales omitidas en vista rápida)")
+        cell_lines.append(f"      ... (+{len(cells) - max_preview} additional cells omitted in quick preview)")
 
     rad_unit = "MJ/m²/h" if result.get("is_radiation_mj_hr") else "W/m²"
     rad_summary = (
-        f"Mínima={min(rads):.2f} {rad_unit} | Promedio={sum(rads) / len(rads):.2f} {rad_unit} | Máxima={max(rads):.2f} {rad_unit}"
-        if rads else "Sin datos"
+        f"Min={min(rads):.2f} {rad_unit} | Mean={sum(rads) / len(rads):.2f} {rad_unit} | Max={max(rads):.2f} {rad_unit}"
+        if rads else "No data"
     )
     rh_summary = (
-        f"Mínima={min(rhs):.1f} % | Promedio={sum(rhs) / len(rhs):.1f} % | Máxima={max(rhs):.1f} %"
-        if rhs else "Sin datos"
+        f"Min={min(rhs):.1f} % | Mean={sum(rhs) / len(rhs):.1f} % | Max={max(rhs):.1f} %"
+        if rhs else "No data"
     )
 
     lines = [
         "",
         "================================================================================",
-        " REPORTE DEL SERVIDOR AGROPHASOR · NASA POWER + SRTM v3 + MOTOR EDO 1",
+        " AGROPHASOR SERVER REPORT · NASA POWER + SRTM v3 + ODE 1 ENGINE",
         "================================================================================",
-        " [1] DATOS DE LA PARCELA Y CULTIVO",
-        f"    • Cultivo evaluado                  : {result.get('crop', result.get('crop_id', 'papa'))} (id: {result.get('crop_id', 'papa')})",
-        f"    • Latitud central de referencia     : {lat:.6f}°",
-        f"    • Longitud central de referencia    : {lon:.6f}°",
-        f"    • Cantidad de celdas (30x30 m)      : {len(cells)} celdas",
-        f"    • Superficie total analizada        : {total_area_m2:.1f} m² ({total_area_m2 / 10000:.2f} ha)",
-        f"    • Humedad radicular asumida         : {result.get('soil_water_mm', 50.0):.1f} mm",
+        " [1] PARCEL AND CROP DATA",
+        f"    • Evaluated crop                   : {result.get('crop', result.get('crop_id', 'papa'))} (id: {result.get('crop_id', 'papa')})",
+        f"    • Reference center latitude        : {lat:.6f}°",
+        f"    • Reference center longitude       : {lon:.6f}°",
+        f"    • Grid cell count (30x30 m)        : {len(cells)} cells",
+        f"    • Total analyzed area              : {total_area_m2:.1f} m² ({total_area_m2 / 10000:.2f} ha)",
+        f"    • Assumed root-zone moisture       : {result.get('soil_water_mm', 50.0):.1f} mm",
         "--------------------------------------------------------------------------------",
-        " [2] NASA POWER · VARIABLES CLIMÁTICAS",
-        f"    • Fecha de consulta NASA POWER      : {day.isoformat()} (Hora Solar Local - LST)",
-        f"    • Temp. del aire a 2m (T2M) Mínima  : {min(temps):.2f} °C",
-        f"    • Temp. del aire a 2m (T2M) Promedio: {sum(temps) / len(temps):.2f} °C",
-        f"    • Temp. del aire a 2m (T2M) Máxima  : {max(temps):.2f} °C",
-        f"    • Radiación solar (ALLSKY_SFC_SW_DWN): {rad_summary}",
-        f"    • Humedad relativa a 2m (RH2M)      : {rh_summary}",
-        "    • Serie horaria de Temperatura del Aire (T2M - 24 horas):",
+        " [2] NASA POWER · CLIMATE VARIABLES",
+        f"    • NASA POWER query date            : {day.isoformat()} (Local Solar Time - LST)",
+        f"    • 2m Air Temp (T2M) Min            : {min(temps):.2f} °C",
+        f"    • 2m Air Temp (T2M) Mean           : {sum(temps) / len(temps):.2f} °C",
+        f"    • 2m Air Temp (T2M) Max            : {max(temps):.2f} °C",
+        f"    • Solar radiation (ALLSKY_SFC_SW_DWN): {rad_summary}",
+        f"    • 2m Relative Humidity (RH2M)      : {rh_summary}",
+        "    • Hourly Air Temperature Series (T2M - 24 hours):",
         *_format_hourly_t2m_blocks(t2m_series),
         "--------------------------------------------------------------------------------",
-        " [3] SRTM v3 (OpenTopoData) · RELIEVE Y TOPOGRAFÍA",
-        f"    • Altitud de referencia (centroide) : {ref_altitude_m:.2f} m s.n.m.",
-        f"    • Altitud mínima de las celdas      : {min(altitudes):.2f} m s.n.m.",
-        f"    • Altitud promedio de las celdas    : {sum(altitudes) / len(altitudes):.2f} m s.n.m.",
-        f"    • Altitud máxima de las celdas      : {max(altitudes):.2f} m s.n.m.",
-        f"    • Desnivel / Variación de altitud   : {max(altitudes) - min(altitudes):.2f} m",
-        f"    • Pendiente mínima en parcela       : {min(slopes):.2f}°",
-        f"    • Pendiente promedio en parcela     : {sum(slopes) / len(slopes):.2f}°",
-        f"    • Pendiente máxima en parcela       : {max(slopes):.2f}°",
-        "    • Detalle por celda (SRTM + EDO 1)  :",
+        " [3] SRTM v3 (OpenTopoData) · RELIEF & TOPOGRAPHY",
+        f"    • Reference altitude (centroid)    : {ref_altitude_m:.2f} m a.s.l.",
+        f"    • Minimum cell altitude            : {min(altitudes):.2f} m a.s.l.",
+        f"    • Mean cell altitude               : {sum(altitudes) / len(altitudes):.2f} m a.s.l.",
+        f"    • Maximum cell altitude            : {max(altitudes):.2f} m a.s.l.",
+        f"    • Elevation relief / range         : {max(altitudes) - min(altitudes):.2f} m",
+        f"    • Minimum parcel slope             : {min(slopes):.2f}°",
+        f"    • Mean parcel slope                : {sum(slopes) / len(slopes):.2f}°",
+        f"    • Maximum parcel slope             : {max(slopes):.2f}°",
+        "    • Per-cell breakdown (SRTM + ODE 1):",
         *cell_lines,
         "--------------------------------------------------------------------------------",
-        " [4] RESULTADO TÉRMICO DEL DOSEL (EDO 1)",
-        f"    • Temperatura media del dosel (lote): {result['lot_mean_temp']:.2f} °C",
+        " [4] CANOPY THERMAL RESULT (ODE 1)",
+        f"    • Parcel mean canopy temperature   : {result['lot_mean_temp']:.2f} °C",
         "================================================================================",
     ]
     print("\n".join(lines), flush=True)
@@ -393,10 +393,10 @@ def simulate_parcel(payload):
     from backend.services.simulation_service import SimulationService
 
     if not isinstance(payload, dict):
-        raise ValueError("Envía la geometría de la parcela como JSON.")
+        raise ValueError("Send parcel geometry as a JSON object.")
     requested_crop = payload.get("crop_id", "papa")
     if not isinstance(requested_crop, str):
-        raise ValueError("El identificador del cultivo debe ser texto.")
+        raise ValueError("Crop identifier must be a string.")
     crop_aliases = {"papa_canchan": "papa", "maiz_amilaceo": "maiz", "habas_verdes": "haba"}
     crop = crop_aliases.get(requested_crop, requested_crop)
     crop = crop if crop in CROP_CATALOG else "papa"
@@ -405,7 +405,7 @@ def simulate_parcel(payload):
     theta_fc = float(payload.get("theta_fc", 0.30))
     theta_wp = float(payload.get("theta_wp", 0.14))
     if not 0 <= theta_wp < theta_fc <= 1:
-        raise ValueError("La humedad del suelo debe cumplir 0 ≤ θ de marchitez < θ de campo ≤ 1.")
+        raise ValueError("Soil moisture limits must satisfy 0 ≤ wilting point θ < field capacity θ ≤ 1.")
     water_limits = compute_soil_limits(crop_param, theta_fc, theta_wp, float(payload.get("h_current_mm", payload.get("h0_mm", 400.0))))
     crop_param = replace(
         crop_param, W_fc=water_limits.w_cc, W_pmp=water_limits.w_pmp, W_crit=water_limits.w_crit,
@@ -413,12 +413,12 @@ def simulate_parcel(payload):
     h0_initial = float(payload.get("h0_mm", 400.0))
     h_start = float(payload.get("h_current_mm", h0_initial))
     if not math.isfinite(h0_initial) or h0_initial <= 0 or not 0 <= h_start <= h0_initial:
-        raise ValueError("El espesor inicial debe ser positivo y el actual debe estar entre 0 y H(0).")
+        raise ValueError("Initial soil depth must be positive and current depth must be between 0 and H(0).")
     water_input = payload.get("soil_water_mm")
     if water_input is not None:
         water = float(water_input)
         if not math.isfinite(water) or water < 0:
-            raise ValueError("La humedad radicular debe ser un valor no negativo en mm.")
+            raise ValueError("Root-zone soil moisture must be a non-negative value in mm.")
         soil_water_source = "manual"
     else:
         water = None
@@ -428,7 +428,7 @@ def simulate_parcel(payload):
     yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
     day, series, radiation_in_mj = load_power(*reference, yesterday)
 
-    # Humedad radicular estimada al inicio del paso diario.
+    # Root-zone moisture estimated at the start of the daily step.
     if water is None:
         mean_gwet = load_root_wetness(*reference, day)
         if mean_gwet is not None:
@@ -459,7 +459,7 @@ def simulate_parcel(payload):
     area = sum(cell["area_m2"] for cell in cells)
     result["lot_mean_temp"] = round(sum(c["area_m2"] * c["mean_canopy_temp"] for c in result["cells"]) / area, 2)
 
-    # Resolución acoplada de EDO 2 (Balance Hidrológico Radicular) y EDO 3 (Macronutrientes NPK) por celda con SRTM
+    # Coupled per-cell resolution of ODE 2 (Root-Zone Water Balance) and ODE 3 (NPK Macronutrients) with SRTM
     rh_mean = sum(series["RH2M"].values()) / float(len(series["RH2M"]))
     rainfall = series.get("PRECTOT") or series.get("PRECTOTCORR", {})
     has_rainfall = all(math.isfinite(rainfall.get(ts, -1)) and rainfall.get(ts, -1) >= 0
@@ -497,7 +497,7 @@ def simulate_parcel(payload):
             dt_days=1.0
         )
 
-        # EDO 5 usa la cobertura al inicio del paso diario.
+        # ODE 5 uses vegetation cover at the start of the daily step.
         edo5_step = solve_edo5_step(
             h_current_mm=h_start,
             precip_mm=precip_total,
@@ -511,7 +511,7 @@ def simulate_parcel(payload):
         )
         eros_rate = abs(edo5_step.dh_dt_mm_day)
 
-        # Resolución acoplada de EDO 3 por celda
+        # Coupled per-cell resolution of ODE 3
         cell_t = thermal["mean_canopy_temp"]
         edo3_step = solve_edo3_step(
             n_current_kg_ha=init_n,
@@ -528,7 +528,7 @@ def simulate_parcel(payload):
         )
         last_edo3_step = edo3_step
 
-        # Resolución acoplada de EDO 4 (Biomasa B y Teledetección NDVI con radiación NASA POWER)
+        # Coupled resolution of ODE 4 (Biomass B and NDVI with NASA POWER radiation)
         edo4_step = solve_edo4_step(
             b_current_t_ha=b_est,
             f_rad_daily_mj_m2=rad_daily_mj,
@@ -546,7 +546,7 @@ def simulate_parcel(payload):
             crop=crop_param
         )
 
-        # Se combina T horaria con W y NPK resultantes del paso diario.
+        # Combine hourly T with end-of-day W and NPK states.
         eta_water = relative_stomatal_conductance(edo2_step.soil_water_mm, water_limits) if is_crop else 0.0
         thermal_comfort = [
             thermal_comfort_index(t, crop_param.T_opt, crop_param.delta_T_tol)
@@ -608,20 +608,20 @@ def simulate_parcel(payload):
     hotspot_cell = max(result["cells"], key=lambda c: c.get("erosion_loss_mm", 0.0)) if result["cells"] else {}
 
     if mean_erosion < 0.005:
-        erosion_risk = "Bajo"
+        erosion_risk = "Low"
     elif mean_erosion < 0.03:
-        erosion_risk = "Moderado"
+        erosion_risk = "Moderate"
     elif mean_erosion < 0.10:
-        erosion_risk = "Severo"
+        erosion_risk = "Severe"
     else:
-        erosion_risk = "Crítico"
+        erosion_risk = "Critical"
 
     if mean_water >= crop_param.W_crit:
-        water_status = "Confort Hídrico"
+        water_status = "Water Comfort"
     elif mean_water > crop_param.W_pmp:
-        water_status = "Estrés Hídrico"
+        water_status = "Water Stress"
     else:
-        water_status = "Punto de Marchitez"
+        water_status = "Wilting Point"
 
     result.update(
         lot_mean_soil_water_mm=mean_water,
@@ -653,8 +653,8 @@ def simulate_parcel(payload):
             "precipitation": "NASA POWER" if has_rainfall else None,
             "soil_moisture": soil_water_source,
             "topography": "SRTM v3 30m (Open Topo Data / USGS)",
-            "biomass_ndvi": "NDVI derivado de biomasa simulada (sin observación orbital)",
-            "soil_attributes": "Parámetros ingresados o valores de referencia"
+            "biomass_ndvi": "NDVI derived from simulated biomass (no orbital observation)",
+            "soil_attributes": "User-provided parameters or reference defaults"
         }
     )
     result.update(

@@ -1,18 +1,18 @@
 """
-Motor Agrofísico de Resolución de EDO 5: Erosión Hídrica de la Capa Fértil (AgroPhasor).
-Implementa el desgaste irreversible del horizonte orgánico provocado por la lluvia en laderas desprotegidas,
-acoplado con la topografía SRTM, precipitaciones GPM/IMERG/NASA POWER, cobertura vegetal de Landsat/MODIS/EDO4,
-parámetros edáficos de SSURGO/WSS y la métrica de conservación de suelo del Frente de Pareto f2.
+Agrophysical Solver Engine for ODE 5: Topsoil Water Erosion (AgroPhasor).
+Models irreversible organic horizon wear caused by rainfall on unprotected hillslopes,
+coupled with SRTM topography, GPM/IMERG/NASA POWER precipitation, Landsat/MODIS/ODE4 vegetation cover,
+SSURGO/WSS soil parameters, and Pareto soil conservation metric f2.
 
-Ecuación diferencial gobernante (AgroPhasor.pdf, Sec. 3.2.5):
+Governing differential equation (AgroPhasor.pdf, Sec. 3.2.5):
     dH_i,j / dt = - k_er(q) * P_0(t) * sin(theta_i,j) * exp(-lambda_B * B_i,j(t))
 
-Actualización analítica exacta para paso temporal dt (Sec. 3.2.5):
+Exact analytical step update for time step dt (Sec. 3.2.5):
     H_i,j(t + dt) = max(0, H_i,j(t) - k_er(q) * P_0(t) * sin(theta_i,j) * exp(-lambda_B * B_i,j(t)) * dt)
 
-Fronteras físicas y geométricas:
+Physical and geometric bounds:
     0 <= H_i,j(t) <= H_i,j(0)
-    dH / dt <= 0 (proceso irreversible en escala estacional)
+    dH / dt <= 0 (irreversible process on a seasonal scale)
 """
 
 from dataclasses import dataclass, field
@@ -24,35 +24,35 @@ from backend.models.crop_parameters import CropParameters, GLOBAL_CONSTANTS
 
 @dataclass
 class EDO5StepOutput:
-    """Resultados físicos de un paso de integración dt de EDO 5."""
-    h_current_mm: float                 # Espesor de capa fértil actual H(t+dt) [mm]
-    h_initial_mm: float                 # Espesor original H(0) [mm]
-    dh_dt_mm_day: float                 # Tasa instantánea de erosión dH/dt <= 0 [mm/día]
-    erosion_loss_step_mm: float         # Pérdida de suelo en el paso Delta_H [mm]
-    accumulated_erosion_mm: float       # Pérdida acumulada total H(0) - H(t) [mm]
-    soil_retention_ratio: float         # Fracción de suelo conservado H(t)/H(0) in [0, 1]
-    topographic_slope_deg: float        # Pendiente topográfica theta [grados] (SRTM)
-    topographic_factor_sin: float       # Modulador geométrico sin(theta) [0, 1]
-    vegetation_cover_factor: float      # Término de atenuación exp(-lambda_B * B) in (0, 1]
-    erodibility_k_er: float             # Coeficiente de erodibilidad activo k_er(q)
-    is_transition_mode: bool            # True si q=Transición (labranza), False si cultivo
-    # Acoplamientos con otros subsistemas agrofísicos
-    w_cc_mm: float                      # Capacidad de campo actualizada W_cc(H) = theta_fc * H [mm] (EDO 2)
-    w_pmp_mm: float                     # Punto de marchitez actualizado W_pmp(H) = theta_wp * H [mm] (EDO 2)
-    nutrient_drag_kg_ha: Dict[str, float] # Pérdida por arrastre de N-P-K [kg/ha/día] (EDO 3)
-    # Acoplamiento con motor visual WebGL / 3D
-    mesh_subsidence_m: float            # Hundimiento geométrico de la malla 3D [m]
-    soil_color_rgb: Tuple[int, int, int] # Color interpolado de suelo (Marrón -> Gris rocoso)
-    is_bedrock_exposed: bool            # Alerta crítica: H <= 0.05 mm (roca madre expuesta)
+    """Physical outputs of a single ODE 5 integration step dt."""
+    h_current_mm: float                 # Current fertile horizon depth H(t+dt) [mm]
+    h_initial_mm: float                 # Original fertile depth H(0) [mm]
+    dh_dt_mm_day: float                 # Instantaneous erosion rate dH/dt <= 0 [mm/day]
+    erosion_loss_step_mm: float         # Soil loss during step Delta_H [mm]
+    accumulated_erosion_mm: float       # Cumulative total loss H(0) - H(t) [mm]
+    soil_retention_ratio: float         # Retained soil fraction H(t)/H(0) in [0, 1]
+    topographic_slope_deg: float        # Topographic slope theta [degrees] (SRTM)
+    topographic_factor_sin: float       # Geometric modulator sin(theta) [0, 1]
+    vegetation_cover_factor: float      # Attenuation term exp(-lambda_B * B) in (0, 1]
+    erodibility_k_er: float             # Active erodibility coefficient k_er(q)
+    is_transition_mode: bool            # True if q=Transition (tillage), False if crop
+    # Couplings with other agrophysical subsystems
+    w_cc_mm: float                      # Updated field capacity W_cc(H) = theta_fc * H [mm] (ODE 2)
+    w_pmp_mm: float                     # Updated wilting point W_pmp(H) = theta_wp * H [mm] (ODE 2)
+    nutrient_drag_kg_ha: Dict[str, float] # N-P-K runoff drag loss [kg/ha/day] (ODE 3)
+    # Coupling with 3D / WebGL visual engine
+    mesh_subsidence_m: float            # 3D mesh geometric subsidence [m]
+    soil_color_rgb: Tuple[int, int, int] # Interpolated soil color (Brown -> Bedrock Gray)
+    is_bedrock_exposed: bool            # Critical alert: H <= 0.05 mm (bedrock exposed)
 
 
 def compute_soil_color(
     retention_ratio: float
 ) -> Tuple[int, int, int]:
     """
-    Interpola el color del terreno en la interfaz WebGL 3D (AgroPhasor.pdf Sec. 2.6.1):
-    - retention_ratio = 1.0 (Suelo intacto): Marrón orgánico fértil (101, 67, 33)
-    - retention_ratio = 0.0 (Suelo completamente erosionado): Gris rocoso (128, 128, 128)
+    Interpolates terrain color for the 3D interface (AgroPhasor.pdf Sec. 2.6.1):
+    - retention_ratio = 1.0 (Intact soil): Fertile organic brown (101, 67, 33)
+    - retention_ratio = 0.0 (Fully eroded soil): Bedrock gray (128, 128, 128)
     """
     ratio = max(0.0, min(1.0, retention_ratio))
     r = int(round(128.0 + (101.0 - 128.0) * ratio))
@@ -81,24 +81,24 @@ def solve_edo5_step(
     kappa_er: float = 0.001
 ) -> EDO5StepOutput:
     """
-    Resuelve analíticamente un paso temporal dt de EDO 5:
+    Analytically solves one time step dt of ODE 5:
     
     dH/dt = - k_er(q) * P_0(t) * sin(theta) * exp(-lambda_B * B(t))
     H(t + dt) = max(0, H(t) + (dH/dt) * dt)
     
-    Parámetros:
-    - h_current_mm: Espesor actual de la capa fértil [mm] (0 <= H <= H0).
-    - precip_mm: Precipitación total diaria P_0(t) [mm/día] (GPM / IMERG / NASA POWER).
-    - slope_deg: Inclinación del terreno theta [grados] (SRTM).
-    - biomass_t_ha: Biomasa vegetal o rastrojo protector B(t) [t/ha] (EDO 4 / Landsat).
-    - is_transition: True si el lote está en barbecho/labranza (q = Transición).
-    - h_initial_mm: Espesor fértil basal original H(0) [mm] (SSURGO / WSS).
-    - theta_fc: Contenido volumétrico a capacidad de campo (m³/m³).
-    - theta_wp: Contenido volumétrico a punto de marchitez (m³/m³).
-    - current_nutrients_kg_ha: Vector actual [N, P, K] para calcular arrastre mecánico.
-    - kappa_er: Factor de escala visual para hundimiento de malla 3D [m/mm].
+    Parameters:
+    - h_current_mm: Current fertile horizon depth [mm] (0 <= H <= H0).
+    - precip_mm: Daily total precipitation P_0(t) [mm/day] (GPM / IMERG / NASA POWER).
+    - slope_deg: Terrain slope theta [degrees] (SRTM).
+    - biomass_t_ha: Protective plant biomass or stover B(t) [t/ha] (ODE 4 / Landsat).
+    - is_transition: True if parcel is in fallow/tillage (q = Transition).
+    - h_initial_mm: Original baseline fertile depth H(0) [mm] (SSURGO / WSS).
+    - theta_fc: Volumetric water content at field capacity (m³/m³).
+    - theta_wp: Volumetric water content at wilting point (m³/m³).
+    - current_nutrients_kg_ha: Current [N, P, K] vector to compute mechanical drag.
+    - kappa_er: Visual scale factor for 3D mesh subsidence [m/mm].
     """
-    # 1. Cargar constantes agrofísicas
+    # 1. Load agrophysical constants
     if k_er_cultivo is None:
         k_er_cultivo = float(GLOBAL_CONSTANTS.get("k_er_cultivo", 0.0004))
     if k_er_labranza is None:
@@ -114,7 +114,7 @@ def solve_edo5_step(
 
     h0 = h_initial_mm if h_initial_mm is not None else max(1.0, h_current_mm)
 
-    # Si ya no queda suelo fértil, la erosión se anula físicamente
+    # When no fertile topsoil remains, erosion drops to zero
     if h_current_mm <= 0.0:
         return EDO5StepOutput(
             h_current_mm=0.0,
@@ -136,51 +136,51 @@ def solve_edo5_step(
             is_bedrock_exposed=True
         )
 
-    # 2. Modulador topográfico SRTM: sin(theta)
+    # 2. SRTM topographic modulator: sin(theta)
     clamped_slope = max(0.0, min(85.0, slope_deg))
     slope_rad = math.radians(clamped_slope)
     sin_theta = math.sin(slope_rad)
 
-    # 3. Modulador vegetal (Biomasa foliar + rastrojo): exp(-lambda_B * B)
+    # 3. Vegetation modulator (Canopy + stover biomass): exp(-lambda_B * B)
     clamped_biomass = max(0.0, biomass_t_ha)
     veg_cover = math.exp(-lambda_b * clamped_biomass)
 
-    # 4. Modo operativo q(t): erodibilidad
+    # 4. Operating mode q(t): erodibility
     k_er = k_er_labranza if is_transition else k_er_cultivo
 
-    # 5. Precipitación efectiva
+    # 5. Effective precipitation
     p0 = max(0.0, precip_mm)
 
-    # 6. Evaluación de la EDO 5
-    # Tasa instantánea de desgaste: dH/dt <= 0
+    # 6. ODE 5 evaluation
+    # Instantaneous erosion rate: dH/dt <= 0
     erosion_rate = k_er * p0 * sin_theta * veg_cover
     dh_dt = -erosion_rate
 
-    # Paso analítico integrado
+    # Integrated analytical step
     loss_step = erosion_rate * dt_days
-    # No puede erosionarse más suelo del existente
+    # Cannot erode more soil than currently remains
     effective_loss = min(h_current_mm, loss_step)
     h_next = max(0.0, h_current_mm - effective_loss)
 
     accumulated_loss = max(0.0, h0 - h_next)
     retention_ratio = h_next / h0 if h0 > 0.0 else 0.0
 
-    # 7. Retroalimentación edáfica con EDO 2
+    # 7. Soil physical feedback to ODE 2
     w_cc_updated = round(theta_fc * h_next, 2)
     w_pmp_updated = round(theta_wp * h_next, 2)
 
-    # 8. Retroalimentación bioquímica con EDO 3 (arrastre de nutrientes)
+    # 8. Biogeochemical feedback to ODE 3 (nutrient runoff drag)
     nut_drag = {"N": 0.0, "P": 0.0, "K": 0.0}
     if current_nutrients_kg_ha is not None:
         n_curr = max(0.0, current_nutrients_kg_ha.get("N", 0.0))
         p_curr = max(0.0, current_nutrients_kg_ha.get("P", 0.0))
         k_curr = max(0.0, current_nutrients_kg_ha.get("K", 0.0))
-        # Pérdida proporcional al desgaste relativo del horizonte orgánico: xi * |dH/dt| * Nutriente
+        # Loss proportional to organic horizon wear: xi * |dH/dt| * Nutrient
         nut_drag["N"] = round(xi_n * effective_loss * n_curr, 4)
         nut_drag["P"] = round(xi_p * effective_loss * p_curr, 4)
         nut_drag["K"] = round(xi_k * effective_loss * k_curr, 4)
 
-    # 9. Capa visual WebGL 3D
+    # 9. 3D WebGL visual layer
     mesh_subsidence = round(kappa_er * accumulated_loss, 4)
     soil_color = compute_soil_color(retention_ratio)
     is_bedrock = h_next <= 0.05
@@ -220,11 +220,11 @@ def simulate_edo5_timeseries(
     initial_nutrients_kg_ha: Optional[Dict[str, float]] = None
 ) -> Dict[str, Any]:
     """
-    Simula la serie temporal completa de EDO 5 sobre una trayectoria de N días.
+    Runs a full ODE 5 time-series simulation over an N-day trajectory.
     """
     n_days = len(precip_series)
     if len(biomass_series) != n_days or len(transition_flags) != n_days:
-        raise ValueError("Las series de precipitación, biomasa y modos de transición deben tener igual longitud.")
+        raise ValueError("Precipitation, biomass, and transition flag series must have the same length.")
 
     h_history: List[float] = []
     loss_history: List[float] = []
@@ -261,7 +261,7 @@ def simulate_edo5_timeseries(
         cover_history.append(step.vegetation_cover_factor)
         p_drag_total += step.nutrient_drag_kg_ha.get("P", 0.0)
 
-        # Actualizar estado interno
+        # Update internal state
         current_h = step.h_current_mm
         current_nutrients["N"] = max(0.0, current_nutrients["N"] - step.nutrient_drag_kg_ha.get("N", 0.0))
         current_nutrients["P"] = max(0.0, current_nutrients["P"] - step.nutrient_drag_kg_ha.get("P", 0.0))
@@ -294,13 +294,13 @@ def compute_soil_pareto_metric_f2(
     omega_n: float = 0.5
 ) -> float:
     """
-    Calcula la métrica f2 del Frente de Pareto (AgroPhasor.pdf, Sec. 3.5, Ec. 3):
+    Computes Pareto Front metric f2 (AgroPhasor.pdf, Sec. 3.5, Eq. 3):
     
     f2(pi) = omega_H * [ (H(0) - H(T)) / H(0) ] + omega_N * [ 1 - eta_N(T) ]
     
-    Donde:
-    - (H(0) - H(T)) / H(0): Fracción de suelo fértil perdido por erosión hídrica en ladera.
-    - 1 - eta_N(T): Déficit de fertilidad química final según la Ley de Liebig.
+    Where:
+    - (H(0) - H(T)) / H(0): Fraction of fertile soil lost to hillslope water erosion.
+    - 1 - eta_N(T): Final chemical fertility deficit per Liebig's Law.
     """
     h0 = max(1e-4, h_initial)
     delta_h_rel = max(0.0, min(1.0, (h0 - h_final) / h0))

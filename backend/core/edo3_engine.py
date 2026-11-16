@@ -1,14 +1,14 @@
 """
-Motor Agrofísico de Resolución de EDO 3: Dinámica Vectorial de Macronutrientes (AgroPhasor).
-Implementa la evolución continua de N_i,j(t) = [N, P, K]^T en kg/ha según AgroPhasor.pdf
-(Secciones 3.2.3, 3.3, 1.2, 1.3 y 2.5).
+Agrophysical Solver Engine for ODE 3: Macronutrient Vector Dynamics (AgroPhasor).
+Implements the continuous evolution of N_i,j(t) = [N, P, K]^T in kg/ha per AgroPhasor.pdf
+(Sections 3.2.3, 3.3, 1.2, 1.3, and 2.5).
 
-Ecuación matricial lineal desacoplada por componente:
+Component-wise decoupled linear matrix ODE:
     d N_i,j / dt = S_N,i,j(t) - Lambda_N,i,j(t) * N_i,j(t)
 
-Solución analítica exacta e incondicionalmente no-negativa:
+Exact unconditionally non-negative analytical solution:
     N_i,j(t + dt) = exp(-Lambda * dt) * N_i,j(t) + dt * phi_1(Lambda * dt) * S
-    con phi_1(z) = (1 - exp(-z)) / z
+    with phi_1(z) = (1 - exp(-z)) / z
 """
 
 from dataclasses import dataclass, field
@@ -20,40 +20,40 @@ from backend.models.crop_parameters import CropParameters, GLOBAL_CONSTANTS
 
 @dataclass
 class SoilChemicalProperties:
-    """Propiedades químicas basales del suelo (SSURGO / WSS / GAEZ)."""
-    om_pct: float = 3.0           # Materia orgánica inicial OM [%]
-    cic_cmolc_kg: float = 22.0     # Capacidad de Intercambio Catiónico [cmol_c/kg]
-    ph: float = 6.8                # pH superficial del suelo [adimensional]
-    ec_ds_m: float = 0.8           # Conductividad eléctrica (salinidad) [dS/m]
-    phi_ph_ec: float = 1.0         # Modulador de disponibilidad química phi_pH,EC [0, 1]
+    """Basal soil chemical properties (SSURGO / WSS / GAEZ)."""
+    om_pct: float = 3.0            # Initial organic matter OM [%]
+    cic_cmolc_kg: float = 22.0     # Cation Exchange Capacity (CEC) [cmol_c/kg]
+    ph: float = 6.8                # Surface soil pH [dimensionless]
+    ec_ds_m: float = 0.8           # Electrical conductivity (salinity) [dS/m]
+    phi_ph_ec: float = 1.0         # Chemical availability modulator phi_pH,EC [0, 1]
 
 
 @dataclass
 class EDO3StepOutput:
-    """Resultados de un paso de integración dt de EDO 3."""
-    n_kg_ha: float                 # Nitrógeno disponible N [kg/ha]
-    p_kg_ha: float                 # Fósforo disponible P [kg/ha]
-    k_kg_ha: float                 # Potasio disponible K [kg/ha]
-    dn_dt: float                   # Tasa de cambio dN/dt [kg/(ha·día)]
-    dp_dt: float                   # Tasa de cambio dP/dt [kg/(ha·día)]
-    dk_dt: float                   # Tasa de cambio dK/dt [kg/(ha·día)]
-    eta_nutrientes: float          # Eficiencia química global de Liebig [0, 1]
-    limiting_nutrient: str         # Macronutriente limitante ("N", "P" o "K")
-    eta_components: Dict[str, float]  # Factores parciales (eta_N, eta_P, eta_K)
-    biological_n_fixation_kg: float   # Aporte por fijación biológica en el paso [kg/ha]
-    p_solubilization_kg: float        # Aporte por solubilización de P [kg/ha]
-    k_stover_recycling_kg: float      # Aporte por descomposición de rastrojo [kg/ha]
-    leaching_n_kg: float              # Pérdida de N por lixiviación vertical [kg/ha]
-    leaching_k_kg: float              # Pérdida de K por lixiviación vertical [kg/ha]
-    erosion_loss_p_kg: float          # Pérdida de P por arrastre de suelo erosionado [kg/ha]
-    f_t_microbial: float              # Factor térmico microbiano Q10 [adimensional]
+    """Outputs of a single integration step dt of ODE 3."""
+    n_kg_ha: float                 # Available Nitrogen N [kg/ha]
+    p_kg_ha: float                 # Available Phosphorus P [kg/ha]
+    k_kg_ha: float                 # Available Potassium K [kg/ha]
+    dn_dt: float                   # Rate of change dN/dt [kg/(ha·day)]
+    dp_dt: float                   # Rate of change dP/dt [kg/(ha·day)]
+    dk_dt: float                   # Rate of change dK/dt [kg/(ha·day)]
+    eta_nutrientes: float          # Global Liebig nutrient efficiency [0, 1]
+    limiting_nutrient: str         # Limiting macronutrient ("N", "P", or "K")
+    eta_components: Dict[str, float]  # Partial Liebig factors (eta_N, eta_P, eta_K)
+    biological_n_fixation_kg: float   # Biological N fixation input in step [kg/ha]
+    p_solubilization_kg: float        # Root P solubilization input in step [kg/ha]
+    k_stover_recycling_kg: float      # Stover decomposition K input in step [kg/ha]
+    leaching_n_kg: float              # Vertical N leaching loss [kg/ha]
+    leaching_k_kg: float              # Vertical K leaching loss [kg/ha]
+    erosion_loss_p_kg: float          # Eroded-soil particulate P loss [kg/ha]
+    f_t_microbial: float              # Microbial thermal Q10 factor [dimensionless]
 
 
 def calculate_phi_ph_ec(ph: float, ec: float) -> float:
     """
-    Calcula el modulador de disponibilidad química phi_pH,EC in [0, 1].
-    - Rango óptimo de pH: 6.0 - 7.5. Suelos muy ácidos o alcalinos reducen la disponibilidad.
-    - Salinidad EC > 1.5 dS/m induce estrés osmótico e inhibe la absorción radicular.
+    Computes the chemical availability modulator phi_pH,EC in [0, 1].
+    - Optimal pH range: 6.0 - 7.5. Strongly acidic or alkaline soils reduce availability.
+    - Salinity EC > 1.5 dS/m induces osmotic stress and inhibits root uptake.
     """
     if 6.0 <= ph <= 7.5:
         f_ph = 1.0
@@ -71,14 +71,14 @@ def calculate_phi_ph_ec(ph: float, ec: float) -> float:
 
 
 def microbial_temperature_factor(t_soil_c: float, q10: float = 2.0) -> float:
-    """Cinética enzimática y microbiana Q10 centrada en 20 °C."""
+    """Microbial and enzymatic Q10 kinetics centered at 20 °C."""
     return float(math.pow(q10, (t_soil_c - 20.0) / 10.0))
 
 
 def phi1(z: float) -> float:
     """
-    Función auxiliar phi_1(z) = (1 - exp(-z)) / z.
-    Libre de singularidades para z -> 0 mediante aproximación de Taylor.
+    Auxiliary function phi_1(z) = (1 - exp(-z)) / z.
+    Singularity-free as z -> 0 via Taylor expansion.
     """
     if abs(z) < 1e-6:
         return 1.0 - 0.5 * z + (z * z) / 6.0
@@ -94,7 +94,7 @@ def compute_liebig_factor(
     kk: float = 45.0
 ) -> Tuple[float, str, Dict[str, float]]:
     """
-    Proyección escalar por la Ley del Mínimo de Liebig (PDF Sec. 1.2 y 3.3):
+    Scalar projection via Liebig's Law of the Minimum (PDF Sec. 1.2 and 3.3):
     eta_nutrientes = min( N/(N + KN), P/(P + KP), K/(K + KK) ) in [0, 1]
     """
     n_val = max(0.0, n_kg_ha)
@@ -135,7 +135,7 @@ def solve_edo3_step(
     fertilizer_npk_kg_ha: Tuple[float, float, float] = (0.0, 0.0, 0.0),
     is_crop: bool = True,
     dt_days: float = 1.0,
-    # Parámetros agrofísicos de calibración (por defecto desde GLOBAL_CONSTANTS)
+    # Calibration agrophysical parameters (defaults from GLOBAL_CONSTANTS)
     k_min0: Optional[float] = None,
     k_ln: Optional[float] = None,
     k_lk: Optional[float] = None,
@@ -147,12 +147,12 @@ def solve_edo3_step(
     q10: Optional[float] = None
 ) -> EDO3StepOutput:
     """
-    Integra un paso de tiempo dt de EDO 3 (Dinámica Vectorial de Macronutrientes).
+    Integrates one time step dt of ODE 3 (Macronutrient Vector Dynamics).
     """
     if soil is None:
         soil = SoilChemicalProperties()
 
-    # Cargar constantes globales
+    # Load global constants
     q10_val = q10 if q10 is not None else float(GLOBAL_CONSTANTS.get("Q10", 2.0))
     k_min0_val = k_min0 if k_min0 is not None else float(GLOBAL_CONSTANTS.get("k_min0_dia", 0.0018))
     k_ln_val = k_ln if k_ln is not None else float(GLOBAL_CONSTANTS.get("k_lN", 0.035))
@@ -166,54 +166,54 @@ def solve_edo3_step(
     f_t = microbial_temperature_factor(t_soil_c, q10_val)
     phi_chem = calculate_phi_ph_ec(soil.ph, soil.ec_ds_m)
 
-    # Humedad relativa W / Wcc
+    # Relative root-zone moisture W / Wcc
     w_rel = max(0.0, min(1.2, w_mm / max(1.0, w_cc_mm)))
     eros = max(0.0, erosion_rate_mm_day)
     cic = max(1.0, soil.cic_cmolc_kg)
 
-    # Biomasa aérea activa
+    # Active above-ground biomass
     b_act = biomass_t_ha if biomass_t_ha is not None else (crop.B_max_t_ha * 0.40 if is_crop else 2.0)
 
-    # Coeficientes fisiológicos
+    # Physiological coefficients
     ic = 1.0 if is_crop else 0.0
     f_fix = crop.F_fix if is_crop else 0.0
     f_sol = crop.F_sol if is_crop else 0.0
 
-    # Tasas de absorción radicular vegetal (calibradas para balance diario)
+    # Plant root uptake rates (calibrated for daily balance)
     ka_n = 0.008
     ka_p = 0.00010
     ka_k = 0.005
 
-    # -------------------- 1. VECTOR DE FUENTES S(t) --------------------
-    # Nitrógeno: SN = FN_fert + Ffix,c * B + kmin0 * OM * (W/Wcc) * fT
-    # Coeficientes aplicados directamente según la sección 3.2.3 del PDF.
+    # -------------------- 1. SOURCE VECTOR S(t) --------------------
+    # Nitrogen: SN = FN_fert + Ffix,c * B + kmin0 * OM * (W/Wcc) * fT
+    # Coefficients applied directly per PDF Section 3.2.3.
     organic_n_pool = soil.om_pct
     sn_mineralization = k_min0_val * organic_n_pool * w_rel * f_t
     sn_fixation = f_fix * b_act
     sn_total = fertilizer_npk_kg_ha[0] + sn_fixation + sn_mineralization
 
-    # Fósforo: SP = FP_fert + Fsol,c * B + mineralización basal
+    # Phosphorus: SP = FP_fert + Fsol,c * B + basal mineralization
     sp_solubilization = f_sol * b_act
     sp_native = 0.0
     sp_total = fertilizer_npk_kg_ha[1] + sp_solubilization + sp_native
 
-    # Potasio: SK = FK_fert + SK_res + liberación basal de arcillas
-    # SK_res = I(q = Transición) * beta_K * kdec * B
+    # Potassium: SK = FK_fert + SK_res + basal clay release
+    # SK_res = I(q = Transition) * beta_K * kdec * B
     sk_stover = (1.0 - ic) * beta_k_val * k_dec_val * b_act
     sk_native = 0.0
     sk_total = fertilizer_npk_kg_ha[2] + sk_stover + sk_native
 
-    # ----------------- 2. VECTOR DE TASAS DE PÉRDIDA Lambda(t) -----------------
-    # Nitrógeno: Lambda_N = (kl,N / CIC) * W + Ic * phi_chem * ka_N * fT + xi_N * eros
-    lambda_n = w_mm * (k_ln_val / cic + ic * phi_chem * ka_n * f_t) + xi_n_val * eros
+    # ----------------- 2. LOSS RATE VECTOR Lambda(t) -----------------
+    # Nitrogen: Lambda_N = (kl,N / CEC) * (W/Wcc) + Ic * phi_chem * ka_N * fT * (W/Wcc) + xi_N * eros
+    lambda_n = w_rel * (k_ln_val / cic + ic * phi_chem * ka_n * f_t) + xi_n_val * eros
 
-    # Fósforo (sin lixiviación vertical): Lambda_P = Ic * phi_chem * ka_P * fT * W + xi_P * eros
-    lambda_p = ic * phi_chem * ka_p * f_t * w_mm + xi_p_val * eros
+    # Phosphorus (immune to vertical leaching): Lambda_P = Ic * phi_chem * ka_P * fT * (W/Wcc) + xi_P * eros
+    lambda_p = ic * phi_chem * ka_p * f_t * w_rel + xi_p_val * eros
 
-    # Potasio: Lambda_K = (kl,K / CIC) * W + Ic * phi_chem * ka_K * fT + xi_K * eros
-    lambda_k = w_mm * (k_lk_val / cic + ic * phi_chem * ka_k * f_t) + xi_k_val * eros
+    # Potassium: Lambda_K = (kl,K / CEC) * (W/Wcc) + Ic * phi_chem * ka_K * fT * (W/Wcc) + xi_K * eros
+    lambda_k = w_rel * (k_lk_val / cic + ic * phi_chem * ka_k * f_t) + xi_k_val * eros
 
-    # ----------------- 3. INTEGRACIÓN ANALÍTICA EXACTA -----------------
+    # ----------------- 3. EXACT ANALYTICAL INTEGRATION -----------------
     # N(t + dt) = exp(-Lambda * dt) * N(t) + dt * phi1(Lambda * dt) * S
     zn = lambda_n * dt_days
     zp = lambda_p * dt_days
@@ -223,25 +223,25 @@ def solve_edo3_step(
     p_next = math.exp(-zp) * max(0.0, p_current_kg_ha) + dt_days * phi1(zp) * sp_total
     k_next = math.exp(-zk) * max(0.0, k_current_kg_ha) + dt_days * phi1(zk) * sk_total
 
-    # Acotamiento estricto no-negativo (Frontera Biogeoquímica de AgroPhasor)
+    # Strict non-negative bound (AgroPhasor Biogeochemical Boundary)
     n_next = max(0.0, n_next)
     p_next = max(0.0, p_next)
     k_next = max(0.0, k_next)
 
-    # Derivadas instantáneas dN/dt
+    # Instantaneous derivatives dN/dt
     dn_dt = (n_next - n_current_kg_ha) / dt_days
     dp_dt = (p_next - p_current_kg_ha) / dt_days
     dk_dt = (k_next - k_current_kg_ha) / dt_days
 
-    # Ley del Mínimo de Liebig
+    # Liebig's Law of the Minimum
     eta_val, limiting, components = compute_liebig_factor(
         n_next, p_next, k_next,
         kn=crop.K_N, kp=crop.K_P, kk=crop.K_K
     )
 
-    # Diagnósticos de flujos físicos en el paso
-    leach_n = (k_ln_val / cic) * w_mm * 0.10 * n_current_kg_ha * dt_days
-    leach_k = (k_lk_val / cic) * w_mm * 0.10 * k_current_kg_ha * dt_days
+    # Step flux diagnostics
+    leach_n = (k_ln_val / cic) * w_rel * 0.10 * n_current_kg_ha * dt_days
+    leach_k = (k_lk_val / cic) * w_rel * 0.10 * k_current_kg_ha * dt_days
     eros_p = xi_p_val * eros * p_current_kg_ha * dt_days
 
     return EDO3StepOutput(
@@ -279,11 +279,11 @@ def simulate_edo3_timeseries(
     dt_days: float = 1.0
 ) -> Dict[str, Any]:
     """
-    Ejecuta una simulación temporal completa de EDO 3 sobre una serie de días.
+    Runs a complete ODE 3 time-series simulation over a sequence of days.
     """
     n_steps = len(w_series)
     if len(t_soil_series) != n_steps:
-        raise ValueError("w_series y t_soil_series deben tener la misma longitud.")
+        raise ValueError("w_series and t_soil_series must have the same length.")
 
     if soil is None:
         soil = SoilChemicalProperties()

@@ -1,6 +1,6 @@
 # ==============================================================================
-# Excepciones conocidas de Gitleaks para AgroPhasor
-# Si se detecta un falso positivo verificado en archivos públicos o tests,
-# registra aquí el fingerprint correspondiente:
+# Known Gitleaks Allowlist Exceptions for AgroPhasor
+# If a verified false positive is detected in public files or tests,
+# register the corresponding fingerprint here:
 # commit:path:rule-id:line
 # ==============================================================================

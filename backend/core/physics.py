@@ -1,10 +1,10 @@
 """
-Ecuaciones constitutivas agrometeorológicas y relaciones de cierre de AgroPhasor.
-Implementa las fórmulas oficiales de la Sección 3.3 y 5 del documento técnico:
-- Presión de vapor de saturación de Tetens e_s(T)
-- Pendiente de saturación de Penman Delta = d(e_s)/dT
-- Déficit de presión de vapor VPD(T, t)
-- Conductancia estomática gamma_c(W)
+AgroPhasor agrometeorological constitutive equations and closure relations.
+Implements the official formulas from Sections 3.3 and 5 of the technical specification:
+- Tetens saturation vapor pressure e_s(T)
+- Penman saturation slope Delta = d(e_s)/dT
+- Canopy vapor pressure deficit VPD(T, t)
+- Stomatal conductance gamma_c(W)
 """
 
 import math
@@ -13,7 +13,7 @@ from typing import Tuple
 
 def saturation_vapor_pressure(temperature_c: float) -> float:
     """
-    Fórmula de Tetens (Ec. constitutiva 3.3 y Ec. 5):
+    Tetens formula (Constitutive Eq. 3.3 and Eq. 5):
     e_s(T) = 0.6108 * exp(17.27 * T / (T + 237.3)) [kPa]
     """
     return 0.6108 * math.exp((17.27 * temperature_c) / (temperature_c + 237.3))
@@ -21,9 +21,9 @@ def saturation_vapor_pressure(temperature_c: float) -> float:
 
 def penman_saturation_slope(temperature_c: float) -> float:
     """
-    Derivada de la curva de saturación de Tetens d(e_s)/dT [kPa / °C]:
+    Derivative of the Tetens saturation curve d(e_s)/dT [kPa / °C]:
     Delta = (4098 * e_s(T)) / ((T + 237.3)^2)
-    Utilizada para la linealización analítica incondicionalmente estable de EDO 1.
+    Used for unconditionally stable analytical Penman linearization in ODE 1.
     """
     es = saturation_vapor_pressure(temperature_c)
     return (4098.0 * es) / ((temperature_c + 237.3) ** 2)
@@ -31,7 +31,7 @@ def penman_saturation_slope(temperature_c: float) -> float:
 
 def actual_vapor_pressure(temperature_air_c: float, relative_humidity_pct: float) -> float:
     """
-    Presión de vapor actual del aire e_a [kPa]:
+    Actual air vapor pressure e_a [kPa]:
     e_a = e_s(T_air) * (RH / 100)
     """
     rh_clamped = max(0.0, min(100.0, relative_humidity_pct))
@@ -41,8 +41,8 @@ def actual_vapor_pressure(temperature_air_c: float, relative_humidity_pct: float
 
 def vapor_pressure_deficit(surface_temp_c: float, ea_air_kpa: float) -> float:
     """
-    Déficit de presión de vapor del dosel VPD [kPa]:
-    VPD = max(0, e_s(T_dosel) - e_a)
+    Canopy vapor pressure deficit VPD [kPa]:
+    VPD = max(0, e_s(T_canopy) - e_a)
     """
     es = saturation_vapor_pressure(surface_temp_c)
     return max(0.0, es - ea_air_kpa)
@@ -56,17 +56,17 @@ def stomatal_conductance_factor(
     epsilon: float = 1e-4
 ) -> float:
     """
-    Función rampa acotada de conductancia estomática gamma_c(W) / gamma_max [0, 1] (Sección 3.3).
-    - Si W <= W_pmp: 0.04 (estomas cerrados / transpiración cuticular mínima).
-    - Si W >= W_crit: 1.0 (máxima apertura estomática).
-    - Si W_pmp < W < W_crit: decaimiento lineal.
-    - Nocturno (is_daylight=False): estomas cerrados por fotoperiodo (f_W <= 0.04).
+    Bounded ramp function for stomatal conductance gamma_c(W) / gamma_max [0, 1] (Section 3.3).
+    - If W <= W_pmp: 0.04 (closed stomata / minimal cuticular transpiration).
+    - If W >= W_crit: 1.0 (maximum stomatal opening).
+    - If W_pmp < W < W_crit: linear decay.
+    - Nighttime (is_daylight=False): photoperiod stomatal closure (f_W <= 0.04).
     """
     if not is_daylight:
-        return 0.04  # Cierre nocturno natural de estomas
+        return 0.04  # Natural nighttime stomatal closure
     
     if soil_water_mm <= w_pmp_mm:
-        return 0.04  # Transpiración residual cuticular en marchitez
+        return 0.04  # Residual cuticular transpiration at wilting point
     elif soil_water_mm >= w_crit_mm:
         return 1.0
     else:
@@ -77,7 +77,7 @@ def stomatal_conductance_factor(
 
 def thermal_comfort_index(temperature_c: float, t_opt_c: float, delta_t_tol_c: float) -> float:
     """
-    Factor térmico fotosintético y de confort eta_T [0, 1] (Sección 2.6.1 y 3.3):
+    Photosynthetic and thermal comfort factor eta_T [0, 1] (Sections 2.6.1 and 3.3):
     eta_T = max(0, 1 - ((T - T_opt) / delta_T_tol)^2)
     """
     diff = (temperature_c - t_opt_c) / max(1e-3, delta_t_tol_c)

@@ -1,6 +1,6 @@
 /**
- * AgroPhasor - Gestor de Lotes y Zonas
- * Manejo de geometrías, IDs independientes, cálculo de área y persistencia de selección.
+ * AgroPhasor - Lot & Zone Manager
+ * Handles geometries, independent IDs, area calculations, and selection persistence.
  */
 
 import { CONFIG } from './config.js';
@@ -15,7 +15,7 @@ export class LotesManager {
   }
 
   /**
-   * Suscribirse a cambios en los lotes
+   * Subscribe to lot changes
    */
   subscribe(callback) {
     this.listeners.push(callback);
@@ -33,20 +33,20 @@ export class LotesManager {
       try {
         cb(all, selected);
       } catch (err) {
-        console.error("Error en subscriber de lotes:", err);
+        console.error("Error in lot subscriber:", err);
       }
     });
   }
 
   /**
-   * Obtener todos los lotes
+   * Get all lots
    */
   getAll() {
     return Array.from(this.lotes.values());
   }
 
   /**
-   * Obtener el lote actualmente seleccionado
+   * Get the currently selected lot
    */
   getSelected() {
     if (!this.selectedId) return null;
@@ -54,7 +54,7 @@ export class LotesManager {
   }
 
   /**
-   * Seleccionar un lote por su ID
+   * Select a lot by its ID
    */
   select(id) {
     if (this.lotes.has(id)) {
@@ -64,15 +64,15 @@ export class LotesManager {
   }
 
   /**
-   * Crear o registrar un nuevo lote a partir de una capa de Leaflet o coordenadas
+   * Create or register a new lot from a Leaflet layer or coordinates
    */
   createLote(polygonLayer, customName = null) {
     if (this.lotes.size >= CONFIG.LIMITS.MAX_LOTES) {
-      throw new Error(`Límite alcanzado: máximo ${CONFIG.LIMITS.MAX_LOTES} zonas habilitadas en la entrega inicial.`);
+      throw new Error(`Limit reached: maximum ${CONFIG.LIMITS.MAX_LOTES} zones enabled in the initial release.`);
     }
 
     const id = `lote-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
-    const name = customName || `Lote ${this.nextIndex}: Zona ${this.lotes.size === 0 ? "Principal" : "Secundaria"}`;
+    const name = customName || `Lot ${this.nextIndex}: ${this.lotes.size === 0 ? "Primary" : "Secondary"} Zone`;
     this.nextIndex++;
 
     const geojson = polygonLayer.toGeoJSON();
@@ -91,8 +91,8 @@ export class LotesManager {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       periodos: [
-        { id: "P1", name: "Campaña Chica", start: "Ene", end: "May", cropId: "papa_canchan" },
-        { id: "P2", name: "Campaña Grande", start: "Jun", end: "Dic", cropId: "habas_verdes" }
+        { id: "P1", name: "Short Season", start: "Jan", end: "May", cropId: "papa_canchan" },
+        { id: "P2", name: "Main Season", start: "Jun", end: "Dec", cropId: "habas_verdes" }
       ]
     };
 
@@ -103,7 +103,7 @@ export class LotesManager {
   }
 
   /**
-   * Actualizar la geometría de un lote existente (por edición con Geoman)
+   * Update an existing lot's geometry (from Geoman editing)
    */
   updateGeometry(id, polygonLayer) {
     const lote = this.lotes.get(id);
@@ -118,7 +118,7 @@ export class LotesManager {
     lote.perimeter_m = stats.perimeter_m;
     lote.centroid = stats.centroid;
     lote.updated_at = new Date().toISOString();
-    // Al editar se pasa a estado borrador hasta volver a confirmar
+    // Editing moves the lot back to draft status until re-confirmed
     if (lote.status === "confirmed") {
       lote.status = "draft";
     }
@@ -128,7 +128,7 @@ export class LotesManager {
   }
 
   /**
-   * Confirmar la forma del lote activo
+   * Confirm the active lot's boundary
    */
   confirmLote(id) {
     const lote = this.lotes.get(id);
@@ -141,7 +141,7 @@ export class LotesManager {
   }
 
   /**
-   * Actualizar propiedades (nombre, cultivo, etc.)
+   * Update lot properties (name, crop, etc.)
    */
   updateLote(id, updates) {
     const lote = this.lotes.get(id);
@@ -153,7 +153,7 @@ export class LotesManager {
   }
 
   /**
-   * Eliminar un lote por ID
+   * Delete a lot by ID
    */
   removeLote(id) {
     if (this.lotes.delete(id)) {
@@ -168,7 +168,7 @@ export class LotesManager {
   }
 
   /**
-   * Vaciar todos los lotes
+   * Clear all lots
    */
   clearAll() {
     this.lotes.clear();
@@ -178,7 +178,7 @@ export class LotesManager {
   }
 
   /**
-   * Generar GeoJSON estricto según Contrato CC-02
+   * Generate strict GeoJSON per CC-02 Contract
    */
   toFeatureCollection() {
     const features = [];
@@ -213,7 +213,7 @@ export class LotesManager {
   }
 
   /**
-   * Generar Payload completo para enviar a la API de simulación
+   * Generate complete payload to send to the simulation API
    */
   toSimulationPayload(options = {}) {
     const selected = this.getSelected();
@@ -235,7 +235,7 @@ export class LotesManager {
   }
 
   /**
-   * Cálculo de área, perímetro y centroide usando Turf.js con fallback matemático
+   * Calculate area, perimeter, and centroid using Turf.js with mathematical fallback
    */
   calculateGeometryStats(geojson) {
     try {
@@ -255,10 +255,10 @@ export class LotesManager {
         };
       }
     } catch (e) {
-      console.warn("Fallo cálculo con Turf.js, usando fallback:", e);
+      console.warn("Turf.js calculation failed, using fallback:", e);
     }
 
-    // Fallback básico aproximado
+    // Basic approximate fallback
     return {
       area_m2: 25000,
       area_ha: 2.5,
@@ -268,7 +268,7 @@ export class LotesManager {
   }
 
   /**
-   * Persistencia en localStorage
+   * Persist to localStorage
    */
   saveToStorage() {
     try {
@@ -279,12 +279,12 @@ export class LotesManager {
       };
       localStorage.setItem(CONFIG.STORAGE_KEYS.LOTES, JSON.stringify(data));
     } catch (e) {
-      console.warn("No se pudo guardar en localStorage:", e);
+      console.warn("Could not save to localStorage:", e);
     }
   }
 
   /**
-   * Cargar desde localStorage
+   * Load from localStorage
    */
   loadFromStorage() {
     try {
@@ -298,7 +298,7 @@ export class LotesManager {
         }
       }
     } catch (e) {
-      console.warn("Error cargando de localStorage:", e);
+      console.warn("Error loading from localStorage:", e);
     }
   }
 }

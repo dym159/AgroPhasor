@@ -1,7 +1,7 @@
 """
-Servicio de Simulación de Parcela para EDO 2 (Balance Hidrológico Radicular).
-Conecta el forzamiento climático (NASA POWER / GPM / SMAP) y parámetros de terreno (SRTM)
-con el motor agrofísico `edo2_engine`.
+Parcel Simulation Service for ODE 2 (Root-Zone Water Balance).
+Connects climate forcing (NASA POWER / GPM / SMAP) and terrain parameters (SRTM)
+to the `edo2_engine` agrophysical solver.
 """
 
 import math
@@ -19,11 +19,11 @@ from backend.core.edo2_engine import (
 
 
 class ParcelEDO2Service:
-    """Servicio agrofísico para la ejecución de simulaciones EDO 2 a nivel de parcela."""
+    """Agrophysical service for running parcel-level ODE 2 simulations."""
 
     @staticmethod
     def validate_catalog(catalog_path_or_dict: Any) -> Dict[str, Any]:
-        """Valida formalmente un archivo o catálogo JSON para EDO 2."""
+        """Formally validates a JSON file or dictionary catalog for ODE 2."""
         return validate_edo2_catalog(catalog_path_or_dict)
 
     @staticmethod
@@ -43,16 +43,16 @@ class ParcelEDO2Service:
         custom_catalog_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Ejecuta la simulación temporal de EDO 2 para un cultivo y pendiente dados.
-        Permite usar el catálogo oficial o un JSON externo validado.
+        Runs the ODE 2 time-series simulation for a given crop and slope.
+        Supports the official catalog or a validated external JSON catalog.
         """
         crop = get_crop_parameters(crop_id)
 
-        # Si se especifica un catálogo customizado, validarlo y extraer el cultivo si existe
+        # If a custom catalog is specified, validate it before simulating
         if custom_catalog_path:
             validation = validate_edo2_catalog(custom_catalog_path, theta_fc, theta_wp)
             if not validation["valid"]:
-                raise ValueError(f"Catálogo customizado inválido para EDO 2: {validation['errors']}")
+                raise ValueError(f"Invalid custom catalog for ODE 2: {validation['errors']}")
 
         return simulate_edo2_timeseries(
             precip_series=precip_series,

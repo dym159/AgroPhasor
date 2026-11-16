@@ -1,7 +1,7 @@
 """
-Suite de Pruebas Unitarias para EDO 1 (AgroPhasor).
-Verifica estabilidad numérica, límites asintóticos físicos y los 4 criterios de validación.
-Implementado en Python puro para máxima portabilidad.
+Unit Test Suite for ODE 1 (AgroPhasor).
+Verifies numerical stability, physical asymptotic bounds, and the 4 validation criteria.
+Implemented in pure Python for maximum portability.
 """
 
 import math
@@ -24,7 +24,7 @@ from backend.services.simulation_service import SimulationService
 
 
 def test_tetens_physics():
-    """Verifica que la presión de saturación de Tetens tenga valores físicos correctos."""
+    """Verify that Tetens saturation vapor pressure yields physically accurate values."""
     es_0 = saturation_vapor_pressure(0.0)
     assert 0.60 <= es_0 <= 0.62  # e_s(0°C) ≈ 0.611 kPa
     
@@ -37,15 +37,15 @@ def test_tetens_physics():
 
 def test_nighttime_asymptotic_cooling():
     """
-    Criterio Asintótico: En la noche (sin radiación), la planta debe enfriarse
-    hacia la temperatura del aire por transferencia de calor sensible (Newton).
+    Asymptotic Criterion: At night (no solar radiation), the plant must cool
+    toward air temperature via sensible heat transfer (Newton's cooling).
     """
     crop = get_crop_parameters("maiz")
     t_air = 8.0
-    t_leaf_initial = 22.0  # Hoja caliente que entra a la noche
+    t_leaf_initial = 22.0  # Warm leaf entering nighttime
     
     t_curr = t_leaf_initial
-    for _ in range(4):  # 4 horas de noche
+    for _ in range(4):  # 4 hours of nighttime
         step = solve_edo1_step(
             t_current_c=t_curr,
             t_ext_c=t_air,
@@ -62,15 +62,15 @@ def test_nighttime_asymptotic_cooling():
 
 def test_cooling_with_water_vs_drought_fever():
     """
-    Verifica que el cultivo regado se mantenga fresco y que el cultivo en sequía
-    dispare fiebre foliar al mediodía (Criterios 1 y 2).
+    Verify that an irrigated crop stays cool while a drought-stressed crop
+    triggers midday leaf fever (Criteria 1 and 2).
     """
     crop = get_crop_parameters("maiz")
     t_air = 16.0
-    f_rad = 750.0  # Radiación alta de mediodía
+    f_rad = 750.0  # High midday radiation
     rh = 45.0
     
-    # Caso 1: Suelo bien regado (W = 70 mm > W_crit)
+    # Case 1: Well-watered soil (W = 70 mm > W_crit)
     step_water = solve_edo1_step(
         t_current_c=t_air,
         t_ext_c=t_air,
@@ -80,7 +80,7 @@ def test_cooling_with_water_vs_drought_fever():
         crop=crop
     )
     
-    # Caso 2: Suelo en sequía extrema (W = 10 mm < W_pmp)
+    # Case 2: Soil in extreme drought (W = 10 mm < W_pmp)
     step_drought = solve_edo1_step(
         t_current_c=t_air,
         t_ext_c=t_air,
@@ -97,12 +97,12 @@ def test_cooling_with_water_vs_drought_fever():
 
 
 def test_simulation_service_field_and_smap():
-    """Verifica el procesamiento de parcela y la inferencia automática de GWETROOT (SMAP)."""
+    """Verify parcel processing and automatic GWETROOT (SMAP) inference."""
     mock_nasa_data = {
         "T2M": {f"20230101{h:02d}": 12.0 + 5.0 * math.sin(h * math.pi / 12) for h in range(24)},
         "ALLSKY_SFC_SW_DWN": {f"20230101{h:02d}": max(0.0, 2.5 * math.sin(h * math.pi / 12)) for h in range(24)},
         "RH2M": {f"20230101{h:02d}": 60.0 for h in range(24)},
-        "GWETROOT": {f"20230101{h:02d}": 0.80 for h in range(24)}  # 80% de humedad en raíces según SMAP
+        "GWETROOT": {f"20230101{h:02d}": 0.80 for h in range(24)}  # 80% root-zone wetness per SMAP
     }
     
     grid = [
@@ -110,7 +110,7 @@ def test_simulation_service_field_and_smap():
         {"cell_id": "0_1", "altitude_m": 3250.0, "slope_deg": 12.0, "aspect_deg": 90.0}
     ]
     
-    # Sin especificar soil_water_mm para que lo infiera de NASA GWETROOT
+    # Omit soil_water_mm so it is inferred from NASA GWETROOT
     res = SimulationService.run_field_simulation(
         nasa_hourly_data=mock_nasa_data,
         grid_cells=grid,
@@ -118,7 +118,7 @@ def test_simulation_service_field_and_smap():
         soil_water_mm=None
     )
     
-    assert res["crop"] == "Maíz"
+    assert res["crop"] == "Maize"
     assert res["cells_count"] == 2
     assert res["soil_moisture_source"] == "NASA_SMAP_GWETROOT"
     assert res["soil_water_mm"] > 0

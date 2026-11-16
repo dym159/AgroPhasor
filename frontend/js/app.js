@@ -1,5 +1,5 @@
 /**
- * AgroPhasor - Aplicación Principal (Bootstrap)
+ * AgroPhasor - Main Application (Bootstrap)
  */
 
 import { LotesManager } from './lotes.js';
@@ -10,7 +10,7 @@ import { Escudo3DViewer } from './escudo3d.js';
 import { TerrainSurface } from './terrain.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log("Iniciando AgroPhasor...");
+  console.log("Starting AgroPhasor...");
 
   const lotesManager = new LotesManager();
   const apiService = new ApiService();
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   uiManager.init();
 
-  // Exponer a nivel global para depuración y pruebas desde consola
+  // Expose globally for console debugging and testing
   window.agroPhasor = {
     lotesManager,
     mapManager,
@@ -47,5 +47,5 @@ document.addEventListener('DOMContentLoaded', () => {
     escudo3d
   };
 
-  console.log("AgroPhasor inicializado con éxito con visor de Escudo 2.5D.");
+  console.log("AgroPhasor initialized successfully with 2.5D Shield viewer.");
 });

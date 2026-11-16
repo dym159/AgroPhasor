@@ -1,10 +1,10 @@
-// Cliente HTTP de la simulación de parcela, recomendaciones y búsqueda de localidades.
+// HTTP client for parcel simulation, crop recommendations, and place search.
 
 import { STRATEGY_MODES } from '../data/mockVisualData.js';
 
 export async function fetchCropCycles() {
   const response = await fetch('/api/v1/crop-cycles');
-  if (!response.ok) throw new Error('No se pudo cargar la duración de los cultivos.');
+  if (!response.ok) throw new Error('Could not load crop cycle durations.');
   return response.json();
 }
 
@@ -27,7 +27,7 @@ export function parcelToGeoJsonGeometry(parcel) {
 export async function fetchParcelSimulation(parcel, cropId = 'papa', signal, plan = {}) {
   const geometry = parcelToGeoJsonGeometry(parcel);
   if (!geometry) {
-    throw new Error('Selecciona o dibuja un polígono válido en el mapa.');
+    throw new Error('Select or draw a valid polygon on the map.');
   }
 
   const response = await fetch('/api/v1/parcelas/simulacion', {
@@ -39,7 +39,7 @@ export async function fetchParcelSimulation(parcel, cropId = 'papa', signal, pla
 
   const data = await response.json().catch(() => null);
   if (!response.ok || !data?.cells?.length) {
-    throw new Error(data?.error || data?.detail || 'La simulación de la parcela no está disponible.');
+    throw new Error(data?.error || data?.detail || 'Parcel simulation is currently unavailable.');
   }
   return data;
 }
@@ -73,7 +73,7 @@ export async function fetchSimulation(parcel, strategyId, weights, signal) {
     signal,
   });
 
-  if (!response.ok) throw new Error('No se pudo calcular la rotación recomendada.');
+  if (!response.ok) throw new Error('Could not compute the recommended crop rotation.');
   return response.json();
 }
 
@@ -84,7 +84,7 @@ export async function searchPlaces(query) {
   const params = new URLSearchParams({ q: cleanQuery });
   const response = await fetch(`/api/places?${params}`);
   if (!response.ok) {
-    throw new Error('Buscador no disponible.');
+    throw new Error('Place search is unavailable.');
   }
   const data = await response.json();
   return Array.isArray(data) ? data : [];
@@ -99,7 +99,7 @@ export async function fetchRotation(payload, signal) {
   });
   const data = await response.json().catch(() => null);
   if (!response.ok || !Array.isArray(data?.routes)) {
-    throw new Error(data?.error || 'No se pudo calcular la rotación.');
+    throw new Error(data?.error || 'Could not compute the crop rotation.');
   }
   return data;
 }

@@ -37,7 +37,7 @@ function createOverzoomImageryTile({ x, y, z }, done) {
     };
     image.onerror = () => {
       if (sourceZoom <= lowestZoom) {
-        done(new Error('Sin imagen satelital para esta tesela.'), tile);
+        done(new Error('No satellite imagery available for this tile.'), tile);
         return;
       }
       sourceZoom -= 1;
@@ -69,14 +69,14 @@ export function mountParcelSelectorMap(container, state, callbacks) {
   const locateBtn = createElement('button', {
     type: 'button',
     className: 'btn',
-    text: 'Mi ubicación',
+    text: 'My location',
     onClick: handleGeolocation,
   });
 
   const deleteBtn = createElement('button', {
     type: 'button',
     className: 'btn btn-danger',
-    text: 'Eliminar terreno',
+    text: 'Remove parcel',
     attrs: state.hasActiveTerrain ? {} : { disabled: 'true' },
     onClick: () => {
       if (activePolygonLayer) {
@@ -94,7 +94,7 @@ export function mountParcelSelectorMap(container, state, callbacks) {
   const confirmBtn = createElement('button', {
     type: 'button',
     className: 'btn btn-accent',
-    text: 'Confirmar terreno',
+    text: 'Confirm parcel',
     attrs: state.hasActiveTerrain ? {} : { disabled: 'true' },
     onClick: () => {
       if (!state.hasActiveTerrain) return;
@@ -117,7 +117,7 @@ export function mountParcelSelectorMap(container, state, callbacks) {
   const retryButton = createElement('button', {
     type: 'button',
     className: 'btn',
-    text: 'Reintentar',
+    text: 'Retry',
     onClick: callbacks.onRetrySimulation,
   });
   const statusBar = createElement('div', {
@@ -191,12 +191,12 @@ export function mountParcelSelectorMap(container, state, callbacks) {
         }),
         onEachFeature: ({ properties: cell }, layer) => {
           layer.bindTooltip(
-            `Celda ${cell.cell_id} · ${cell.latitude.toFixed(5)}°, ${cell.longitude.toFixed(5)}°<br>` +
+            `Cell ${cell.cell_id} · ${cell.latitude.toFixed(5)}°, ${cell.longitude.toFixed(5)}°<br>` +
               (cell.shield_enabled
-                ? `Dosel medio ${cell.mean_canopy_temp} °C (mín ${cell.min_canopy_temp} °C / máx ${cell.max_canopy_temp} °C)<br>`
-                : 'Suelo desnudo · Exposición a la lluvia<br>') +
-              `SRTM ${cell.altitude_m.toFixed(1)} m · pendiente ${cell.slope_deg.toFixed(1)}°<br>` +
-              `Fertilidad ${Math.round(cell.eta_nutrientes * 100)} % · limitante ${cell.limiting_nutrient}`
+                ? `Mean canopy ${cell.mean_canopy_temp} °C (min ${cell.min_canopy_temp} °C / max ${cell.max_canopy_temp} °C)<br>`
+                : 'Bare soil · Rainfall exposure<br>') +
+              `SRTM ${cell.altitude_m.toFixed(1)} m · slope ${cell.slope_deg.toFixed(1)}°<br>` +
+              `Fertility ${Math.round(cell.eta_nutrientes * 100)}% · limiting ${cell.limiting_nutrient}`
           );
         },
       }
@@ -240,8 +240,8 @@ function createPlaceSearchControl(onSelectPlace) {
     type: 'search',
     className: 'stage-search-input',
     attrs: {
-      placeholder: 'Buscar localidad...',
-      'aria-label': 'Buscar distrito, ciudad o valle',
+      placeholder: 'Search locality...',
+      'aria-label': 'Search district, city, or valley',
     },
   });
 
@@ -367,6 +367,6 @@ function initializeLeafletMap(mapHost, parcel, hasActiveTerrain, onPolygonCreate
 function renderFallbackSelector(body) {
   body.append(createElement('div', {
     className: 'fallback-map-panel',
-    text: 'El mapa no está disponible. Recarga la página para dibujar tu terreno.',
+    text: 'The map is unavailable. Reload the page to draw your parcel.',
   }));
 }

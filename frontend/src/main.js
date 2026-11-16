@@ -64,7 +64,7 @@ function bootstrapApp() {
       store.setState({
         parcelSimulationResult: null,
         parcelSimulationFailed: false,
-        parcelSimulationStatusText: 'Dibuja el contorno de tu terreno en el mapa.',
+        parcelSimulationStatusText: 'Draw your parcel boundary on the map.',
       });
       return;
     }
@@ -74,6 +74,7 @@ function bootstrapApp() {
       state.selectedParcel.polygon,
       cropId,
       state.phases, state.simulationDate,
+      state.climateDeltaT, state.climateDeltaPct,
       !state.isBareSoil && !selectedCrop,
     ]);
     if (!retry && signature === lastParcelSignature) return;
@@ -89,8 +90,8 @@ function bootstrapApp() {
       parcelSimulationResult: null,
       parcelSimulationFailed: false,
       parcelSimulationStatusText: state.isBareSoil
-        ? 'Calculando el suelo desnudo con NASA POWER y SRTM…'
-        : 'Calculando el escudo con NASA POWER y SRTM…',
+        ? 'Computing bare soil with NASA POWER and SRTM…'
+        : 'Computing thermal shield with NASA POWER and SRTM…',
     });
 
     parcelSimulationTimer = setTimeout(async () => {
@@ -100,17 +101,22 @@ function bootstrapApp() {
           cropId,
           controller.signal,
           !state.isBareSoil && state.phases.length && state.phases.every((phase) => phase.cropId && phase.harvest)
-            ? { phases: state.phases, selected_date: state.simulationDate && state.simulationDate >= state.phases[0].start && state.simulationDate <= state.phases.at(-1).harvest ? state.simulationDate : state.phases[0].start }
+            ? {
+                phases: state.phases,
+                selected_date: state.simulationDate && state.simulationDate >= state.phases[0].start && state.simulationDate <= state.phases.at(-1).harvest ? state.simulationDate : state.phases[0].start,
+                delta_T_whatif: state.climateDeltaT ?? 0,
+                delta_P_pct_whatif: state.climateDeltaPct ?? 0,
+              }
             : {}
         );
         if (controller.signal.aborted) return;
 
         const cropLabel = result.reference_crop_used || (!state.isBareSoil && !selectedCrop)
-          ? `${result.crop} (referencia)` : result.crop;
+          ? `${result.crop} (reference)` : result.crop;
 
         store.setState({
           parcelSimulationResult: result,
-          parcelSimulationStatusText: `${cropLabel} · ${result.date} · ${result.cells_count} celdas de 30 m`,
+          parcelSimulationStatusText: `${cropLabel} · ${result.date} · ${result.cells_count} 30 m cells`,
         });
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -129,7 +135,7 @@ function bootstrapApp() {
       const current = store.getState();
       if (current.knobsLocked || current.knobs[knobId] === value) return;
       const nextKnobs = rebalanceKnobs(current.knobs, knobId, value);
-      store.setState({ knobs: nextKnobs });
+      store.setState({ knobs: nextKnobs, selectedSubRouteId: null });
     },
     () => store.setState({ knobsLocked: !store.getState().knobsLocked })
   );
@@ -191,6 +197,10 @@ function bootstrapApp() {
       store.setState({ phases: nextPhases });
       scheduleParcelSimulation();
     },
+    onClimateWhatIf: (climateDeltaT, climateDeltaPct) => {
+      store.setState({ climateDeltaT, climateDeltaPct });
+      scheduleParcelSimulation();
+    },
   });
 
   const handleDeleteTerrain = () => {
@@ -203,7 +213,7 @@ function bootstrapApp() {
       centerMode: 'select',
       parcelSimulationResult: null,
       parcelSimulationFailed: false,
-      parcelSimulationStatusText: 'Terreno eliminado. Selecciona o dibuja otro lote.',
+      parcelSimulationStatusText: 'Parcel removed. Select or draw another parcel.',
     });
   };
 
@@ -218,7 +228,7 @@ function bootstrapApp() {
       store.setState({
         selectedParcel: {
           id: `custom-${Date.now()}`,
-          name: 'Terreno seleccionado',
+          name: 'Selected parcel',
           center: [centerLat, centerLng],
           polygon: polygonCoords,
         },

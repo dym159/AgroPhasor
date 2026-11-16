@@ -1,4 +1,4 @@
-// La escala visual exagera el desgaste en mm respecto al desnivel SRTM en m.
+// Visual scaling exaggerates topsoil loss in mm relative to SRTM relief in meters.
 const SINK_PER_MM = 0.0006;
 
 export function buildParcelSimulationMesh(parcel, cells) {

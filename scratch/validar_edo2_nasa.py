@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 def get_nasa_power_daily(lat=-12.06, lon=-75.21, start="20230501", end="20230630"):
     """
-    Descarga datos agroclimáticos diarios de NASA POWER para la estación seca/transición
-    (mayo-junio en los Andes centrales, ideal para probar agotamiento hídrico y riego).
+    Fetch daily agro-climatic data from NASA POWER for the dry/transition season
+    (May-June in the central Andes, ideal for testing water depletion and irrigation).
     """
     url = (
         f"https://power.larc.nasa.gov/api/temporal/daily/point?"
@@ -21,29 +21,29 @@ def get_nasa_power_daily(lat=-12.06, lon=-75.21, start="20230501", end="20230630
 
 class AgroPhasorEDO2:
     """
-    Implementación rigurosa de EDO 2: Balance Hidrológico Radicular (AgroPhasor.pdf, Sec. 3.2.2 y 3.3)
+    Strict implementation of ODE 2: Root-Zone Hydrological Balance (AgroPhasor.pdf, Sec. 3.2.2 & 3.3)
     dWi,j/dt = P0(t)*cos(theta) + eta_riego*I(t) - ETc,i,j(Ti,j, Wi,j) - kd*sin(theta)*Wi,j
-    Sujeto a: 0 <= Wi,j(t) <= Wcc,i,j(Hi,j)
+    Subject to: 0 <= Wi,j(t) <= Wcc,i,j(Hi,j)
     """
     def __init__(self,
-                 theta_fc=0.30,      # Capacidad de campo (m3/m3 - SSURGO / WSS)
-                 theta_wp=0.14,      # Punto de marchitez permanente (m3/m3 - SSURGO / WSS)
-                 H_soil=400.0,       # Espesor capa radicular fértil (mm)
-                 slope_deg=8.0,      # Pendiente local SRTM (grados)
-                 p_c=0.45,           # Fracción de agotamiento permisible (FAO 56 / CDL)
-                 gamma_max=2.2,      # Coeficiente transpirativo max (mm/(kPa*día))
-                 E_suelo_0=2.0,      # Evaporación basal de suelo desnudo (mm/día)
-                 lambda_B=0.35,      # Factor de extinción de radiación por biomasa
-                 B=4.0,              # Biomasa del cultivo (t/ha)
-                 kd=0.03,            # Coeficiente de drenaje gravitacional por pendiente
-                 eta_riego=0.85):    # Eficiencia del sistema de riego
+                 theta_fc=0.30,      # Field capacity (m3/m3 - SSURGO / WSS)
+                 theta_wp=0.14,      # Permanent wilting point (m3/m3 - SSURGO / WSS)
+                 H_soil=400.0,       # Fertile root layer thickness (mm)
+                 slope_deg=8.0,      # Local SRTM slope (degrees)
+                 p_c=0.45,           # Allowable depletion fraction (FAO 56 / CDL)
+                 gamma_max=2.2,      # Max transpirational coefficient (mm/(kPa*day))
+                 E_suelo_0=2.0,      # Basal bare soil evaporation (mm/day)
+                 lambda_B=0.35,      # Biomass radiation extinction factor
+                 B=4.0,              # Crop biomass (t/ha)
+                 kd=0.03,            # Slope gravitational drainage coefficient
+                 eta_riego=0.85):    # Irrigation system efficiency
         self.H_soil = H_soil
         self.theta_fc = theta_fc
         self.theta_wp = theta_wp
         self.W_cc = theta_fc * H_soil   # 120.0 mm
         self.W_pmp = theta_wp * H_soil  # 56.0 mm
         self.p_c = p_c
-        # Umbral crítico de confort estomático
+        # Stomatal comfort critical threshold
         self.W_crit = self.W_cc - self.p_c * (self.W_cc - self.W_pmp) # 91.2 mm
         
         self.slope_deg = slope_deg
@@ -59,13 +59,13 @@ class AgroPhasorEDO2:
         self.eta_riego = eta_riego
 
     def vpd_kpa(self, T, rh):
-        # Ecuación de Tetens para presión de vapor saturada y déficit
+        # Tetens equation for saturation vapor pressure and vapor pressure deficit
         es = 0.6108 * math.exp((17.27 * T) / (T + 237.3))
         ea = es * (rh / 100.0)
         return max(0.0, es - ea)
 
     def gamma_conductance(self, W):
-        """Conductancia estomática gamma_c(W) de AgroPhasor.pdf (Sec. 3.3)"""
+        """Stomatal conductance gamma_c(W) from AgroPhasor.pdf (Sec. 3.3)"""
         eps = 1e-4
         if W >= self.W_crit:
             return self.gamma_max
@@ -82,7 +82,7 @@ class AgroPhasorEDO2:
             gamma = self.gamma_conductance(W)
             transp = gamma * vpd
         else:
-            transp = 0.0 # Transición / suelo en barbecho o rastrojo
+            transp = 0.0 # Transition / fallow or stubble soil
             
         evap_soil = self.E_suelo_0 * (W / max(eps, self.W_cc)) * math.exp(-self.lambda_B * self.B)
         return transp, evap_soil
@@ -96,7 +96,7 @@ class AgroPhasorEDO2:
         dW_dt = infil - ETc - drainage
         W_tentative = W + dW_dt * dt
         
-        # Frontera superior de saturación W_cc: excedente es escorrentía superficial
+        # Upper saturation boundary W_cc: excess leaves as surface runoff
         runoff = 0.0
         if W_tentative > self.W_cc:
             runoff = W_tentative - self.W_cc
@@ -110,33 +110,33 @@ class AgroPhasorEDO2:
 
 def run_validation():
     print("=" * 90)
-    print("VALIDACIÓN CIENTÍFICA DE EDO 2: BALANCE HIDROLÓGICO RADICULAR (AgroPhasor)")
+    print("SCIENTIFIC VALIDATION OF ODE 2: ROOT-ZONE HYDROLOGICAL BALANCE (AgroPhasor)")
     print("=" * 90)
     
-    # 1. Obtener datos reales de NASA POWER
-    print("[1/5] Conectando a NASA POWER API (Valle del Mantaro: -12.06°, -75.21°)...")
+    # 1. Fetch real NASA POWER data
+    print("[1/5] Connecting to NASA POWER API (Mantaro Valley: -12.06°, -75.21°)...")
     data = get_nasa_power_daily(start="20230501", end="20230619")
     days = sorted(data['PRECTOTCORR'].keys())
     N = len(days)
-    print(f"      Descargados {N} días de datos meteorológicos y edáficos.")
+    print(f"      Downloaded {N} days of meteorological and soil data.")
     
     precip_arr = np.array([data['PRECTOTCORR'][d] for d in days])
     t2m_arr = np.array([data['T2M'][d] for d in days])
     rh_arr = np.array([data['RH2M'][d] for d in days])
     smap_gwet = np.array([data['GWETROOT'][d] for d in days])
     
-    # Parámetros del modelo
+    # Model parameters
     sim_base = AgroPhasorEDO2(slope_deg=10.0)
     
-    # Condición inicial W(0) calibrada con SMAP:
+    # Initial condition W(0) calibrated with SMAP:
     # W(0) = W_pmp + SMAP_wetness * (W_cc - W_pmp)
     W0 = sim_base.W_pmp + smap_gwet[0] * (sim_base.W_cc - sim_base.W_pmp)
-    print(f"[2/5] Inicialización SMAP: GWETROOT={smap_gwet[0]:.2f} -> W(0) = {W0:.1f} mm")
-    print(f"      Capacidad de Campo (Wcc) = {sim_base.W_cc:.1f} mm")
-    print(f"      Umbral Crítico (Wcrit)   = {sim_base.W_crit:.1f} mm")
-    print(f"      Punto de Marchitez (Wpmp)= {sim_base.W_pmp:.1f} mm")
+    print(f"[2/5] SMAP Initialization: GWETROOT={smap_gwet[0]:.2f} -> W(0) = {W0:.1f} mm")
+    print(f"      Field Capacity (Wcc)   = {sim_base.W_cc:.1f} mm")
+    print(f"      Critical Threshold     = {sim_base.W_crit:.1f} mm")
+    print(f"      Wilting Point (Wpmp)   = {sim_base.W_pmp:.1f} mm")
     
-    # --- SIMULACIÓN 1: Secano Natural (Sin Riego, I=0) ---
+    # --- SIMULATION 1: Rainfed Natural Regime (No Irrigation, I=0) ---
     W_secano = [W0]
     ETc_secano = []
     Transp_secano = []
@@ -158,8 +158,8 @@ def run_validation():
         Runoff_secano.append(ro)
         dW_secano.append(dw)
         
-    # --- SIMULACIÓN 2: Riego Inteligente (Alerta AgroPhasor Sec. 2.6.2) ---
-    # Trigger cuando W <= W_crit -> I_sug = (W_cc - W) / eta_riego
+    # --- SIMULATION 2: Smart Irrigation (AgroPhasor Alert Sec. 2.6.2) ---
+    # Trigger when W <= W_crit -> I_sug = (W_cc - W) / eta_irrigation
     W_riego = [W0]
     Irrig_applied = []
     ETc_riego = []
@@ -171,10 +171,10 @@ def run_validation():
         T = t2m_arr[t]
         rh = rh_arr[t]
         
-        # Chequeo de alerta de riego
+        # Irrigation alert check
         I_today = 0.0
         if W_curr <= sim_base.W_crit:
-            # Lámina sugerida exacta según PDF Sec. 2.6.2
+            # Exact suggested depth per PDF Sec. 2.6.2
             I_today = (sim_base.W_cc - W_curr) / sim_base.eta_riego
             events_riego.append((t, days[t], W_curr, I_today))
             
@@ -184,7 +184,7 @@ def run_validation():
             W_riego.append(W_next)
         ETc_riego.append(etc)
         
-    # --- SIMULACIÓN 3: Efecto Pendiente SRTM (0° vs 25° de ladera) ---
+    # --- SIMULATION 3: SRTM Slope Effect (0° flat vs 25° hillside) ---
     sim_plano = AgroPhasorEDO2(slope_deg=0.0)
     sim_ladera = AgroPhasorEDO2(slope_deg=25.0)
     W_plano = [W0]
@@ -199,8 +199,8 @@ def run_validation():
             W_plano.append(W_next_p)
             W_ladera.append(W_next_l)
             
-    # --- SIMULACIÓN 4: Modo Cultivo vs Modo Transición (Rastrojo q(t)=Transicion) ---
-    sim_trans = AgroPhasorEDO2(slope_deg=10.0, B=1.5) # Rastrojo 1.5 t/ha
+    # --- SIMULATION 4: Crop Mode vs Transition Mode (Residue q(t)=Transition) ---
+    sim_trans = AgroPhasorEDO2(slope_deg=10.0, B=1.5) # 1.5 t/ha stover
     W_trans = [W0]
     for t in range(N):
         P0 = precip_arr[t]
@@ -210,9 +210,9 @@ def run_validation():
         if t < N - 1:
             W_trans.append(W_next_t)
 
-    print("\n[3/5] REPORTE DE EJECUCIÓN TEMPORAL (Muestra de días representativos)")
+    print("\n[3/5] EXECUTION TIME SERIES REPORT (Sample of representative days)")
     print("-" * 105)
-    print(f"{'Fecha':<9} | {'P0 (mm)':<7} | {'T (°C)':<6} | {'RH (%)':<6} | {'W_sec (mm)':<10} | {'γ_c/γ_max':<9} | {'ETc (mm)':<8} | {'Drenaje':<7} | {'Diagnóstico Fisiológico':<22}")
+    print(f"{'Date':<9} | {'P0 (mm)':<7} | {'T (°C)':<6} | {'RH (%)':<6} | {'W_dry (mm)':<10} | {'γ_c/γ_max':<9} | {'ETc (mm)':<8} | {'Drain':<7} | {'Physiological Diagnostic':<24}")
     print("-" * 105)
     
     sample_indices = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, N-1]
@@ -227,86 +227,86 @@ def run_validation():
         dr_val = Drain_secano[idx]
         
         if w_val >= sim_base.W_crit:
-            diag = "Confort / Escudo Azul"
+            diag = "Comfort / Blue Shield"
         elif w_val > sim_base.W_pmp:
-            diag = f"Estrés Hídrico ({gamma_rel*100:.0f}%)"
+            diag = f"Water Stress ({gamma_rel*100:.0f}%)"
         else:
-            diag = "Marchitez / Escudo Rojo"
+            diag = "Wilting / Red Shield"
             
-        print(f"{d_str:<9} | {p_val:<7.1f} | {t_val:<6.1f} | {rh_val:<6.1f} | {w_val:<10.1f} | {gamma_rel:<9.2f} | {etc_val:<8.2f} | {dr_val:<7.2f} | {diag:<22}")
+        print(f"{d_str:<9} | {p_val:<7.1f} | {t_val:<6.1f} | {rh_val:<6.1f} | {w_val:<10.1f} | {gamma_rel:<9.2f} | {etc_val:<8.2f} | {dr_val:<7.2f} | {diag:<24}")
 
-    print("\n[4/5] VALIDACIÓN DE CRITERIOS FÍSICOS DE EDO 2:")
-    # Criterio 1: Acotamiento
+    print("\n[4/5] ODE 2 PHYSICAL CRITERIA VALIDATION:")
+    # Criterion 1: Bounding
     min_w = min(W_secano)
     max_w = max(W_secano)
     crit1_pass = (min_w >= 0.0) and (max_w <= sim_base.W_cc + 1e-6)
-    print(f"  ✓ Criterio 1 (Fronteras Físicas 0 <= W <= Wcc): {'SUPERADO' if crit1_pass else 'FALLÓ'} (Min: {min_w:.2f} mm, Max: {max_w:.2f} mm, Wcc: {sim_base.W_cc:.2f} mm)")
+    print(f"  ✓ Criterion 1 (Physical Bounds 0 <= W <= Wcc): {'PASSED' if crit1_pass else 'FAILED'} (Min: {min_w:.2f} mm, Max: {max_w:.2f} mm, Wcc: {sim_base.W_cc:.2f} mm)")
 
-    # Criterio 2: Regulación estomática
+    # Criterion 2: Stomatal regulation
     crit2_pass = (W_secano[-1] < sim_base.W_crit) and (sim_base.gamma_conductance(W_secano[-1]) < sim_base.gamma_max)
-    print(f"  ✓ Criterio 2 (Respuesta Estomática al Estrés): {'SUPERADO' if crit2_pass else 'FALLÓ'} (Conductancia cae a medida que W < Wcrit)")
+    print(f"  ✓ Criterion 2 (Stomatal Stress Response): {'PASSED' if crit2_pass else 'FAILED'} (Conductance drops as W < Wcrit)")
 
-    # Criterio 3: Topografía SRTM
+    # Criterion 3: SRTM topography
     crit3_pass = W_plano[-1] > W_ladera[-1]
-    print(f"  ✓ Criterio 3 (Efecto de Pendiente SRTM): {'SUPERADO' if crit3_pass else 'FALLÓ'} (Humedad final plano: {W_plano[-1]:.1f} mm vs ladera 25°: {W_ladera[-1]:.1f} mm)")
+    print(f"  ✓ Criterion 3 (SRTM Slope Effect): {'PASSED' if crit3_pass else 'FAILED'} (Final moisture flat: {W_plano[-1]:.1f} mm vs 25° slope: {W_ladera[-1]:.1f} mm)")
 
-    # Criterio 4: Eficacia de Riego
-    print(f"  ✓ Criterio 4 (Alertas y Reposición de Riego): SUPERADO ({len(events_riego)} riegos aplicados, humedad mínima en riego: {min(W_riego):.1f} mm vs secano: {min_w:.1f} mm)")
+    # Criterion 4: Irrigation effectiveness
+    print(f"  ✓ Criterion 4 (Alerts & Irrigation Replenishment): PASSED ({len(events_riego)} irrigations applied, min irrigated moisture: {min(W_riego):.1f} mm vs rainfed: {min_w:.1f} mm)")
     for ev in events_riego:
-        print(f"      -> Evento {ev[1]}: W cayó a {ev[2]:.1f} mm -> Riego sugerido {ev[3]:.1f} mm")
+        print(f"      -> Event {ev[1]}: W dropped to {ev[2]:.1f} mm -> Suggested irrigation {ev[3]:.1f} mm")
 
-    # [5/5] Generar Gráficas de Validación
-    print("\n[5/5] Generando panel gráfico de validación en scratch/validacion_edo2_nasa.png...")
+    # [5/5] Generate Validation Charts
+    print("\n[5/5] Generating validation chart panel at scratch/validacion_edo2_nasa.png...")
     time_steps = np.arange(N)
     
     fig, axs = plt.subplots(3, 1, figsize=(12, 11), sharex=True)
     
-    # Subplot 1: Dinámica de Humedad Radicular W(t)
-    axs[0].set_title("Validación EDO 2: Balance Hidrológico Radicular forzado con NASA POWER & SMAP", fontsize=13, fontweight='bold')
-    axs[0].plot(time_steps, W_secano, 'r-', linewidth=2.0, label="W(t) Secano (Sin riego)")
-    axs[0].plot(time_steps, W_riego, 'b-', linewidth=2.0, label="W(t) Riego Inteligente AgroPhasor")
-    axs[0].axhline(sim_base.W_cc, color='navy', linestyle='--', label=f"Wcc (Capacidad de Campo: {sim_base.W_cc:.0f} mm)")
-    axs[0].axhline(sim_base.W_crit, color='orange', linestyle='--', label=f"Wcrit (Estrés estomático: {sim_base.W_crit:.0f} mm)")
-    axs[0].axhline(sim_base.W_pmp, color='red', linestyle=':', label=f"Wpmp (Punto marchitez: {sim_base.W_pmp:.0f} mm)")
-    axs[0].fill_between(time_steps, sim_base.W_crit, sim_base.W_cc, color='green', alpha=0.15, label="Zona de Confort Óptimo")
-    axs[0].fill_between(time_steps, sim_base.W_pmp, sim_base.W_crit, color='orange', alpha=0.15, label="Zona de Estrés Moderado")
-    axs[0].fill_between(time_steps, 0, sim_base.W_pmp, color='red', alpha=0.15, label="Zona de Marchitez Permanente")
-    axs[0].set_ylabel("Humedad Radicular W (mm)", fontsize=11)
+    # Subplot 1: Root-Zone Moisture Dynamics W(t)
+    axs[0].set_title("ODE 2 Validation: Root-Zone Hydrological Balance Forced with NASA POWER & SMAP", fontsize=13, fontweight='bold')
+    axs[0].plot(time_steps, W_secano, 'r-', linewidth=2.0, label="W(t) Rainfed (No irrigation)")
+    axs[0].plot(time_steps, W_riego, 'b-', linewidth=2.0, label="W(t) Smart Irrigation AgroPhasor")
+    axs[0].axhline(sim_base.W_cc, color='navy', linestyle='--', label=f"Wcc (Field Capacity: {sim_base.W_cc:.0f} mm)")
+    axs[0].axhline(sim_base.W_crit, color='orange', linestyle='--', label=f"Wcrit (Stomatal Stress: {sim_base.W_crit:.0f} mm)")
+    axs[0].axhline(sim_base.W_pmp, color='red', linestyle=':', label=f"Wpmp (Wilting Point: {sim_base.W_pmp:.0f} mm)")
+    axs[0].fill_between(time_steps, sim_base.W_crit, sim_base.W_cc, color='green', alpha=0.15, label="Optimal Comfort Zone")
+    axs[0].fill_between(time_steps, sim_base.W_pmp, sim_base.W_crit, color='orange', alpha=0.15, label="Moderate Stress Zone")
+    axs[0].fill_between(time_steps, 0, sim_base.W_pmp, color='red', alpha=0.15, label="Permanent Wilting Zone")
+    axs[0].set_ylabel("Root Moisture W (mm)", fontsize=11)
     axs[0].grid(True, linestyle=':', alpha=0.6)
     axs[0].legend(loc='upper right', fontsize=9, ncol=2)
     
-    # Subplot 2: Forzamiento Meteorológico (Lluvia NASA GPM/POWER y Riegos)
-    axs[1].bar(time_steps - 0.2, precip_arr, width=0.4, color='teal', label="Precipitación P0 (NASA POWER/GPM)", alpha=0.8)
-    axs[1].bar(time_steps + 0.2, Irrig_applied, width=0.4, color='blue', label="Lámina Riego Isugerido (AgroPhasor)", alpha=0.8)
-    axs[1].set_ylabel("Aporte Hídrico (mm/día)", fontsize=11)
+    # Subplot 2: Meteorological Forcing (NASA GPM/POWER Rainfall & Irrigations)
+    axs[1].bar(time_steps - 0.2, precip_arr, width=0.4, color='teal', label="Precipitation P0 (NASA POWER/GPM)", alpha=0.8)
+    axs[1].bar(time_steps + 0.2, Irrig_applied, width=0.4, color='blue', label="Suggested Irrigation Depth Isug (AgroPhasor)", alpha=0.8)
+    axs[1].set_ylabel("Water Input (mm/day)", fontsize=11)
     axs[1].grid(True, linestyle=':', alpha=0.6)
     axs[1].legend(loc='upper right', fontsize=10)
     
-    # Subplot 3: Componentes de Pérdida (ETc vs Drenaje) y Conductancia Estomática
+    # Subplot 3: Loss Components (ETc vs Drainage) and Stomatal Conductance
     ax3_twin = axs[2].twinx()
-    axs[2].plot(time_steps, ETc_secano, 'purple', linewidth=1.8, label="ETc Secano (mm/día)")
-    axs[2].plot(time_steps, Drain_secano, 'brown', linestyle='--', linewidth=1.5, label="Drenaje Ladera kd*sin(θ)*W")
+    axs[2].plot(time_steps, ETc_secano, 'purple', linewidth=1.8, label="Rainfed ETc (mm/day)")
+    axs[2].plot(time_steps, Drain_secano, 'brown', linestyle='--', linewidth=1.5, label="Slope Drainage kd*sin(θ)*W")
     
     gamma_curve = [sim_base.gamma_conductance(w) / sim_base.gamma_max for w in W_secano]
-    ax3_twin.plot(time_steps, gamma_curve, 'g-', linewidth=2.0, label="Conductancia Relativa γc/γmax")
-    ax3_twin.set_ylabel("Factor de Transpiración γc / γmax", color='green', fontsize=11)
+    ax3_twin.plot(time_steps, gamma_curve, 'g-', linewidth=2.0, label="Relative Conductance γc/γmax")
+    ax3_twin.set_ylabel("Transpiration Factor γc / γmax", color='green', fontsize=11)
     ax3_twin.tick_params(axis='y', labelcolor='green')
     ax3_twin.set_ylim(-0.05, 1.05)
     
-    axs[2].set_ylabel("Flujos de Pérdida (mm/día)", fontsize=11)
-    axs[2].set_xlabel("Días de Simulación (Mayo - Junio 2023)", fontsize=11)
+    axs[2].set_ylabel("Loss Fluxes (mm/day)", fontsize=11)
+    axs[2].set_xlabel("Simulation Days (May - June 2023)", fontsize=11)
     axs[2].grid(True, linestyle=':', alpha=0.6)
     axs[2].legend(loc='upper left', fontsize=10)
     ax3_twin.legend(loc='upper right', fontsize=10)
     
-    # Eje X con fechas legibles
+    # X-axis with readable date ticks
     step_ticks = np.arange(0, N, 7)
     axs[2].set_xticks(step_ticks)
     axs[2].set_xticklabels([days[i] for i in step_ticks], rotation=30)
     
     plt.tight_layout()
     plt.savefig("scratch/validacion_edo2_nasa.png", dpi=180)
-    print("      Gráfica guardada exitosamente en scratch/validacion_edo2_nasa.png")
+    print("      Chart saved successfully at scratch/validacion_edo2_nasa.png")
     print("=" * 90)
 
 if __name__ == '__main__':

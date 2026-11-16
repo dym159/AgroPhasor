@@ -26,6 +26,8 @@ export function createUiState() {
     isBareSoil: false,
     phases: [],
     plantingStart: monthStart(today.getFullYear(), today.getMonth()),
+    climateDeltaT: 0,
+    climateDeltaPct: 0,
     cropCycles: {},
     parcelSimulationResult: null,
     parcelSimulationFailed: false,

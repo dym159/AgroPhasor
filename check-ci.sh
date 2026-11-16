@@ -1,10 +1,10 @@
 #!/bin/sh
 # ==============================================================================
-# Script de ValidaciÃƒÂ³n Local de CI (AgroPhasor)
-# Basado en el validador de Quippu y en cumplimiento de la tarea Linear CC-01.
-# 1. Gitleaks (DetecciÃƒÂ³n de secretos y credenciales en el historial de commits)
-# 2. AuditorÃƒÂ­a de archivos sensibles versionados y verificaciÃƒÂ³n de .env.example
-# 3. VerificaciÃƒÂ³n de sintaxis / pruebas unitarias si existen en el repositorio
+# Local CI Validation Script (AgroPhasor)
+# Based on Quippu validator and compliant with Linear task CC-01.
+# 1. Gitleaks (Secret and credential scanning in commit history)
+# 2. Tracked sensitive file audit and .env.example verification
+# 3. Syntax check / unit tests if present in the repository
 # ==============================================================================
 set -euo pipefail
 
@@ -12,14 +12,14 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 echo "================================================================"
-echo " [CI Local] Validador Pre-Push / Pre-PR Ã¢â‚¬â€ AgroPhasor            "
+echo " [Local CI] Pre-Push / Pre-PR Validator — AgroPhasor            "
 echo "================================================================"
 
 # ------------------------------------------------------------------------------
-# 1. GITLEAKS (DetecciÃƒÂ³n de Secretos en commits)
+# 1. GITLEAKS (Secret detection in commits)
 # ------------------------------------------------------------------------------
 echo ""
-echo "[1/3] Ejecutando Gitleaks (escaneo de historial)..."
+echo "[1/3] Running Gitleaks (commit history scan)..."
 
 TARGET_BASE="origin/main"
 if ! git rev-parse --verify "$TARGET_BASE" >/dev/null 2>&1; then
@@ -32,13 +32,13 @@ COMMITS_COUNT=$(git rev-list --count "${TARGET_BASE}..HEAD" 2>/dev/null || echo 
 GITLEAKS_ARGS="--source $REPO_ROOT -v --redact"
 
 if [ "$COMMITS_COUNT" -gt 0 ]; then
-    echo "   Escaneando commits de la rama actual: ${TARGET_BASE}..HEAD"
+    echo "   Scanning current branch commits: ${TARGET_BASE}..HEAD"
     GITLEAKS_ARGS="$GITLEAKS_ARGS --log-opts=${TARGET_BASE}..HEAD"
 elif [ "$TOTAL_COMMITS" -gt 3 ]; then
-    echo "   Escaneando ultimos commits: HEAD~3..HEAD"
+    echo "   Scanning recent commits: HEAD~3..HEAD"
     GITLEAKS_ARGS="$GITLEAKS_ARGS --log-opts=HEAD~3..HEAD"
 else
-    echo "   Repositorio inicial ($TOTAL_COMMITS commit(s)): Escaneando historial completo..."
+    echo "   Initial repository ($TOTAL_COMMITS commit(s)): Scanning full history..."
 fi
 
 GITLEAKS_BIN=""
@@ -58,41 +58,41 @@ elif command -v docker >/dev/null 2>&1; then
     docker run --rm -v "$REPO_ROOT:/repo" zricethezav/gitleaks:latest \
         detect --source /repo -v --redact
 else
-    echo "⚠️  ADVERTENCIA: Ni 'gitleaks' ni 'docker' estan disponibles en este entorno." >&2
-    echo "   Recomendacion de seguridad (CC-01): winget install Gitleaks.Gitleaks" >&2
-    echo "   [OK] Omitiendo escaneo de Gitleaks en entorno local sin binario."
+    echo "⚠️  WARNING: Neither 'gitleaks' nor 'docker' is available in this environment." >&2
+    echo "   Security recommendation (CC-01): winget install Gitleaks.Gitleaks" >&2
+    echo "   [OK] Skipping Gitleaks scan in local environment without binary."
 fi
-echo "[OK] Gitleaks: Cero secretos detectados."
+echo "[OK] Gitleaks: Zero secrets detected."
 
 # ------------------------------------------------------------------------------
-# 2. AUDITORÃƒÂA DE ARCHIVOS SENSIBLES Y .env.example
+# 2. SENSITIVE FILES AUDIT AND .env.example CHECK
 # ------------------------------------------------------------------------------
 echo ""
-echo "[2/3] Verificando que no haya archivos privados en el indice de Git..."
+echo "[2/3] Checking that no private files are tracked in Git index..."
 
 TRACKED_SENSITIVE=$(git ls-files | grep -E '(\.env$|\.env\.|\.netrc$|\.pem$|\.key$|id_rsa|.*gcp.*\.json$|.*credentials.*\.json$|.*service_account.*\.json$)' | grep -v '\.env\.example$' || true)
 
 if [ -n "$TRACKED_SENSITIVE" ]; then
-    echo "ERROR: Se encontraron archivos sensibles rastreados por Git:" >&2
+    echo "ERROR: Sensitive files found tracked by Git:" >&2
     echo "$TRACKED_SENSITIVE" >&2
-    echo "       Eliminalos del repositorio y registralos en .gitignore." >&2
+    echo "       Remove them from the repository and add them to .gitignore." >&2
     exit 1
 fi
 
 if [ ! -f "$REPO_ROOT/.env.example" ]; then
-    echo "ADVERTENCIA: No se encontro el archivo .env.example en la raiz del proyecto." >&2
+    echo "WARNING: .env.example file was not found in repository root." >&2
 else
-    echo "[OK] Archivo .env.example presente y seguro."
+    echo "[OK] .env.example file present and safe."
 fi
-echo "[OK] Archivos sensibles: Ninguno detectado en el indice de Git."
+echo "[OK] Sensitive files: None detected in Git index."
 
 # ------------------------------------------------------------------------------
-# 3. VERIFICACIÃƒâ€œN DE CÃƒâ€œDIGO Y PRUEBAS (Backend Python / Frontend TS)
+# 3. CODE AND TEST VERIFICATION (Python Backend / Frontend)
 # ------------------------------------------------------------------------------
 echo ""
-echo "[3/3] Verificacion de codigo y pruebas del proyecto..."
+echo "[3/3] Verifying project code and running tests..."
 
-# Si existe un backend con Python
+# If a Python backend exists
 find_python() {
     for candidate in py python3 python; do
         if command -v "$candidate" >/dev/null 2>&1 && "$candidate" --version >/dev/null 2>&1; then
@@ -104,30 +104,30 @@ find_python() {
 }
 
 if [ -d "$REPO_ROOT/backend" ] || [ -f "$REPO_ROOT/requirements.txt" ] || [ -f "$REPO_ROOT/pyproject.toml" ]; then
-    echo "   Verificando componentes de Python..."
+    echo "   Checking Python components..."
     PYTHON_CMD="$(find_python || true)"
     if [ -n "$PYTHON_CMD" ] && "$PYTHON_CMD" -m pytest --version >/dev/null 2>&1; then
         "$PYTHON_CMD" -m pytest
     elif [ -n "$PYTHON_CMD" ]; then
         "$PYTHON_CMD" -m unittest discover tests
     else
-        echo "   (pytest/python no esta en el entorno local; omitiendo suite Python)"
+        echo "   (pytest/python not found in local environment; skipping Python suite)"
     fi
 fi
 
-# Si existe un frontend con npm/pnpm
+# If a frontend with npm/pnpm exists
 if [ -f "$REPO_ROOT/package.json" ]; then
-    echo "   Verificando componentes de Frontend / Node..."
+    echo "   Checking Frontend / Node components..."
     if command -v npm >/dev/null 2>&1; then
         (npm run typecheck 2>/dev/null || true)
         (npm test 2>/dev/null || true)
     fi
 fi
 
-echo "[OK] Verificacion de codigo finalizada."
+echo "[OK] Code verification completed."
 
 echo ""
 echo "================================================================"
-echo " [EXITO] CI LOCAL APROBADO: El codigo esta listo para envio     "
+echo " [SUCCESS] LOCAL CI PASSED: Code is ready to push               "
 echo "================================================================"
 exit 0

@@ -1,15 +1,15 @@
 """
-Suite de Pruebas Unitarias Agrofísicas para EDO 4 (AgroPhasor).
-Verifica:
-1. Crecimiento logístico asintótico y acotamiento biológico 0 <= B(t) <= B_max.
-2. Ley del Mínimo de Liebig: colapso químico ante carencia de N, P o K.
-3. Campana térmica de confort eta_T y paro por helada/estrés letal.
-4. Regulación hídrica radicular f_W (SMAP) y detención por sequía.
-5. Régimen de transición / barbecho: decaimiento exponencial estricto de rastrojo B(t) = B0 * exp(-k_dec * t).
-6. Saltos discretos híbridos de cosecha (Y_k, rastrojo r_res) y siembra (B0).
-7. Proyección y calibración con teledetección satelital (Landsat/MODIS NDVI y GEDI).
-8. Validación de catálogos con EDO4Validator.
-9. Integración con el Adaptador de Datos Satelitales (NASA POWER, SMAP, SRTM, ECOSTRESS, USDA).
+Agro-Physical Unit Test Suite for ODE 4 (AgroPhasor).
+Verifies:
+1. Asymptotic logistic growth and biological bounding 0 <= B(t) <= B_max.
+2. Liebig's Law of the Minimum: chemical collapse upon N, P, or K deficiency.
+3. Photosynthetic thermal comfort envelope eta_T and arrest on frost/lethal heat.
+4. Root-zone water regulation f_W (SMAP) and drought arrest.
+5. Transition / fallow regime: strict exponential stover decay B(t) = B0 * exp(-k_dec * t).
+6. Hybrid discrete jumps at harvest (Y_k, residue r_res) and planting (B0).
+7. Satellite remote sensing projection & calibration (Landsat/MODIS NDVI and GEDI).
+8. Catalog validation via EDO4Validator.
+9. Integration with Multi-Source Satellite Data Adapter (NASA POWER, SMAP, SRTM, ECOSTRESS, USDA).
 """
 
 import math
@@ -45,16 +45,16 @@ class TestEDO4Engine(unittest.TestCase):
 
     def test_asymptotic_logistic_saturation_and_bounds(self):
         """
-        Criterio 1: Crecimiento y Acotamiento Físico Estricto 0 <= B(t) <= B_max.
-        Bajo condiciones ambientales perfectas y continuas, la biomasa debe crecer
-        inicialmente de forma rápida y desacelerar asintóticamente hacia B_max sin superarlo.
+        Criterion 1: Growth and Strict Physical Bounding 0 <= B(t) <= B_max.
+        Under continuous ideal environmental conditions, biomass must grow rapidly
+        initially and decelerate asymptotically toward B_max without exceeding it.
         """
         crop = self.crop_maiz
         b_curr = crop.B0_t_ha  # 0.25 t/ha
         b_max = crop.B_max_t_ha  # 22.0 t/ha
 
-        # Simular 180 días con forzamiento óptimo
-        f_rad = 22.0  # MJ/m²·día
+        # Simulate 180 days with optimal forcing
+        f_rad = 22.0  # MJ/m²·day
         t_canopy = crop.T_opt  # 25°C
         w_soil = 80.0  # mm (> W_crit)
         n_avail = 120.0  # kg/ha
@@ -82,87 +82,87 @@ class TestEDO4Engine(unittest.TestCase):
             self.assertGreaterEqual(b_curr, 0.0)
             self.assertLessEqual(b_curr, b_max)
 
-        # La biomasa final debe haber crecido significativamente y acercarse al equilibrio asintótico
+        # Final biomass should grow substantially and approach asymptotic equilibrium
         self.assertGreater(trajectory[-1], 8.0)
         self.assertLessEqual(trajectory[-1], b_max)
 
-        # La tasa de crecimiento debe mostrar desaceleración al acercarse a B_max
+        # Growth rate must decelerate as biomass approaches B_max
         peak_rate = max(growth_rates)
         final_rate = growth_rates[-1]
         self.assertLess(final_rate, peak_rate)
 
     def test_liebig_minimum_nutrient_law(self):
         """
-        Criterio 2: Ley del Mínimo de Liebig (PDF Sec. 3.3 y 1.2):
+        Criterion 2: Liebig's Law of the Minimum (PDF Sec. 3.3 and 1.2):
         eta_N = min( N/(N+KN), P/(P+KP), K/(K+KK) ).
-        Si un solo nutriente se agota (ej. N = 0), el factor químico se colapsa a 0
-        y detiene la fotosíntesis neta sin importar que P y K sean abundantes.
+        If a single nutrient is depleted (e.g. N = 0), the chemical factor collapses to 0
+        and halts net photosynthesis regardless of abundant P and K.
         """
         crop = self.crop_maiz
         kn, kp, kk = crop.K_N, crop.K_P, crop.K_K
 
-        # Caso 1: Todos equilibrados
+        # Case 1: All balanced
         eta_bal, lim_bal = liebig_nutrient_efficiency(kn, kp, kk, kn, kp, kk)
         self.assertAlmostEqual(eta_bal, 0.5, places=2)
 
-        # Caso 2: Nitrógeno severamente agotado (N = 0.5 kg/ha, P = 100, K = 150)
+        # Case 2: Severely Nitrogen-depleted (N = 0.5 kg/ha, P = 100, K = 150)
         eta_n_dep, lim_n = liebig_nutrient_efficiency(0.5, 100.0, 150.0, kn, kp, kk)
         self.assertEqual(lim_n, "N")
         self.assertLess(eta_n_dep, 0.05)
 
-        # Probar en solve_edo4_step
+        # Verify in solve_edo4_step
         step_n_dep = solve_edo4_step(
             b_current_t_ha=2.0,
             f_rad_daily_mj_m2=20.0,
             temp_canopy_c=25.0,
             soil_water_mm=70.0,
-            nitrogen_kg_ha=0.1,  # Prácticamente nulo
+            nitrogen_kg_ha=0.1,  # Practically zero
             phosphorus_kg_ha=100.0,
             potassium_kg_ha=100.0,
             crop=crop
         )
         self.assertEqual(step_n_dep.limiting_nutrient, "N")
         self.assertTrue(step_n_dep.is_nutrient_arrest)
-        # Con fotosíntesis bloqueada, la respiración de mantenimiento produce cambio neto negativo
+        # With photosynthesis blocked, maintenance respiration yields negative net change
         self.assertLess(step_n_dep.db_dt, 0.0)
 
-        # Caso 3: Fósforo como limitante
+        # Case 3: Phosphorus limiting
         eta_p_dep, lim_p = liebig_nutrient_efficiency(100.0, 0.2, 100.0, kn, kp, kk)
         self.assertEqual(lim_p, "P")
         self.assertLess(eta_p_dep, 0.05)
 
-        # Caso 4: Potasio como limitante
+        # Case 4: Potassium limiting
         eta_k_dep, lim_k = liebig_nutrient_efficiency(100.0, 100.0, 0.2, kn, kp, kk)
         self.assertEqual(lim_k, "K")
         self.assertLess(eta_k_dep, 0.05)
 
     def test_thermal_photosynthetic_envelope_and_frost_arrest(self):
         """
-        Criterio 3: Campana Térmica Fotosintética eta_T(T) (PDF Sec. 3.3):
-        - A T = T_opt: eta_T = 1.0 (máxima fotosíntesis).
-        - A T_opt +- delta_T_tol: eta_T = 0.0.
-        - Ante helada T <= T_helada o calor letal T >= T_letal: paro estricto eta_T = 0.
+        Criterion 3: Photosynthetic Thermal Envelope eta_T(T) (PDF Sec. 3.3):
+        - At T = T_opt: eta_T = 1.0 (maximum photosynthesis).
+        - At T_opt +- delta_T_tol: eta_T = 0.0.
+        - On frost T <= T_frost or lethal heat T >= T_lethal: strict arrest eta_T = 0.
         """
-        crop = self.crop_maiz  # T_opt = 25°C, dT_tol = 14°C, T_helada = 0°C, T_letal = 42°C
+        crop = self.crop_maiz  # T_opt = 25°C, dT_tol = 14°C, T_frost = 0°C, T_lethal = 42°C
 
-        # 1. Óptimo
+        # 1. Optimal
         eta_opt = thermal_photosynthetic_efficiency(25.0, crop.T_opt, crop.delta_T_tol)
         self.assertAlmostEqual(eta_opt, 1.0, places=2)
 
-        # 2. Desviación simétrica
+        # 2. Symmetric deviation
         eta_warm = thermal_photosynthetic_efficiency(32.0, crop.T_opt, crop.delta_T_tol)
         eta_cool = thermal_photosynthetic_efficiency(18.0, crop.T_opt, crop.delta_T_tol)
         self.assertAlmostEqual(eta_warm, eta_cool, places=2)
         self.assertLess(eta_warm, 1.0)
         self.assertGreater(eta_warm, 0.0)
 
-        # 3. Helada severa (T = -2°C)
+        # 3. Severe frost (T = -2°C)
         eta_frost = thermal_photosynthetic_efficiency(
             -2.0, crop.T_opt, crop.delta_T_tol, crop.T_frost, crop.T_lethal
         )
         self.assertEqual(eta_frost, 0.0)
 
-        # Verificar en solve_edo4_step
+        # Verify in solve_edo4_step
         step_frost = solve_edo4_step(
             b_current_t_ha=5.0,
             f_rad_daily_mj_m2=20.0,
@@ -176,7 +176,7 @@ class TestEDO4Engine(unittest.TestCase):
         self.assertEqual(step_frost.eta_thermal, 0.0)
         self.assertTrue(step_frost.is_thermal_arrest)
 
-        # 4. Calor letal (T = 44°C)
+        # 4. Lethal heat (T = 44°C)
         eta_lethal = thermal_photosynthetic_efficiency(
             44.0, crop.T_opt, crop.delta_T_tol, crop.T_frost, crop.T_lethal
         )
@@ -184,28 +184,28 @@ class TestEDO4Engine(unittest.TestCase):
 
     def test_water_limitation_and_drought_arrest(self):
         """
-        Criterio 4: Factor de Limitación Hídrica f_W(W) (PDF Sec. 3.2.4 y SMAP):
+        Criterion 4: Water Limitation Factor f_W(W) (PDF Sec. 3.2.4 & SMAP):
         - W >= W_crit: f_W = 1.0.
-        - W <= W_pmp: f_W = 0.0 (paro fotosintético por sequía).
+        - W <= W_pmp: f_W = 0.0 (photosynthetic arrest from drought).
         """
         crop = self.crop_maiz
         w_pmp = crop.W_pmp  # 20 mm
         w_crit = crop.W_crit  # 50 mm
 
-        # En marchitez permanente
+        # At permanent wilting point
         fw_wilting = water_limitation_factor(w_pmp - 5.0, w_pmp, w_crit)
         self.assertAlmostEqual(fw_wilting, (w_pmp - 5) / (w_pmp - 5 + max(1, .5 * (w_crit - w_pmp))))
 
-        # Por encima de crítico (confort)
+        # Above critical threshold (comfort)
         fw_optimal = water_limitation_factor(w_crit + 20.0, w_pmp, w_crit)
         self.assertGreaterEqual(fw_optimal, 0.70)
 
-        # Probar en solve_edo4_step
+        # Verify in solve_edo4_step
         step_drought = solve_edo4_step(
             b_current_t_ha=4.0,
             f_rad_daily_mj_m2=20.0,
             temp_canopy_c=25.0,
-            soil_water_mm=0.0,  # Sin agua
+            soil_water_mm=0.0,  # Zero water
             nitrogen_kg_ha=50.0,
             phosphorus_kg_ha=30.0,
             potassium_kg_ha=60.0,
@@ -217,17 +217,17 @@ class TestEDO4Engine(unittest.TestCase):
 
     def test_bare_soil_transition_regime_and_residue_decomposition(self):
         """
-        Criterio 5: Régimen de Transición / Rastrojo (q = Transición, PDF Sec. 3.2.4):
+        Criterion 5: Transition / Stover Regime (q = Transition, PDF Sec. 3.2.4):
         dB/dt = - k_dec * B.
-        La biomasa de rastrojo remanente debe decaer monótonamente siguiendo la curva
-        analítica exacta: B(t) = B0 * exp(-k_dec * t).
+        Remaining residue biomass must decay monotonically along the exact
+        analytical curve: B(t) = B0 * exp(-k_dec * t).
         """
         crop = self.crop_maiz
-        b_residue_initial = 3.0  # 3 t/ha de rastrojo
-        k_dec = 0.025  # 1/día
+        b_residue_initial = 3.0  # 3 t/ha of crop residue
+        k_dec = 0.025  # 1/day
 
         b_curr = b_residue_initial
-        t_canopy = 20.0  # A 20°C Q10 factor = 1.0
+        t_canopy = 20.0  # At 20°C Q10 factor = 1.0
 
         for day in range(1, 11):
             step = solve_edo4_step(
@@ -239,12 +239,12 @@ class TestEDO4Engine(unittest.TestCase):
                 phosphorus_kg_ha=30.0,
                 potassium_kg_ha=60.0,
                 crop=crop,
-                q_is_crop=False,  # Modo Transición
+                q_is_crop=False,  # Transition mode
                 k_dec_daily=k_dec
             )
             b_curr = step.biomass_t_ha
 
-            # Comparación con la solución analítica exacta
+            # Compare against exact analytical solution
             expected_b = b_residue_initial * math.exp(-k_dec * day)
             self.assertAlmostEqual(b_curr, expected_b, places=3)
             self.assertEqual(step.gross_growth_t_ha, 0.0)
@@ -252,14 +252,14 @@ class TestEDO4Engine(unittest.TestCase):
 
     def test_discrete_harvest_event_and_market_economics(self):
         """
-        Criterio 6: Salto Discreto de Cosecha y Valoración Económica (PDF Sec. 3.4 y 1.1):
+        Criterion 6: Discrete Harvest Jump and Economic Valuation (PDF Sec. 3.4 & 1.1):
         Y_k = HI * (1 - r_res) * B(t_s^-)
         B(t_s^+) = r_res * B(t_s^-)
-        Ingreso Bruto = Y_k * P_mercado (USDA AMS)
+        Gross Revenue = Y_k * P_market (USDA AMS)
         """
         crop = self.crop_maiz  # HI = 0.48, price = 220 USD/t, base_cost = 650 USD/ha
-        b_pre_harvest = 10.0  # 10 t/ha en pie antes de cosechar
-        r_res = 0.30  # 30% retenido como rastrojo
+        b_pre_harvest = 10.0  # 10 t/ha standing biomass prior to harvest
+        r_res = 0.30  # 30% retained as crop residue
 
         harvest = execute_harvest_event(
             biomass_pre_harvest_t_ha=b_pre_harvest,
@@ -280,39 +280,39 @@ class TestEDO4Engine(unittest.TestCase):
 
     def test_satellite_ndvi_and_canopy_cover_mapping(self):
         """
-        Criterio 7: Proyección a Teledetección Satelital (Landsat / MODIS NDVI):
-        - B = 0 -> NDVI = NDVI_suelo (0.15) y cover = 0.0.
-        - B alto -> NDVI satura asintóticamente a NDVI_max (0.88) y cover -> 1.0.
-        - Inversión empírica: satellite_ndvi_to_biomass invierte correctamente.
+        Criterion 7: Satellite Remote Sensing Projection (Landsat / MODIS NDVI):
+        - B = 0 -> NDVI = NDVI_soil (0.15) and cover = 0.0.
+        - High B -> NDVI saturates asymptotically at NDVI_max (0.88) and cover -> 1.0.
+        - Empirical inversion: satellite_ndvi_to_biomass inverts cleanly.
         """
-        # Suelo desnudo
+        # Bare soil
         ndvi_bare = biomass_to_satellite_ndvi(0.0)
         self.assertAlmostEqual(ndvi_bare, 0.15, places=2)
         cover_bare = biomass_to_canopy_cover(0.0)
         self.assertEqual(cover_bare, 0.0)
 
-        # Cultivo desarrollado
+        # Well-developed crop
         ndvi_dense = biomass_to_satellite_ndvi(15.0)
         self.assertGreater(ndvi_dense, 0.85)
         cover_dense = biomass_to_canopy_cover(15.0)
         self.assertGreater(cover_dense, 0.99)
 
-        # Inversión
+        # Inversion
         b_reconstructed = satellite_ndvi_to_biomass(ndvi_dense, b_max_t_ha=20.0)
         self.assertGreater(b_reconstructed, 5.0)
 
     def test_edo4_validator_success_and_failure_detection(self):
         """
-        Criterio 8: Validador Agrofísico de Catálogos EDO 4:
-        - Valida correctamente crop_catalog.json oficial.
-        - Rechaza catálogos con kp_c <= 0 o B_max <= B0.
+        Criterion 8: Agro-Physical Validator for ODE 4 Catalogs:
+        - Properly validates the official crop_catalog.json.
+        - Rejects catalogs with kp_c <= 0 or B_max <= B0.
         """
-        # Catálogo oficial
+        # Official catalog
         res_valid = validate_edo4_catalog("backend/data/crop_catalog.json")
         self.assertTrue(res_valid["valid"])
         self.assertGreater(res_valid["crops_validated_count"], 0)
 
-        # Catálogo inválido
+        # Invalid catalog
         invalid_data = {
             "constantes_globales": {
                 "k_dec_dia": 0.025,
@@ -321,7 +321,7 @@ class TestEDO4Engine(unittest.TestCase):
             },
             "cultivos": {
                 "CultivoInvalido": {
-                    "kp_c": -0.05,        # ERROR: negativo
+                    "kp_c": -0.05,        # ERROR: negative
                     "B_max_t_ha": 5.0,
                     "B0_t_ha": 10.0,       # ERROR: B0 > B_max
                     "km_c_dia": 0.008,
@@ -338,9 +338,9 @@ class TestEDO4Engine(unittest.TestCase):
 
     def test_nasa_and_usda_data_adapter_complete_cycle(self):
         """
-        Criterio 9: Adaptador de Integración Multifuente (NASA POWER, SMAP, ECOSTRESS, SRTM, USDA).
-        Ejecuta un ciclo de 30 días simulando una celda con datos meteorológicos variables,
-        contraste satelital Landsat/MODIS NDVI y calibración de techo de biomasa FAO GAEZ / GEDI.
+        Criterion 9: Multi-Source Integration Adapter (NASA POWER, SMAP, ECOSTRESS, SRTM, USDA).
+        Runs a 30-day cycle simulating a cell with varying weather forcing,
+        Landsat/MODIS NDVI satellite comparison, and FAO GAEZ / GEDI biomass ceiling calibration.
         """
         crop_calibrated = EDO4DataAdapter.calibrate_crop_ceiling_from_faog_and_nass(
             crop_id="maiz",
@@ -350,7 +350,7 @@ class TestEDO4Engine(unittest.TestCase):
         )
         self.assertGreater(crop_calibrated.B_max_t_ha, 15.0)
 
-        # Generar 30 días de forzamiento biofísico
+        # Generate 30 days of biophysical forcing
         forcing_series = []
         for d in range(30):
             nasa_day = {
@@ -358,10 +358,10 @@ class TestEDO4Engine(unittest.TestCase):
                 "T2M": 22.0 + 4.0 * math.cos(d * math.pi / 15.0)
             }
             terrain = {"slope_deg": 5.0, "aspect_deg": 180.0, "altitude_m": 3100.0, "ref_altitude_m": 3000.0}
-            soil_smap = {"smap_wetness": 0.75 - 0.01 * d}  # Suelo secándose paulatinamente
+            soil_smap = {"smap_wetness": 0.75 - 0.01 * d}  # Soil gradually drying out
             nutrients = {"W_cc_mm": 90.0, "W_pmp_mm": 25.0, "N_kg_ha": 60.0, "P_kg_ha": 35.0, "K_kg_ha": 80.0}
             
-            # Observaciones satelitales intermitentes (Landsat NDVI cada 8 días)
+            # Intermittent satellite observations (Landsat NDVI every 8 days)
             obs_ndvi = (0.20 + 0.015 * d) if (d % 8 == 0) else None
             obs_gedi = (0.3 + 0.1 * d) if (d == 16) else None
 
@@ -393,9 +393,9 @@ class TestEDO4Engine(unittest.TestCase):
 
     def test_parcel_edo4_service_spatial_grid(self):
         """
-        Criterio 10: Simulación Espacial 2.5D en Malla de Celdas (ParcelEDO4Service).
-        Simula una parcela heterogénea con pendientes y altitudes distintas (SRTM),
-        verificando la respuesta espacial diferenciada en biomasa, NDVI y rendimiento.
+        Criterion 10: 2.5D Spatial Grid Simulation (ParcelEDO4Service).
+        Simulates a heterogeneous parcel with varying slopes and altitudes (SRTM),
+        verifying spatially differentiated responses in biomass, NDVI, and yield.
         """
         grid = [
             {"cell_id": "0_0", "altitude_m": 3050.0, "slope_deg": 2.0, "aspect_deg": 180.0},
@@ -412,7 +412,7 @@ class TestEDO4Engine(unittest.TestCase):
             soil_water_mm=65.0,
             simulation_days=20
         )
-        self.assertEqual(res["crop"], "Maíz")
+        self.assertEqual(res["crop"], "Maize")
         self.assertEqual(res["cells_simulated"], 2)
         self.assertGreater(res["mean_biomass_t_ha"], 0.0)
         self.assertGreater(res["mean_yield_t_ha"], 0.0)

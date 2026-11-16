@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-AgroPhasor - API Backend Local (FastAPI + EDO 1) y Servidor HTTP de Frontend.
+AgroPhasor - Local Backend API (FastAPI + ODE 1–5) and Frontend HTTP Server.
 NASA Space Apps Challenge 2026 - Field Shift
 
-Provee endpoints REST para el motor EDO 1 (/simulate/edo1, /crops),
-el contrato CC-02 (/api/v1/simular, /api/v1/parcelas, /api/v1/health),
-búsqueda de localidades Nominatim (/api/places) y servicio de archivos estáticos.
+Provides REST endpoints for the ODE 1 engine (/simulate/edo1, /crops), ODE 2–5 solvers,
+the CC-02 contract (/api/v1/simular, /api/v1/parcelas, /api/v1/health),
+Nominatim place search (/api/places), and static file serving.
 """
 
 from datetime import datetime, timezone
@@ -23,13 +23,13 @@ import urllib.request
 PORT = int(os.environ.get("PORT", 5173))
 HOST = os.environ.get("HOST", "0.0.0.0")
 
-# Rutas de frontend y raíz del proyecto
+# Frontend and project root paths
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.abspath(os.environ.get(
     "AGROPHASOR_FRONTEND_DIR", os.path.join(BASE_DIR, "frontend")
 ))
 if not os.path.isfile(os.path.join(FRONTEND_DIR, "index.html")):
-    raise RuntimeError(f"No se encontró index.html en el directorio del frontend: {FRONTEND_DIR}")
+    raise RuntimeError(f"index.html not found in the frontend directory: {FRONTEND_DIR}")
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
@@ -86,11 +86,11 @@ ROTATION_ROUTES = {
     "avena_habas_quinua": {
         "metrics": (1.1, 1.0, -12.4, 3.4),
         "sugerencia_optimizada": [
-            {"periodo": "P1 (Ene-May)", "cultivo": "Avena Forrajera / Vicia", "ventaja": "Cobertura antierosiva (-72% escorrentía)"},
-            {"periodo": "P2 (Jun-Dic)", "cultivo": "Habas Verdes / Serranas", "ventaja": "Fijación biológica +45 kg N/ha"},
-            {"periodo": "P3 (Futuro)", "cultivo": "Quinua Pasankalla", "ventaja": "Alta tolerancia a heladas y sequía"},
+            {"periodo": "P1 (Jan-May)", "cultivo": "Forage Oat / Vetch", "ventaja": "Anti-erosion cover (-72% runoff)"},
+            {"periodo": "P2 (Jun-Dec)", "cultivo": "Green Fava Beans", "ventaja": "Biological N fixation +45 kg N/ha"},
+            {"periodo": "P3 (Future)", "cultivo": "Pasankalla Quinoa", "ventaja": "High frost and drought tolerance"},
         ],
-        "motivo_agronomico": "Prioriza la máxima resiliencia climática y protección de la capa fértil mediante cobertura densa, fijación de nitrógeno y rusticidad andina.",
+        "motivo_agronomico": "Prioritizes maximum climate resilience and topsoil protection through dense canopy cover, nitrogen fixation, and Andean hardiness.",
         "metricas_comparativas": {
             "ahorro_agua_pct": 24,
             "aumento_fertilidad_pct": 38,
@@ -101,11 +101,11 @@ ROTATION_ROUTES = {
     "papa_habas_quinua": {
         "metrics": (2.2, 1.8, -19.8, 2.5),
         "sugerencia_optimizada": [
-            {"periodo": "P1 (Ene-May)", "cultivo": "Papa Canchán", "ventaja": "14.1 t/ha (+6.8%)"},
-            {"periodo": "P2 (Jun-Dic)", "cultivo": "Habas Verdes / Serranas", "ventaja": "Fijación biológica +45 kg N/ha"},
-            {"periodo": "P3 (Futuro)", "cultivo": "Quinua o Cebada", "ventaja": "Rastrojo y cobertura contra heladas"},
+            {"periodo": "P1 (Jan-May)", "cultivo": "Canchan Potato", "ventaja": "14.1 t/ha (+6.8%)"},
+            {"periodo": "P2 (Jun-Dec)", "cultivo": "Green Fava Beans", "ventaja": "Biological N fixation +45 kg N/ha"},
+            {"periodo": "P3 (Future)", "cultivo": "Quinoa or Barley", "ventaja": "Crop residue and frost ground cover"},
         ],
-        "motivo_agronomico": "La rotación de Papa con Habas Verdes rompe el ciclo biológico de plagas del suelo y fija nitrógeno de forma natural, reduciendo costos de fertilización.",
+        "motivo_agronomico": "Rotating Potato with Green Fava Beans breaks soil pest life cycles and fixes nitrogen naturally, cutting fertilizer costs.",
         "metricas_comparativas": {
             "ahorro_agua_pct": 18,
             "aumento_fertilidad_pct": 32,
@@ -116,11 +116,11 @@ ROTATION_ROUTES = {
     "papa_maiz_habas": {
         "metrics": (4.6, 4.1, -28.5, 1.8),
         "sugerencia_optimizada": [
-            {"periodo": "P1 (Ene-May)", "cultivo": "Papa Canchán", "ventaja": "14.5 t/ha (alta demanda comercial)"},
-            {"periodo": "P2 (Jun-Dic)", "cultivo": "Maíz Blanco Cuzco / Amiláceo", "ventaja": "Alto margen neto y aporte de rastrojo"},
-            {"periodo": "P3 (Futuro)", "cultivo": "Habas Verdes / Serranas", "ventaja": "Recuperación parcial de N tras extracción"},
+            {"periodo": "P1 (Jan-May)", "cultivo": "Canchan Potato", "ventaja": "14.5 t/ha (strong market demand)"},
+            {"periodo": "P2 (Jun-Dec)", "cultivo": "Cusco White / Amylaceous Maize", "ventaja": "High net margin and stover input"},
+            {"periodo": "P3 (Future)", "cultivo": "Green Fava Beans", "ventaja": "Partial N recovery after nutrient uptake"},
         ],
-        "motivo_agronomico": "Maximiza el retorno económico de corto plazo combinando cultivos comerciales andinos con una leguminosa de cierre para evitar el colapso de nitrógeno.",
+        "motivo_agronomico": "Maximizes short-term economic return by combining commercial Andean crops with a closing legume to prevent nitrogen collapse.",
         "metricas_comparativas": {
             "ahorro_agua_pct": 11,
             "aumento_fertilidad_pct": 19,
@@ -131,14 +131,14 @@ ROTATION_ROUTES = {
     "papa_monocultivo": {
         "metrics": (7.8, 8.5, -10.2, 4.0),
         "sugerencia_optimizada": [],
-        "motivo_agronomico": "Secuencia dominada por degradación acelerada y riesgo fitosanitario.",
+        "motivo_agronomico": "Sequence dominated by accelerated degradation and phytosanitary risk.",
         "metricas_comparativas": {},
     },
 }
 
 
 def search_places(query: str) -> List[Dict[str, Any]]:
-    """Consulta Nominatim (o AGROPHASOR_GEOCODER) con caché en memoria y límite de 1.1 s."""
+    """Query Nominatim (or AGROPHASOR_GEOCODER) with in-memory cache and 1.1 s rate limit."""
     global _next_geocoder_request
     cache_key = query.casefold()
     with _search_lock:
@@ -149,7 +149,7 @@ def search_places(query: str) -> List[Dict[str, Any]]:
             "q": query,
             "format": "jsonv2",
             "limit": 5,
-            "accept-language": "es",
+            "accept-language": "en",
         })
         request = urllib.request.Request(
             f"{SEARCH_URL}?{params}",
@@ -181,7 +181,7 @@ def build_v1_health_payload() -> Dict[str, Any]:
         "version": "1.0-alpha",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "default_parcel": {
-            "name": "Valle del Mantaro, Junín",
+            "name": "Mantaro Valley, Junin",
             "latitude": -12.06,
             "longitude": -75.21,
             "elevation_m": 3250,
@@ -190,7 +190,7 @@ def build_v1_health_payload() -> Dict[str, Any]:
 
 
 def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Valida el GeoJSON y computa balances físicos y ranking CC-09 de rotaciones."""
+    """Validate GeoJSON input and compute physical balances and CC-09 rotation rankings."""
     geo_features = payload.get("geo_features", {})
     lote_id = payload.get("lote_seleccionado_id", "lote-1")
     modo = payload.get("modo_prioridad", "balance_optimo")
@@ -223,36 +223,36 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     selected_route_id = ordered_routes[0] if ordered_routes else "papa_habas_quinua"
     selected_route = ROTATION_ROUTES[selected_route_id]
 
-    # Dinámica Bioquímica de EDO 3 (Nutrientes N-P-K y Ley de Liebig)
+    # Biochemical Dynamics of ODE 3 (N-P-K Nutrients and Liebig's Law)
     if ranking_mode == "resilience":
-        # Rotación con leguminosa fijadora (Avena + Habas Verdes): F_fix > 0
+        # Rotation with nitrogen-fixing legume (Oat + Green Fava Beans): F_fix > 0
         n_val = 104.5
         p_val = 36.2
         k_val = 192.0
         eta_val = 0.749
-        limiting_nut = "Fósforo (P)"
-        npk_state = "Regenerado / Alta fertilidad biológica"
+        limiting_nut = "Phosphorus (P)"
+        npk_state = "Regenerated / High biological fertility"
         has_fix = True
     elif ranking_mode == "balance":
-        # Rotación balanceada (Papa Canchán + Habas)
+        # Balanced rotation (Canchan Potato + Fava Beans)
         n_val = 88.0
         p_val = 34.0
         k_val = 195.0
         eta_val = 0.682
-        limiting_nut = "Nitrógeno (N)"
-        npk_state = "Fértil / Balance equilibrado"
+        limiting_nut = "Nitrogen (N)"
+        npk_state = "Fertile / Balanced nutrient budget"
         has_fix = True
     else:  # profit
-        # Monocultivo extractivo continuo (Papa + Maíz sin leguminosas): F_fix = 0
+        # Continuous extractive monoculture (Potato + Maize without legumes): F_fix = 0
         n_val = 44.5
         p_val = 21.0
         k_val = 138.0
         eta_val = 0.448
-        limiting_nut = "Nitrógeno (N)"
-        npk_state = "Agotamiento progresivo de N (Requiere fertilización)"
+        limiting_nut = "Nitrogen (N)"
+        npk_state = "Progressive N depletion (Fertilization required)"
         has_fix = False
 
-    # Si el cliente solicita activación explícita de EDO 3 con parámetros personalizados
+    # If the client explicitly requests ODE 3 evaluation with custom parameters
     if payload.get("activar_edo3") or "nutrientes_iniciales" in payload:
         try:
             from backend.core.edo3_engine import solve_edo3_step, SoilChemicalProperties
@@ -290,9 +290,9 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # Dinámica Biofísica de EDO 4 (Biomasa Aérea B_{i,j}(t) y Rendimiento Comercial Y_k)
+    # Biophysical Dynamics of ODE 4 (Aboveground Biomass B_{i,j}(t) and Commercial Yield Y_k)
     b_val = 11.8
-    b_state = "Crecimiento vigoroso"
+    b_state = "Vigorous growth"
     db_dt_val = 0.125
     ndvi_val = 0.81
     cover_pct = 95.0
@@ -328,10 +328,10 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         )
 
         b_val = step_edo4.biomass_t_ha
-        b_state = "Crecimiento vigoroso" if step_edo4.is_growth_active else (
-            "Paro por sequía" if step_edo4.is_drought_arrest else (
-                "Paro térmico" if step_edo4.is_thermal_arrest else (
-                    "Paro por nutrientes" if step_edo4.is_nutrient_arrest else "Estable / Maduro"
+        b_state = "Vigorous growth" if step_edo4.is_growth_active else (
+            "Drought arrest" if step_edo4.is_drought_arrest else (
+                "Thermal arrest" if step_edo4.is_thermal_arrest else (
+                    "Nutrient arrest" if step_edo4.is_nutrient_arrest else "Stable / Mature"
                 )
             )
         )
@@ -343,7 +343,7 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # Dinámica Geomorfológica de EDO 5 (Erosión Hídrica de la Capa Fértil)
+    # Geomorphological Dynamics of ODE 5 (Water Erosion of Topsoil Layer)
     slope_est = float(payload.get("slope_deg", 10.0 if ranking_mode != "resilience" else 4.5))
     precip_est = float(payload.get("precip_mm", 22.5))
     h0_soil = float(payload.get("h0_mm", 400.0))
@@ -366,7 +366,7 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "simulation_kind": "demonstration",
-        "warning": "Endpoint histórico con valores de demostración. Usa /api/v1/parcelas/simulacion y /api/v1/rotaciones para cálculo físico.",
+        "warning": "Legacy endpoint with demonstration values. Use /api/v1/parcelas/simulacion and /api/v1/rotaciones for physical computation.",
         "status": "success",
         "meta": {
             "engine": "AgroPhasor-FastODE-Mantaro",
@@ -381,21 +381,21 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             "humedad_radicular_W": {
                 "valor": 142.5,
                 "unidad": "mm",
-                "estado": "Adecuado",
+                "estado": "Optimal",
                 "color": "#10b981",
-                "descripcion": "Humedad en zona de raíces suficiente para tubérculos y leguminosas.",
+                "descripcion": "Root-zone moisture sufficient for tubers and legumes.",
             },
             "temperatura_dosel_T": {
                 "valor": 16.8,
                 "unidad": "°C",
-                "estado": "Óptimo",
+                "estado": "Optimal",
                 "color": "#38bdf8",
-                "descripcion": "Sin estrés térmico ni riesgo inmediato de helada severa.",
+                "descripcion": "No thermal stress and no immediate severe frost risk.",
             },
             "nutrientes_NPK": {
-                "N": {"valor": round(n_val, 1), "unidad": "kg/ha", "nivel": "Óptimo" if n_val >= 90 else ("Medio" if n_val >= 60 else "Bajo")},
-                "P": {"valor": round(p_val, 1), "unidad": "kg/ha", "nivel": "Alto" if p_val >= 30 else ("Medio" if p_val >= 20 else "Bajo")},
-                "K": {"valor": round(k_val, 1), "unidad": "kg/ha", "nivel": "Óptimo" if k_val >= 180 else ("Medio" if k_val >= 120 else "Bajo")},
+                "N": {"valor": round(n_val, 1), "unidad": "kg/ha", "nivel": "Optimal" if n_val >= 90 else ("Medium" if n_val >= 60 else "Low")},
+                "P": {"valor": round(p_val, 1), "unidad": "kg/ha", "nivel": "High" if p_val >= 30 else ("Medium" if p_val >= 20 else "Low")},
+                "K": {"valor": round(k_val, 1), "unidad": "kg/ha", "nivel": "Optimal" if k_val >= 180 else ("Medium" if k_val >= 120 else "Low")},
                 "eta_nutrientes": eta_val,
                 "nutriente_limitante": limiting_nut,
                 "fijacion_biologica_activa": has_fix,
@@ -405,7 +405,7 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
                 "valor": round(b_val, 1),
                 "unidad": "t/ha",
                 "estado": b_state,
-                "tasa_crecimiento_diario": f"{round(db_dt_val, 3)} t/(ha·día)",
+                "tasa_crecimiento_diario": f"{round(db_dt_val, 3)} t/(ha·day)",
                 "ndvi_satelital_estimado": ndvi_val,
                 "cobertura_foliar_pct": cover_pct,
                 "rendimiento_estimado_cosecha": f"{round(yield_est, 2)} t/ha",
@@ -414,8 +414,8 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             "espesor_fertil_H": {
                 "valor": h_current_calc,
                 "unidad": "mm",
-                "tasa_erosion": f"{annual_erosion_loss} mm/año ({'Baja' if annual_erosion_loss < 0.1 else ('Moderada' if annual_erosion_loss < 0.5 else 'Alta')})",
-                "estado": "Protegido" if annual_erosion_loss < 0.1 else ("Vigilancia" if annual_erosion_loss < 0.5 else "Riesgo de Erosión"),
+                "tasa_erosion": f"{annual_erosion_loss} mm/year ({'Low' if annual_erosion_loss < 0.1 else ('Moderate' if annual_erosion_loss < 0.5 else 'High')})",
+                "estado": "Protected" if annual_erosion_loss < 0.1 else ("Watch" if annual_erosion_loss < 0.5 else "Erosion Risk"),
                 "perdida_fosforo_kg_ha": round(step_edo5.nutrient_drag_kg_ha.get("P", 0.0) * 18.0, 3),
                 "pendiente_terreno_deg": slope_est,
                 "proteccion_foliar_pct": round((1.0 - step_edo5.vegetation_cover_factor) * 100.0, 1),
@@ -424,7 +424,7 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             "escudo_ambiental": {
                 "indice": shield_idx,
                 "max": 100,
-                "calificacion": "Alta Resiliencia",
+                "calificacion": "High Resilience",
                 "color": "#10b981",
             },
         },
@@ -432,8 +432,8 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             "ruta_seleccionada": selected_route_id,
             "pareto_frente": list(ranking.pareto),
             "plan_actual": [
-                {"periodo": "P1 (Ene-May)", "cultivo": "Papa Canchán", "rendimiento_est": "13.2 t/ha"},
-                {"periodo": "P2 (Jun-Dic)", "cultivo": "Papa Canchán (Monocultivo)", "alerta": "Riesgo fitosanitario"},
+                {"periodo": "P1 (Jan-May)", "cultivo": "Canchan Potato", "rendimiento_est": "13.2 t/ha"},
+                {"periodo": "P2 (Jun-Dec)", "cultivo": "Canchan Potato (Monoculture)", "alerta": "Phytosanitary risk"},
             ],
             "sugerencia_optimizada": selected_route["sugerencia_optimizada"],
             "motivo_agronomico": selected_route["motivo_agronomico"],
@@ -445,9 +445,9 @@ def compute_simulation_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
 def build_parcel_saved_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     lote_id = payload.get("lote_seleccionado_id", "lote-default")
     return {
-        "status": "guardado",
+        "status": "saved",
         "lote_id": lote_id,
-        "mensaje": "Coordenadas GeoJSON registradas exitosamente en el servidor.",
+        "mensaje": "GeoJSON coordinates successfully registered on the server.",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -471,18 +471,81 @@ def parcel_edo1_response(payload):
         result = simulate_parcel(payload)
         if payload.get("phases") and payload.get("selected_date"):
             from backend.services.plan_service import replay_plan
-            result = replay_plan(result, payload["phases"], payload["selected_date"])
+            result = replay_plan(
+                result,
+                payload["phases"],
+                payload["selected_date"],
+                mc_samples=payload.get("mc_samples", 30),
+                delta_T_whatif=payload.get("delta_T_whatif", 0.0),
+                delta_P_pct_whatif=payload.get("delta_P_pct_whatif", 0.0),
+                seed=payload.get("climate_seed", 42),
+                use_climate_forecast=bool(payload.get("use_climate_forecast", True)),
+            )
         return result, 200
     except (ValueError, TypeError, KeyError) as exc:
         return {"error": str(exc)}, 400
     except (ParcelDataError, ClimateUnavailable) as exc:
         return {"error": str(exc)}, 502
     except ImportError:
-        return {"error": "Instala las dependencias de simulación indicadas en el README."}, 503
+        return {"error": "Install the simulation dependencies listed in the README."}, 503
+
+
+def climate_forecast_response(payload):
+    from datetime import date, timedelta
+    from backend.services.climate_service import predict_climate_scenarios
+    from backend.services.rotation_service import number
+
+    try:
+        if not isinstance(payload, dict):
+            raise ValueError("Expected a JSON object.")
+        lat = number(payload.get("latitude", -12.06), -90, 90, "Latitude")
+        lon = number(payload.get("longitude", -75.21), -180, 180, "Longitude")
+        start_raw = payload.get("start_date")
+        start_dt = date.fromisoformat(start_raw) if start_raw else datetime.now(timezone.utc).date()
+        end_raw = payload.get("end_date")
+        if end_raw:
+            end_dt = date.fromisoformat(end_raw)
+        else:
+            months = int(number(payload.get("months", 6), 1, 36, "Forecast months"))
+            end_dt = start_dt + timedelta(days=months * 30 - 1)
+        if (end_dt - start_dt).days > 3650:
+            raise ValueError("Forecast horizon must not exceed 3,650 days.")
+        n_mc = int(number(payload.get("n_mc", 100), 1, 200, "Monte Carlo scenarios"))
+        n_armonicos = int(number(payload.get("n_armonicos", 2), 1, 4, "Fourier harmonics"))
+        delta_t = number(payload.get("delta_T_whatif", 0.0), -10, 15, "Temperature delta")
+        delta_p = number(payload.get("delta_P_pct_whatif", 0.0), -90, 200, "Precipitation delta (%)")
+        seed = int(payload.get("seed", 42))
+        include_series = bool(payload.get("include_representative_series", True))
+
+        forecast = predict_climate_scenarios(
+            lat,
+            lon,
+            start_dt,
+            end_dt,
+            n_mc=n_mc,
+            delta_T_whatif=delta_t,
+            delta_P_pct_whatif=delta_p,
+            seed=seed,
+            n_armonicos=n_armonicos,
+        )
+        body = {
+            **forecast["metadata"],
+            "summary": forecast["summary"],
+        }
+        if include_series:
+            body["representative_series"] = [
+                {"date": day.isoformat(), **sc_day}
+                for day, sc_day in zip(forecast["dates"], forecast["representative_scenario"])
+            ]
+        return body, 200
+    except (ValueError, TypeError, KeyError) as exc:
+        return {"error": str(exc)}, 422
+    except ClimateUnavailable as exc:
+        return {"error": str(exc)}, 503
 
 
 class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
-    """Manejador HTTP con soporte para API REST y servicio de archivos estáticos."""
+    """HTTP request handler supporting the REST API and static file serving."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
@@ -504,12 +567,12 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
         if path == "/api/places":
             query = " ".join(urllib.parse.parse_qs(parsed.query).get("q", [""])[0].split())
             if not 2 <= len(query) <= 120:
-                self.send_json_response({"error": "Escribe entre 2 y 120 caracteres."}, status=400)
+                self.send_json_response({"error": "Enter between 2 and 120 characters."}, status=400)
                 return
             try:
                 results = search_places(query)
             except (OSError, ValueError, KeyError, TypeError):
-                self.send_json_response({"error": "El buscador no está disponible por ahora."}, status=502)
+                self.send_json_response({"error": "Place search is currently unavailable."}, status=502)
                 return
             self.send_json_response(results)
             return
@@ -535,7 +598,7 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
         try:
             payload = json.loads(body.decode("utf-8")) if body else {}
         except Exception as e:
-            self.send_json_response({"error": f"JSON inválido: {str(e)}"}, status=400)
+            self.send_json_response({"error": f"Invalid JSON: {str(e)}"}, status=400)
             return
 
         if path in ("/api/v1/parcelas/simulacion", "/api/v1/parcelas/edo1"):
@@ -548,11 +611,16 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(result, status=status)
             return
 
+        if path in ("/api/v1/clima/predecir", "/api/v1/climate/forecast"):
+            result, status = climate_forecast_response(payload)
+            self.send_json_response(result, status=status)
+            return
+
         if path == "/api/v1/simular":
             if "simulate_error" in query or payload.get("force_error"):
                 self.send_json_response({
-                    "error": "Error 500: Fallo inducido en el solver físico para pruebas de resiliencia.",
-                    "detail": "El cliente debe conservar la selección de la parcela sin perder los vértices.",
+                    "error": "Error 500: Induced physics solver failure for resilience testing.",
+                    "detail": "The client must preserve the parcel selection without losing vertices.",
                 }, status=500)
                 return
 
@@ -757,7 +825,7 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(build_parcel_saved_payload(payload))
             return
 
-        self.send_json_response({"error": "Endpoint no encontrado"}, status=404)
+        self.send_json_response({"error": "Endpoint not found"}, status=404)
 
     def process_simulation(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         return compute_simulation_payload(payload)
@@ -773,8 +841,8 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
 
 if HAS_FASTAPI:
     app = FastAPI(
-        title="AgroPhasor Simulation Engine - Backend Local",
-        description="Motor de física y balance térmico (EDO 1) para rotación de cultivos bajo estrés climático",
+        title="AgroPhasor Simulation Engine - Local Backend",
+        description="Physics and thermal balance engine (ODE 1–5) for crop rotation under climate stress",
         version="1.0.0",
     )
     app.add_middleware(
@@ -791,23 +859,23 @@ if HAS_FASTAPI:
         aspect_deg: float = 0.0
 
     class FieldSimulationRequest(BaseModel):
-        crop_id: str = Field(default="papa", description="Identificador del cultivo ('papa', 'maiz', 'haba', 'barbecho')")
-        soil_water_mm: float = Field(default=50.0, description="Humedad del suelo en raíces [mm]")
-        ref_altitude_m: Optional[float] = Field(default=None, description="Altitud de referencia del lote [m]")
+        crop_id: str = Field(default="papa", description="Crop identifier ('papa', 'maiz', 'haba', 'barbecho')")
+        soil_water_mm: float = Field(default=50.0, description="Root-zone soil moisture [mm]")
+        ref_altitude_m: Optional[float] = Field(default=None, description="Parcel reference altitude [m]")
         nasa_hourly_data: Dict[str, Dict[str, float]] = Field(
             ...,
-            description="Respuesta horaria de NASA POWER conteniendo 'T2M', 'ALLSKY_SFC_SW_DWN', 'RH2M'",
+            description="Hourly NASA POWER response containing 'T2M', 'ALLSKY_SFC_SW_DWN', 'RH2M'",
         )
         grid_cells: List[CellData] = Field(
             default_factory=lambda: [CellData(cell_id="0_0", altitude_m=3200.0, slope_deg=2.0, aspect_deg=180.0)],
-            description="Lista de celdas de 30x30m de la parcela dibujada",
+            description="List of 30x30m grid cells for the drawn parcel",
         )
 
     class SinglePointSimulationRequest(BaseModel):
         crop_id: str = "papa"
         soil_water_mm: float = 50.0
         t_air_hourly: List[float]
-        radiation_hourly: List[float] = Field(..., description="Radiación solar en W/m² (o MJ/hr si is_radiation_mj_hr=True)")
+        radiation_hourly: List[float] = Field(..., description="Solar radiation in W/m² (or MJ/hr if is_radiation_mj_hr=True)")
         rh_hourly: List[float]
         is_radiation_mj_hr: bool = False
 
@@ -823,11 +891,11 @@ if HAS_FASTAPI:
     def places_lookup(q: str = Query(default="")):
         query = " ".join(q.split())
         if not 2 <= len(query) <= 120:
-            return JSONResponse({"error": "Escribe entre 2 y 120 caracteres."}, status_code=400)
+            return JSONResponse({"error": "Enter between 2 and 120 characters."}, status_code=400)
         try:
             return search_places(query)
         except (OSError, ValueError, KeyError, TypeError):
-            return JSONResponse({"error": "El buscador no está disponible por ahora."}, status_code=502)
+            return JSONResponse({"error": "Place search is currently unavailable."}, status_code=502)
 
     @app.get("/api/v1/crop-cycles")
     def crop_cycles_api():
@@ -835,7 +903,7 @@ if HAS_FASTAPI:
 
     @app.get("/crops")
     def list_crops():
-        """Devuelve la lista de cultivos precalibrados en el sistema."""
+        """Return the list of pre-calibrated crops in the system."""
         return {
             crop_id: {
                 "name": crop.name,
@@ -852,9 +920,9 @@ if HAS_FASTAPI:
     @app.post("/simulate/edo1")
     def simulate_field(request: FieldSimulationRequest):
         """
-        Simulación completa de la parcela:
-        Recibe la respuesta cruda de NASA POWER y las celdas 30x30m de SRTM,
-        y devuelve la temperatura del dosel y métricas de confort para cada celda.
+        Full parcel simulation:
+        Receives the raw NASA POWER response and SRTM 30x30m grid cells,
+        and returns canopy temperature and thermal comfort metrics for each cell.
         """
         try:
             cells_dict = [cell.model_dump() for cell in request.grid_cells]
@@ -870,7 +938,7 @@ if HAS_FASTAPI:
 
     @app.post("/simulate/edo1/point")
     def simulate_point(request: SinglePointSimulationRequest):
-        """Simulación para un punto / celda individual en una serie de horas."""
+        """Simulation for a single point/cell over a sequence of hours."""
         crop = get_crop_parameters(request.crop_id)
         rad_wm2 = (
             [convert_nasa_radiation_to_wm2(r) for r in request.radiation_hourly]
@@ -890,11 +958,11 @@ if HAS_FASTAPI:
         try:
             payload = await request.json()
         except Exception as e:
-            return JSONResponse({"error": f"JSON inválido: {str(e)}"}, status_code=400)
+            return JSONResponse({"error": f"Invalid JSON: {str(e)}"}, status_code=400)
         if simulate_error is not None or payload.get("force_error"):
             return JSONResponse({
-                "error": "Error 500: Fallo inducido en el solver físico para pruebas de resiliencia.",
-                "detail": "El cliente debe conservar la selección de la parcela sin perder los vértices.",
+                "error": "Error 500: Induced physics solver failure for resilience testing.",
+                "detail": "The client must preserve the parcel selection without losing vertices.",
             }, status_code=500)
         return compute_simulation_payload(payload)
 
@@ -909,12 +977,18 @@ if HAS_FASTAPI:
         result, status = parcel_edo1_response(payload)
         return JSONResponse(result, status_code=status)
 
+    @app.post("/api/v1/clima/predecir")
+    @app.post("/api/v1/climate/forecast")
+    def predict_climate_v1(payload: Dict[str, Any]):
+        result, status = climate_forecast_response(payload)
+        return JSONResponse(result, status_code=status)
+
     @app.post("/api/v1/parcelas")
     async def save_parcelas_v1(request: Request):
         try:
             payload = await request.json()
         except Exception as e:
-            return JSONResponse({"error": f"JSON inválido: {str(e)}"}, status_code=400)
+            return JSONResponse({"error": f"Invalid JSON: {str(e)}"}, status_code=400)
         return build_parcel_saved_payload(payload)
 
     @app.post("/api/v1/validate/catalog")
@@ -1106,15 +1180,15 @@ def run():
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     with http.server.ThreadingHTTPServer((HOST, PORT), AgroPhasorHandler) as httpd:
         print("==================================================================")
-        print(" 🚀 AgroPhasor Servidor Activo")
-        print(f" 🌐 Aplicación Web Frontend:  http://localhost:{PORT}")
-        print(f" 📡 Simulación de parcela:   http://localhost:{PORT}/api/v1/parcelas/simulacion")
+        print(" 🚀 AgroPhasor Server Active")
+        print(f" 🌐 Web Frontend Application: http://localhost:{PORT}")
+        print(f" 📡 Parcel Simulation:        http://localhost:{PORT}/api/v1/parcelas/simulacion")
         print(f" 🩺 Health Check:             http://localhost:{PORT}/api/v1/health")
         print("==================================================================")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\nDeteniendo servidor AgroPhasor...")
+            print("\nStopping AgroPhasor server...")
 
 
 if __name__ == "__main__":

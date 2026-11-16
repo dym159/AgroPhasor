@@ -1,9 +1,9 @@
 """
-Motor Analítico de Resolución de EDO 1 (AgroPhasor).
-Implementa la solución analítica exacta paso a paso por factor integrante y linealización de Penman
-derivada formalmente en las Secciones 6.1 a 6.4 del documento técnico.
+Analytical Solver Engine for ODE 1 (AgroPhasor).
+Implements the exact step-by-step integrating factor solution with Penman linearization
+formally derived in Sections 6.1 to 6.4 of the technical specification.
 
-Ecuaciones gobernantes:
+Governing equations:
 H_eff = hc + lambda_max * f_W * Delta
 tau_eff = Cp / H_eff
 T_eq = T_ext + (alpha * f_rad - lambda_max * f_W * VPD_air) / H_eff
@@ -26,13 +26,13 @@ from backend.core.physics import (
 
 @dataclass
 class EDO1StepOutput:
-    t_canopy_c: float        # Temperatura calculada del dosel [°C]
-    t_air_c: float           # Temperatura local del aire [°C]
-    t_eq_c: float            # Temperatura de equilibrio estacionario [°C]
-    delta_t_c: float         # Diferencia T_dosel - T_aire [°C]
-    comfort_index: float     # Confort térmico eta_T [0, 1]
-    is_fever: bool           # Alerta de estrés térmico foliar (fiebre por sequía)
-    is_frost_risk: bool      # Alerta de riesgo de helada
+    t_canopy_c: float        # Calculated canopy temperature [°C]
+    t_air_c: float           # Local air temperature [°C]
+    t_eq_c: float            # Steady-state equilibrium temperature [°C]
+    delta_t_c: float         # Difference T_canopy - T_air [°C]
+    comfort_index: float     # Thermal comfort eta_T [0, 1]
+    is_fever: bool           # Foliar thermal stress alert (drought fever)
+    is_frost_risk: bool      # Frost risk alert
 
 
 def solve_edo1_step(
@@ -46,19 +46,19 @@ def solve_edo1_step(
     sub_steps: int = 1
 ) -> EDO1StepOutput:
     """
-    Resuelve un paso de tiempo (dt) de EDO 1 para una celda de cultivo.
-    Aplica la formulación analítica exacta con linealización de Penman (incondicionalmente estable).
+    Solves a time step (dt) of ODE 1 for a crop cell.
+    Applies the exact analytical formulation with Penman linearization (unconditionally stable).
     """
     dt_sub = dt_seconds / float(sub_steps)
     T = t_current_c
     
-    # Presión de vapor actual del aire [kPa]
+    # Actual air vapor pressure [kPa]
     ea_air = actual_vapor_pressure(t_ext_c, rh_pct)
     es_air = saturation_vapor_pressure(t_ext_c)
     vpd_air = max(0.0, es_air - ea_air)
     delta_penman = penman_saturation_slope(t_ext_c)
     
-    # Factor estomático según nivel hídrico del suelo
+    # Stomatal conductance factor based on soil moisture level
     is_daylight = f_rad_wm2 > 5.0
     fw = stomatal_conductance_factor(
         soil_water_mm=soil_water_mm,
@@ -67,17 +67,17 @@ def solve_edo1_step(
         is_daylight=is_daylight
     )
     
-    # Coeficiente efectivo de disipación de calor
-    # H_eff = h_c + lambda_ev * gamma_c * Delta (combina convección y pendiente evaporativa)
+    # Effective heat dissipation coefficient
+    # H_eff = h_c + lambda_ev * gamma_c * Delta (combines convection and evaporative slope)
     h_eff = crop.hc + (crop.lambda_gamma_max * fw * delta_penman)
     tau_eff = crop.Cp / max(1e-4, h_eff)
     
-    # Temperatura de equilibrio teórico (Ec. 17)
+    # Theoretical equilibrium temperature (Eq. 17)
     radiative_gain = crop.alpha * f_rad_wm2
     latent_loss = crop.lambda_gamma_max * fw * vpd_air
     t_eq = t_ext_c + (radiative_gain - latent_loss) / max(1e-4, h_eff)
     
-    # Integración exponencial exacta en los sub-pasos (Ec. 18)
+    # Exact exponential integration over sub-steps (Eq. 18)
     decay_factor = math.exp(-dt_sub / max(1e-4, tau_eff))
     for _ in range(sub_steps):
         T = t_eq + (T - t_eq) * decay_factor
@@ -100,8 +100,8 @@ def solve_edo1_step(
 
 def compute_lissajous_area(t_air_series: List[float], t_canopy_series: List[float]) -> float:
     """
-    Calcula el área de la trayectoria cerrada en el plano de fase (T_air(t), T_dosel(t)).
-    Fórmula de Gauss / Shoelace para el área del polígono (Sección 2.6.1).
+    Computes the area of the closed trajectory in the phase plane (T_air(t), T_canopy(t)).
+    Uses the Gauss / Shoelace polygon area formula (Section 2.6.1).
     """
     n = len(t_air_series)
     if n < 3 or len(t_canopy_series) < 3:
@@ -122,8 +122,8 @@ def simulate_canopy_diurnal_cycle(
     t_initial_c: Optional[float] = None
 ) -> Dict[str, Any]:
     """
-    Simula un ciclo completo de 24 horas para una celda de cultivo.
-    Devuelve las series horarias y las métricas del Escudo Térmico.
+    Simulates a complete 24-hour cycle for a crop cell.
+    Returns hourly time series and Thermal Shield metrics.
     """
     n_hours = len(t_ext_hourly)
     t_curr = t_initial_c if t_initial_c is not None else t_ext_hourly[0]

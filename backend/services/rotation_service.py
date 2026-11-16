@@ -3,7 +3,6 @@
 import csv
 from copy import deepcopy
 import json
-import random
 from heapq import heappush, heappop
 from itertools import count as counter
 from dataclasses import replace
@@ -14,8 +13,14 @@ from pathlib import Path
 import unicodedata
 from urllib.parse import urlencode
 
+from backend.core.climate_generator import mc_day_to_weather
 from backend.core.edo2_engine import compute_soil_limits, solve_edo2_step
 from backend.core.edo3_engine import solve_edo3_step, compute_liebig_factor
+from backend.services.climate_service import (
+    ClimateUnavailable,
+    history_from_annual_climate,
+    predict_climate_scenarios,
+)
 from backend.services.coupled_model import advance_day, incorporate_residue
 from backend.core.edo4_engine import execute_harvest_event, solve_edo4_step
 from backend.core.edo5_engine import solve_edo5_step
@@ -23,7 +28,8 @@ from backend.models.crop_parameters import CROP_CATALOG
 from backend.services.parcel_edo1 import POWER_DAILY_URL, read_json
 from rotation_ranking import Candidate, METRICS, rank_rotations
 
-PRODUCTS = {"papa": "Papa", "maiz": "Maíz amiláceo", "frijol": "Frijol grano seco"}
+PRODUCTS = {"papa": "Native Potato", "maiz": "Amylaceous Maize", "frijol": "Dry Bean"}
+CSV_CROP_NAMES = {"papa": "Papa", "maiz": "Maíz amiláceo", "frijol": "Frijol grano seco"}
 BASE_WEIGHTS = {"resilience": (.50, .30, .10, .10), "balance": (.25,) * 4,
                 "profit": (.05, .05, .85, .05)}
 REFERENCE_YEAR = 2023
@@ -45,10 +51,6 @@ def load_prices():
                 for row in csv.DictReader(source)}
 
 
-class ClimateUnavailable(RuntimeError):
-    pass
-
-
 @lru_cache(maxsize=64)
 def load_climate(lat, lon):
     fields = ("PRECTOTCORR", "T2M", "RH2M", "ALLSKY_SFC_SW_DWN")
@@ -64,7 +66,7 @@ def load_climate(lat, lon):
         elif units.startswith("kw"):
             radiation_scale = 3.6
         else:
-            raise ValueError("Unidad de radiación desconocida")
+            raise ValueError("Unknown radiation unit")
         climate = {}
         for offset in range(365):
             day = date(REFERENCE_YEAR, 1, 1) + timedelta(days=offset)
@@ -72,16 +74,34 @@ def load_climate(lat, lon):
             rain, temp, humidity, radiation = values
             if not all(map(isfinite, values)) or not (rain >= 0 and -90 <= temp <= 65
                                                        and 0 <= humidity <= 100 and radiation >= 0):
-                raise ValueError("Datos diarios incompletos")
+                raise ValueError("Incomplete daily weather data")
             climate[day.month, day.day] = (rain, temp, humidity, radiation * radiation_scale)
         return climate
     except (KeyError, TypeError, ValueError, OSError) as exc:
-        raise ClimateUnavailable("NASA POWER no devolvió una serie diaria completa. Intenta de nuevo.") from exc
+        raise ClimateUnavailable("NASA POWER did not return a complete daily series. Please try again.") from exc
+
+
+_DEFAULT_LOAD_CLIMATE = load_climate
+
+
+def _rotation_horizon_days(payload, start_day):
+    """Estimate maximum date span in days needed to simulate all candidate routes."""
+    count = payload.get("crop_count", 3)
+    max_crop_days = max(CROP_CATALOG[k].duration_days for k in PRODUCTS)
+    horizon = max(365, int(count) * (max_crop_days + TRANSITION_DAYS) + TRANSITION_DAYS)
+    phases = payload.get("baseline_phases")
+    if isinstance(phases, list) and phases:
+        try:
+            last_harvest = date.fromisoformat(phases[-1]["harvest"])
+            horizon = max(horizon, (last_harvest - start_day).days + TRANSITION_DAYS)
+        except (KeyError, TypeError, ValueError):
+            pass
+    return horizon
 
 
 def number(value, minimum, maximum, label):
     if type(value) not in (int, float) or not minimum <= value <= maximum:
-        raise ValueError(f"{label} debe estar entre {minimum} y {maximum}.")
+        raise ValueError(f"{label} must be between {minimum} and {maximum}.")
     return float(value)
 
 
@@ -96,40 +116,81 @@ def simulate_segment(crop, start, days, soil, climate, slope, irrigation, rain_f
     for offset in range(days):
         day = start + timedelta(days=offset)
         key = (2, 28) if (day.month, day.day) == (2, 29) else (day.month, day.day)
-        rain, temp, humidity, radiation = climate[key]
-        state, diagnostics = advance_day(state, crop, (rain * rain_factor, temp, humidity, radiation),
+        rain, temp, humidity, radiation, *rest = climate[day] if day in climate else climate[key]
+        state, diagnostics = advance_day(state, crop, (rain * rain_factor, temp, humidity, radiation, *rest),
                                           slope, irrigation if growing else 0, growing, organic_matter)
         if growing and not diagnostics["viable"]:
-            raise ValueError("Ruta fuera de los límites térmicos del cultivo.")
+            raise ValueError("Route exceeds the crop's thermal limits.")
         stress_days += growing and diagnostics["water_stress"] > 0
         deficit += 1 - diagnostics["psi"]
     water, npk, depth, biomass, history = state
     return (water / depth if depth else 0, npk, depth, biomass, history, organic_matter), stress_days, deficit
 
 
+def _resolve_rotation_climate(payload, start, lat, lon):
+    delta_t = number(payload.get("delta_T_whatif", 0), -10, 15, "Temperature delta")
+    delta_p = number(payload.get("delta_P_pct_whatif", 0), -90, 200, "Precipitation delta (%)")
+    seed = int(payload.get("climate_seed", 42))
+    use_forecast = bool(payload.get("use_climate_forecast", True))
+    if load_climate is not _DEFAULT_LOAD_CLIMATE or not use_forecast:
+        climate = load_climate(round(lat, 3), round(lon, 3))
+        if delta_t or delta_p:
+            rain_mult = max(0.0, 1.0 + delta_p / 100.0)
+            climate = {
+                k: (w[0] * rain_mult, w[1] + delta_t, w[2], w[3], *(([w[4] + delta_t] if len(w) > 4 else [])))
+                for k, w in climate.items()
+            }
+        return climate, {
+            "climate_source": f"NASA POWER {REFERENCE_YEAR} · historical repeat",
+            "climate_window": None,
+        }
+
+    horizon = _rotation_horizon_days(payload, start)
+    n_mc = int(number(payload.get("mc_samples", 30), 1, 200, "Monte Carlo samples"))
+    forecast = predict_climate_scenarios(
+        lat,
+        lon,
+        start,
+        start + timedelta(days=horizon),
+        n_mc=n_mc,
+        delta_T_whatif=delta_t,
+        delta_P_pct_whatif=delta_p,
+        seed=seed,
+    )
+    climate = {
+        day: mc_day_to_weather(sc_day)
+        for day, sc_day in zip(forecast["dates"], forecast["representative_scenario"])
+    }
+    return climate, {
+        "climate_source": "NASA POWER + Fourier/AR(1)-Gamma Monte Carlo",
+        "climate_window": forecast["metadata"]["fitting_window"],
+        "climate_forecast_meta": forecast["metadata"],
+    }
+
+
 def recommend_rotation(payload):
     if not isinstance(payload, dict):
-        raise ValueError("Se esperaba un objeto JSON.")
+        raise ValueError("Expected a JSON object.")
     physical = {key: value for key, value in payload.items() if key not in ("weights", "strategy")}
     data = json.loads(_cached_rotation(json.dumps(physical, sort_keys=True)))
     candidates = [Candidate(route["id"], route["metrics"]) for route in data["candidates"]]
     weights = dict(zip(METRICS, (.25,) * 4))
     if "weights" in payload:
         if not isinstance(payload["weights"], dict):
-            raise ValueError("Las perillas deben ser un objeto.")
-        values = [number(payload["weights"].get(f"w{i}"), 0, 100, "Cada perilla") for i in range(1, 5)]
+            raise ValueError("Weights must be a JSON object.")
+        values = [number(payload["weights"].get(f"w{i}"), 0, 100, "Each knob weight") for i in range(1, 5)]
         total = sum(values)
         if total <= 0:
-            raise ValueError("Asigna peso al menos a una perilla.")
+            raise ValueError("Assign weight to at least one knob.")
         weights = dict(zip(METRICS, (value / total for value in values)))
     else:
         mode = payload.get("strategy", "balance")
         if mode not in BASE_WEIGHTS:
-            raise ValueError("Estrategia desconocida.")
+            raise ValueError("Unknown strategy mode.")
         weights = dict(zip(METRICS, BASE_WEIGHTS[mode]))
     modes = {key: dict(zip(METRICS, values)) for key, values in BASE_WEIGHTS.items()}
     ranking = rank_rotations(candidates, data["bounds"], {**modes, "custom": weights})
-    by_id = {route["id"]: route for route in data.pop("candidates")}
+    by_id = {route["id"]: route for route in data["candidates"]}
     data["routes"] = [by_id[key] for key in ranking.by_mode["custom"] or ()]
     return data
 
@@ -141,28 +202,53 @@ def _cached_rotation(serialized):
     phases = payload.get("baseline_phases")
     if phases:
         if not isinstance(phases, list) or not 2 <= len(phases) <= 6:
-            raise ValueError("La comparación admite entre dos y seis fases completas.")
+            raise ValueError("Baseline comparison supports between two and six complete phases.")
         baseline = _evaluate_spatial({**payload, "_baseline": True, "crop_id": phases[0]["cropId"],
                                      "crop_count": len(phases), "start_date": phases[0]["start"]})
         result["baseline"] = baseline["candidates"][0] if baseline["candidates"] else None
         result["baseline_rejected"] = not bool(baseline["candidates"])
     if payload.get("evaluate_uncertainty"):
-        climate = load_climate(round(payload["latitude"], 3), round(payload["longitude"], 3))
-        rng = random.Random(2026)
-        samples = 20
+        start_dt = date.fromisoformat(payload["start_date"])
+        horizon = _rotation_horizon_days(payload, start_dt)
+        samples = int(number(payload.get("uncertainty_samples", 20), 1, 200, "Uncertainty samples"))
+        delta_t = number(payload.get("delta_T_whatif", 0), -10, 15, "Temperature delta")
+        delta_p = number(payload.get("delta_P_pct_whatif", 0), -90, 200, "Precipitation delta (%)")
+        seed = int(payload.get("climate_seed", 42))
+        history_override = None
+        if load_climate is not _DEFAULT_LOAD_CLIMATE:
+            annual = load_climate(round(payload["latitude"], 3), round(payload["longitude"], 3))
+            history_override = history_from_annual_climate(
+                annual, lat=payload["latitude"], lon=payload["longitude"]
+            )
+        mc_forecast = predict_climate_scenarios(
+            payload["latitude"],
+            payload["longitude"],
+            start_dt,
+            start_dt + timedelta(days=horizon),
+            n_mc=samples,
+            delta_T_whatif=delta_t,
+            delta_P_pct_whatif=delta_p,
+            seed=seed,
+            history_override=history_override,
+        )
         survived = {route["id"]: 0 for route in result["candidates"]}
-        for _ in range(samples):
-            temperature_shift = rng.gauss(0, 1)
-            rain_multiplier = max(0, rng.gauss(1, .2))
-            scenario = {day: (rain * rain_multiplier, temp + temperature_shift, rh, radiation)
-                        for day, (rain, temp, rh, radiation) in climate.items()}
+        for sc in mc_forecast["escenarios"]:
+            scenario = {day: mc_day_to_weather(sc_day) for day, sc_day in zip(mc_forecast["dates"], sc)}
             tested = _evaluate_spatial(payload, scenario)
             for route in tested["candidates"]:
                 if route["id"] in survived:
                     survived[route["id"]] += 1
         for route in result["candidates"]:
-            route["uncertainty"] = {"samples": samples, "viable_samples": survived[route["id"]]}
-        result["uncertainty_assumptions"] = "20 escenarios sintéticos, desviación térmica de 1 °C y de lluvia del 20 %. Frecuencia de viabilidad; sin calibración probabilística local."
+            route["uncertainty"] = {
+                "samples": samples,
+                "viable_samples": survived[route["id"]],
+                "confidence_pct": round(100.0 * survived[route["id"]] / samples, 1),
+            }
+        fit_win = mc_forecast["metadata"]["fitting_window"]
+        result["uncertainty_assumptions"] = (
+            f"{samples} Fourier (K=2) + AR(1) + Bernoulli-Gamma Monte Carlo scenarios "
+            f"calibrated on {fit_win['start']}..{fit_win['end']} ({fit_win['days']} days, seed={seed})."
+        )
     return json.dumps(result)
 
 
@@ -172,21 +258,30 @@ def _evaluate_spatial(payload, climate_override=None):
     if not cells:
         return _evaluate_rotation(payload, climate_override)
     if not isinstance(cells, list) or len(cells) > 2500:
-        raise ValueError("La malla debe contener hasta 2500 celdas.")
+        raise ValueError("The terrain grid must contain at most 2,500 cells.")
     validated = []
     for cell in cells:
         validated.append((
-            number(cell.get("area_m2"), .001, 1e8, "Área de celda"),
-            number(cell.get("altitude_m"), -500, 9000, "Altitud"),
-            number(cell.get("slope_deg"), 0, 80, "Pendiente"),
+            number(cell.get("area_m2"), .001, 1e8, "Cell area"),
+            number(cell.get("altitude_m"), -500, 9000, "Altitude"),
+            number(cell.get("slope_deg"), 0, 80, "Slope"),
         ))
+    base_climate = climate_override
+    base_meta = {}
+    if base_climate is None:
+        start_dt = date.fromisoformat(payload.get("start_date", ""))
+        lat = number(payload.get("latitude"), -90, 90, "Latitude")
+        lon = number(payload.get("longitude"), -180, 180, "Longitude")
+        base_climate, base_meta = _resolve_rotation_climate(payload, start_dt, lat, lon)
     area = sum(cell[0] for cell in validated)
     altitude = sum(a*z for a,z,_ in validated) / area
     results = []
     for cell_area, elevation, slope in validated:
         cell_payload = {**payload, "slope_deg": slope,
                         "temperature_offset_c": -.0065 * (elevation-altitude)}
-        result = _evaluate_rotation(cell_payload, climate_override)
+        result = _evaluate_rotation(cell_payload, base_climate)
+        if base_meta:
+            result.update(base_meta)
         results.append((cell_area / area, result))
     result = deepcopy(results[0][1])
     common = set(route["id"] for route in result["candidates"])
@@ -221,57 +316,65 @@ def _evaluate_spatial(payload, climate_override=None):
 
 def _evaluate_rotation(payload, climate_override=None):
     if not isinstance(payload, dict):
-        raise ValueError("Se esperaba un objeto JSON.")
+        raise ValueError("Expected a JSON object.")
     first = payload.get("crop_id")
     if not isinstance(first, str) or first not in PRODUCTS:
-        raise ValueError("Elige papa, maíz amiláceo o frijol seco.")
+        raise ValueError("Choose Native Potato (papa), Amylaceous Maize (maiz), or Dry Bean (frijol).")
     count = payload.get("crop_count", 3)
     if type(count) is not int or not 2 <= count <= 6:
-        raise ValueError("La rotación debe contener entre dos y seis cultivos.")
+        raise ValueError("The crop rotation must contain between two and six crops.")
     try:
         start = date.fromisoformat(payload.get("start_date", ""))
         if not 1900 <= start.year <= 9990:
             raise ValueError
     except (ValueError, TypeError) as exc:
-        raise ValueError("Indica una fecha de siembra válida.") from exc
+        raise ValueError("Provide a valid planting start date.") from exc
 
-    lat = number(payload.get("latitude"), -90, 90, "La latitud")
-    lon = number(payload.get("longitude"), -180, 180, "La longitud")
-    slope = number(payload.get("slope_deg", 0), 0, 80, "La pendiente")
-    irrigation = number(payload.get("irrigation_mm_day", 0), 0, 30, "El riego diario")
+    lat = number(payload.get("latitude"), -90, 90, "Latitude")
+    lon = number(payload.get("longitude"), -180, 180, "Longitude")
+    slope = number(payload.get("slope_deg", 0), 0, 80, "Slope")
+    irrigation = number(payload.get("irrigation_mm_day", 0), 0, 30, "Daily irrigation")
     region = payload.get("region", "")
     if not isinstance(region, str) or len(region) > 100:
-        raise ValueError("Indica una región válida.")
+        raise ValueError("Provide a valid region.")
     costs = payload.get("costs_pen_ha", {})
     if not isinstance(costs, dict) or costs.keys() - PRODUCTS.keys():
-        raise ValueError("Los costos deben corresponder al catálogo piloto.")
-    costs = {key: number(value, 0, 1_000_000, "El costo por hectárea")
+        raise ValueError("Costs must correspond to the pilot crop catalog.")
+    costs = {key: number(value, 0, 1_000_000, "Cost per hectare")
              for key, value in costs.items()}
 
     mode = payload.get("strategy", "balance")
     if not isinstance(mode, str) or mode not in BASE_WEIGHTS:
-        raise ValueError("Estrategia desconocida.")
+        raise ValueError("Unknown strategy mode.")
     weights = {key: dict(zip(METRICS, values)) for key, values in BASE_WEIGHTS.items()}
     sliders = payload.get("weights")
     if sliders is not None:
         if not isinstance(sliders, dict):
-            raise ValueError("Las perillas deben ser un objeto.")
-        values = [number(sliders.get(f"w{i}"), 0, 100, "Cada perilla") for i in range(1, 5)]
+            raise ValueError("Weights must be a JSON object.")
+        values = [number(sliders.get(f"w{i}"), 0, 100, "Each knob weight") for i in range(1, 5)]
         total = sum(values)
         if not total:
-            raise ValueError("Asigna peso al menos a una perilla.")
+            raise ValueError("Assign weight to at least one knob.")
         weights["custom"] = dict(zip(METRICS, (value / total for value in values)))
         mode = "custom"
 
-    residue_fraction = number(payload.get("residue_fraction", .5), 0, 1, "Fracción de rastrojo")
-    irrigation_cost = number(payload.get("irrigation_cost_pen_mm_ha", 0), 0, 10000, "Costo de riego")
-    climate = climate_override if climate_override is not None else load_climate(round(lat, 3), round(lon, 3))
-    temperature_offset = number(payload.get("temperature_offset_c", 0), -70, 70, "Corrección térmica")
+    residue_fraction = number(payload.get("residue_fraction", .5), 0, 1, "Residue fraction")
+    irrigation_cost = number(payload.get("irrigation_cost_pen_mm_ha", 0), 0, 10000, "Irrigation cost")
+    if climate_override is not None:
+        climate = climate_override
+        climate_meta = {}
+    else:
+        climate, climate_meta = _resolve_rotation_climate(payload, start, lat, lon)
+    temperature_offset = number(payload.get("temperature_offset_c", 0), -70, 70, "Temperature offset")
     if temperature_offset:
-        climate = {key: (rain, temp + temperature_offset, humidity, radiation)
-                   for key, (rain, temp, humidity, radiation) in climate.items()}
+        adjusted = {}
+        for key, weather in climate.items():
+            rain, temp, humidity, radiation, *rest = weather
+            t_soil = (rest[0] + temperature_offset,) if rest else ()
+            adjusted[key] = (rain, temp + temperature_offset, humidity, radiation, *t_soil)
+        climate = adjusted
     prices = {key: load_prices().get((normalize_name(region), product))
-              for key, product in PRODUCTS.items()}
+              for key, product in CSV_CROP_NAMES.items()}
     manual = payload.get("baseline_phases") if payload.get("_baseline") else None
     if manual:
         previous_end = None
@@ -279,7 +382,7 @@ def _evaluate_rotation(payload, climate_override=None):
             phase_start = date.fromisoformat(phase["start"])
             phase_end = date.fromisoformat(phase["harvest"])
             if phase.get("cropId") not in PRODUCTS or phase_end <= phase_start or (previous_end and phase_start < previous_end):
-                raise ValueError("La rotación actual contiene cultivos o fechas inválidos.")
+                raise ValueError("The current rotation contains invalid crops or dates.")
             previous_end = phase_end
     routes = {}
     rejected = []
@@ -291,7 +394,7 @@ def _evaluate_rotation(payload, climate_override=None):
         duration = ((date.fromisoformat(manual[len(stages)]["harvest"]) - planting).days
                     if manual else crop.duration_days)
         if not 1 <= duration <= 1095:
-            raise ValueError("Cada cultivo debe durar entre 1 y 1095 días.")
+            raise ValueError("Each crop cycle must last between 1 and 1,095 days.")
         try:
             wet, _, _ = simulate_segment(crop, planting, duration, wet, climate, slope, irrigation, 1, True)
             dry, stress_days, deficit = simulate_segment(
@@ -380,5 +483,6 @@ def _evaluate_rotation(payload, climate_override=None):
         "climate_year": REFERENCE_YEAR, "dry_rain_factor": DRY_RAIN_FACTOR,
         "transition_days": TRANSITION_DAYS,
         "slope_assumed": "slope_deg" not in payload,
+        **climate_meta,
     }
 

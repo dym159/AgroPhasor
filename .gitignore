@@ -1,9 +1,9 @@
 # ==============================================================================
 # .gitignore — AgroPhasor (Nasa_AgroFarm)
-# Cumplimiento estricto de la tarea CC-01 y estándares de seguridad
+# Strict compliance with Linear task CC-01 and security standards
 # ==============================================================================
 
-# Entorno y Secretos (CRÍTICO: nunca subir a Git)
+# Environment and Secrets (CRITICAL: never commit to Git)
 .env
 .env.*
 .env*.bak*
@@ -11,7 +11,7 @@
 !.env.example
 .netrc
 
-# Credenciales de Google Cloud y llaves privadas
+# Google Cloud credentials and private keys
 *credentials*.json
 client_secret*.json
 *gcp*.json
@@ -24,7 +24,7 @@ client_secret*.json
 id_rsa
 id_rsa.pub
 
-# Python (Backend y Simulador EDO / FFT)
+# Python (Backend and ODE / Simulation Engine)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -55,7 +55,7 @@ wheels/
 htmlcov/
 .coverage
 
-# Node.js / TypeScript / Frontend (Leaflet, Mapas, Dashboard)
+# Node.js / TypeScript / Frontend (Leaflet, Maps, Dashboard)
 node_modules/
 .next/
 .nuxt/
@@ -67,14 +67,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Datos satelitales en caché y temporales
+# Cached and temporary satellite data
 data/cache/
 data/raw/
 data/temp/
 *.tmp
 *.log
 
-# Editores e IDEs
+# Editors and IDEs
 .vscode/
 .idea/
 .claude/
@@ -83,7 +83,7 @@ data/temp/
 *.sublime-project
 *.sublime-workspace
 
-# Archivos del Sistema Operativo
+# Operating System Files
 .DS_Store
 .DS_Store?
 ._*

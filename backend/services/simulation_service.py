@@ -1,12 +1,12 @@
 """
-Servicio de Simulación Espacio-Temporal para AgroPhasor.
-Orquesta:
-1. Recepción y normalización de datos de NASA POWER (T2M, Radiación, RH, GWETROOT).
-2. Detección automática de la Humedad Radicular real del suelo vía NASA (SMAP / GWETROOT).
-3. Procesamiento de la cuadrícula de celdas 30x30m (Topografía SRTM).
-4. Downscaling topoclimático local.
-5. Ejecución analítica de EDO 1 para todo el lote.
-6. Generación de diagnósticos de Escudo Térmico y alertas.
+Spatiotemporal Simulation Service for AgroPhasor.
+Orchestrates:
+1. Ingestion and normalization of NASA POWER data (T2M, Radiation, RH, GWETROOT).
+2. Automatic detection of actual root-zone soil moisture via NASA (SMAP / GWETROOT).
+3. Processing of the 30x30m grid cells (SRTM topography).
+4. Local topoclimatic downscaling.
+5. Analytical execution of ODE 1 across the entire parcel.
+6. Generation of Thermal Shield diagnostics and alerts.
 """
 
 import math
@@ -33,7 +33,7 @@ class SimulationService:
         crop_parameters: Optional[CropParameters] = None,
     ) -> Dict[str, Any]:
         """
-        Ejecuta la simulación para todas las celdas de 30x30m del terreno sobre las horas disponibles.
+        Runs the simulation for all 30x30m terrain cells over the available hours.
         """
         crop = crop_parameters or get_crop_parameters(crop_id)
         
@@ -44,7 +44,7 @@ class SimulationService:
         
         timestamps = sorted(t2m_dict.keys())
         if not timestamps:
-            raise ValueError("No se encontraron series temporales válidas en los datos de NASA POWER.")
+            raise ValueError("No valid time series found in NASA POWER data.")
             
         t2m_raw = [float(t2m_dict[ts]) for ts in timestamps]
         if is_radiation_mj_hr:
@@ -54,7 +54,7 @@ class SimulationService:
             
         rh_raw = [float(rh_dict.get(ts, 60.0)) for ts in timestamps]
         
-        # Inferencia o lectura de la humedad radicular real del suelo (SMAP / NASA GWETROOT)
+        # Inference or direct reading of root-zone soil moisture (SMAP / NASA GWETROOT)
         soil_moisture_source = "manual"
         if soil_water_mm is None:
             if gwetroot_dict:
@@ -66,7 +66,7 @@ class SimulationService:
                 soil_water_mm = round(0.70 * crop.W_fc, 2)
                 soil_moisture_source = "default_70pct_Wfc"
         
-        # Altitud media de referencia si no se especifica
+        # Default reference altitude if not specified
         if ref_altitude_m is None and grid_cells:
             alts = [float(c.get("altitude_m", 3000.0)) for c in grid_cells]
             ref_altitude_m = sum(alts) / float(len(alts))
@@ -82,7 +82,7 @@ class SimulationService:
             slope_rad = math.radians(float(cell.get("slope_deg", 0.0)))
             aspect_rad = math.radians(float(cell.get("aspect_deg", 0.0)))
             
-            # Factor solar topográfico fijo de la celda
+            # Fixed topographic solar projection factor for the cell
             topo_solar = topographic_solar_factor(slope_rad, aspect_rad)
             
             canopy_temps = []
@@ -121,11 +121,11 @@ class SimulationService:
             
             mean_comfort = sum(comfort_list) / float(len(comfort_list))
             if mean_comfort >= 0.75:
-                shield_color = "Azul Cobalto (Óptimo)"
+                shield_color = "Cobalt Blue (Optimal)"
             elif mean_comfort >= 0.45:
-                shield_color = "Ámbar (Estrés Moderado)"
+                shield_color = "Amber (Moderate Stress)"
             else:
-                shield_color = "Rojo Intenso (Estrés Crítico)"
+                shield_color = "Deep Red (Critical Stress)"
                 
             cells_output.append({
                 "cell_id": cell_id,

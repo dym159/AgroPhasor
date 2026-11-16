@@ -1,11 +1,10 @@
 """
-Servicio de Simulación de Parcela para EDO 4 (Crecimiento de Biomasa y Rastrojo).
-AgroPhasor - Qillawasi / Universidad Nacional de Ingeniería.
+Parcel Simulation Service for ODE 4 (Biomass Growth and Stover Residue).
+AgroPhasor - Qillawasi / National University of Engineering (UNI).
 
-Conecta el motor agrofísico `edo4_engine`, el validador `edo4_validator` y el adaptador
-de teledetección `edo4_data_adapter` para resolver la dinámica temporal y espacial de biomasa
-en parcelas agrícolas bajo forzamientos de NASA (POWER, SMAP, GPM, ECOSTRESS, SRTM, GEDI)
-y bases del USDA / FAO.
+Connects the `edo4_engine` solver, `edo4_validator`, and `edo4_data_adapter`
+to resolve temporal and spatial biomass dynamics across agricultural parcels under
+NASA forcings (POWER, SMAP, GPM, ECOSTRESS, SRTM, GEDI) and USDA / FAO datasets.
 """
 
 from typing import Dict, Any, List, Optional, Union
@@ -28,11 +27,11 @@ from backend.services.edo4_data_adapter import (
 
 
 class ParcelEDO4Service:
-    """Servicio de simulación agrofísica y teledetección satelital para EDO 4."""
+    """Agrophysical simulation and satellite remote-sensing service for ODE 4."""
 
     @staticmethod
     def validate_catalog(catalog_path_or_dict: Any) -> Dict[str, Any]:
-        """Valida formalmente un archivo o diccionario de catálogo para EDO 4."""
+        """Formally validates a JSON file or dictionary catalog for ODE 4."""
         return validate_edo4_catalog(catalog_path_or_dict)
 
     @staticmethod
@@ -42,7 +41,7 @@ class ParcelEDO4Service:
         nass_historical_county_yield_t_ha: Optional[float] = None,
         gedi_max_biomass_t_ha: Optional[float] = None
     ) -> CropParameters:
-        """Calibra el potencial genético y de cosecha a partir de FAO GAEZ, USDA NASS y GEDI."""
+        """Calibrates genetic biomass ceiling and harvest potential from FAO GAEZ, USDA NASS, and GEDI."""
         return EDO4DataAdapter.calibrate_crop_ceiling_from_faog_and_nass(
             crop_id=crop_id,
             fao_gaez_yield_potential_t_ha=fao_gaez_yield_potential_t_ha,
@@ -67,8 +66,8 @@ class ParcelEDO4Service:
         custom_crop: Optional[CropParameters] = None
     ) -> Dict[str, Any]:
         """
-        Ejecuta la simulación temporal completa de EDO 4 para una campaña de cultivo.
-        Permite el contraste simultáneo con observaciones de Landsat/MODIS NDVI y Lidar GEDI.
+        Runs a full ODE 4 time-series simulation for a crop season.
+        Supports simultaneous validation against Landsat/MODIS NDVI and GEDI Lidar observations.
         """
         crop = custom_crop if custom_crop is not None else get_crop_parameters(crop_id)
         
@@ -80,7 +79,7 @@ class ParcelEDO4Service:
             obs_gedi = gedi_biomass_observations.get(d) if gedi_biomass_observations else None
 
             forcing = EnvironmentalForcingEDO4(
-                date_str=f"Día {d+1}",
+                date_str=f"Day {d+1}",
                 f_rad_daily_mj_m2=f_rad_series_mj_m2[d],
                 temp_canopy_c=t_canopy_series_c[d],
                 soil_water_mm=soil_water_series_mm[d],
@@ -110,18 +109,18 @@ class ParcelEDO4Service:
         simulation_days: int = 30
     ) -> Dict[str, Any]:
         """
-        Simula una malla 2.5D espacial de celdas de 30x30m (SRTM) bajo EDO 4.
-        Calcula la biomasa espacial, cobertura y rendimiento esperado en cada punto del terreno.
+        Simulates a spatial 2.5D grid of 30x30m cells (SRTM) under ODE 4.
+        Computes spatial biomass, canopy cover, and expected yield for each parcel cell.
         """
         crop = get_crop_parameters(crop_id)
         nutrients = soil_nutrients or {"N": 55.0, "P": 30.0, "K": 70.0}
 
-        # Extraer radiación media diaria y temperatura de NASA POWER
+        # Extract mean daily radiation and temperature from NASA POWER
         t2m_dict = nasa_hourly_data.get("T2M", {})
         rad_dict = nasa_hourly_data.get("ALLSKY_SFC_SW_DWN", {})
 
         mean_t2m = (sum(float(v) for v in t2m_dict.values()) / max(1, len(t2m_dict))) if t2m_dict else 20.0
-        # Convertir suma de radiación horaria a MJ/m²·día
+        # Convert summed hourly radiation to MJ/m²·day
         mean_rad_mj = (sum(float(v) for v in rad_dict.values())) if rad_dict else 18.0
 
         cells_summary = []
@@ -131,13 +130,13 @@ class ParcelEDO4Service:
             aspect = float(cell.get("aspect_deg", 180.0))
             alt = float(cell.get("altitude_m", 3000.0))
 
-            # Ajustes topoclimáticos locales por celda
+            # Local per-cell topoclimatic adjustments
             from backend.core.topoclimatic import topographic_solar_factor, lapse_rate_air_temperature
             g_topo = topographic_solar_factor(slope, aspect)
             f_rad_cell = max(5.0, mean_rad_mj * g_topo)
             t_cell = lapse_rate_air_temperature(mean_t2m, alt, 3000.0)
 
-            # Serie constante de forzamiento para la celda
+            # Constant forcing series for the cell
             f_rad_series = [f_rad_cell] * simulation_days
             t_series = [t_cell] * simulation_days
             w_series = [soil_water_mm] * simulation_days

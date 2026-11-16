@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AgroPhasor - Acceso Directo de Ejecución Local
-Sirve la aplicación frontend y la API en http://127.0.0.1:5173
+AgroPhasor - Local Execution Entry Point
+Serves the frontend web application and REST API at http://127.0.0.1:5173
 """
 import sys
 import os

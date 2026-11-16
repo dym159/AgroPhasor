@@ -1,17 +1,17 @@
 """
-Validación Rigurosa de EDO 5: Erosión Hídrica de la Capa Fértil (AgroPhasor)
-============================================================================
-Forzamiento Agroclimático con Datos Oficiales de NASA GPM / IMERG / NASA POWER,
-Modelos Digitales de Elevación SRTM, Vigor de Biomasa Landsat/MODIS/Sentinel-2
-y Parámetros Edáficos de USDA NRCS SSURGO / Web Soil Survey (WSS) / CDL.
+Rigorous Validation of ODE 5: Topsoil Water Erosion (AgroPhasor)
+==================================================================
+Agro-climatic forcing with Official Data from NASA GPM / IMERG / NASA POWER,
+SRTM Digital Elevation Models, Landsat/MODIS/Sentinel-2 Biomass Vigor,
+and Edaphic Parameters from USDA NRCS SSURGO / Web Soil Survey (WSS) / CDL.
 
-Criterios Físicos, Geomorfológicos y Agronómicos Evaluados:
-  1. Modulación Topográfica SRTM (sin θ): Cero erosión en plano (θ = 0°) y crecimiento con la pendiente.
-  2. Escudo Foliar y de Rastrojo (exp(-λ_B · B)): Atenuación exponencial del impacto de lluvia (Landsat/MODIS).
-  3. Salto Discreto de Labranza (k_er(q)): Conmutación a k_er,labranza = 0.0035 durante ventanas desnudas (8.75x).
-  4. Pérdida Particulada de Fósforo (ξ_P · |dH/dt| · P) y degradación de capacidad hídrica W_cc(H) (EDO 2 y 3).
-  5. Contraste de Rotaciones: Rotación Conservacionista (cobertura) vs. Barbecho Erosivo en temporada de lluvia.
-  6. Evaluación de la Métrica de Pareto f2(π) ("Mejor Tierra al Final") y Deformación Visual 3D.
+Physical, Geomorphological & Agronomic Criteria Evaluated:
+  1. SRTM Topographic Modulation (sin theta): Zero erosion on flat ground (theta = 0°) and rising with slope.
+  2. Foliar & Residue Shield (exp(-lambda_B · B)): Exponential rainfall impact attenuation (Landsat/MODIS).
+  3. Discrete Tillage Jump (k_er(q)): Switch to k_er,tillage = 0.0035 during bare windows (8.75x).
+  4. Particulate Phosphorus Loss (xi_P · |dH/dt| · P) & water-holding capacity loss W_cc(H) (ODE 2 & 3).
+  5. Rotation Contrast: Conservation Rotation (canopy cover) vs. Erosive Bare Fallow during rainy season.
+  6. Pareto Metric Evaluation f2(pi) ("Best Soil at the End") and 3D Mesh Deformation.
 """
 
 import sys
@@ -22,7 +22,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Permitir importación directa desde el directorio actual o scratch
+# Allow direct import from current directory or scratch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scratch.test_edo5_nasa import AgroPhasorEDO5
 from backend.core.edo5_engine import (
@@ -41,8 +41,8 @@ JSON_CATALOG = os.path.join(
 
 def fetch_nasa_data(lat=-12.06, lon=-75.21, start="20230101", end="20230630"):
     """
-    Descarga datos agroclimáticos diarios de NASA POWER / GPM para la temporada lluviosa y de transición
-    en los Andes centrales (Enero a Junio 2023). En caso de no haber red, utiliza serie calibrada.
+    Download daily agro-climatic data from NASA POWER / GPM for the rainy and transition seasons
+    in the central Andes (January to June 2023). Falls back to a calibrated series if offline.
     """
     url = (
         f"https://power.larc.nasa.gov/api/temporal/daily/point?"
@@ -56,21 +56,21 @@ def fetch_nasa_data(lat=-12.06, lon=-75.21, start="20230101", end="20230630"):
             dates = sorted(data['PRECTOTCORR'].keys())
             precip = np.array([float(data['PRECTOTCORR'][d]) for d in dates])
             t2m = np.array([float(data['T2M'][d]) for d in dates])
-            print(f"      Descarga exitosa de NASA POWER: {len(dates)} días ({dates[0]} a {dates[-1]}).")
+            print(f"      NASA POWER download succeeded: {len(dates)} days ({dates[0]} to {dates[-1]}).")
             return dates, precip, t2m
     except Exception as e:
-        print(f"      (Aviso: Red externa no disponible [{e}], cargando serie agroclimática calibrada GPM/NASA POWER Mantaro)...")
-        # Serie sintética estadísticamente idéntica a NASA POWER Mantaro (Ene-Jun, 181 días)
+        print(f"      (Notice: External network unavailable [{e}], loading calibrated GPM/NASA POWER Mantaro series)...")
+        # Synthetic series statistically matched to NASA POWER Mantaro (Jan-Jun, 181 days)
         np.random.seed(42)
         n_days = 181
         dates = [f"2023-day-{i+1:03d}" for i in range(n_days)]
-        # Temporada de lluvia andina (Ene-Mar: lluvias intensas 10-60 mm; Abr-Jun: transición seca)
+        # Andean rainy season (Jan-Mar: intense storms 10-60 mm; Apr-Jun: dry transition)
         precip = np.zeros(n_days)
         for i in range(n_days):
-            if i < 90:  # Enero - Marzo (GPM lluvias intensas)
+            if i < 90:  # January - March (GPM heavy rains)
                 if np.random.rand() < 0.65:
                     precip[i] = np.random.exponential(scale=14.0) + (35.0 if i in [15, 32, 54, 78] else 0.0)
-            else:       # Abril - Junio (estación seca)
+            else:       # April - June (dry season)
                 if np.random.rand() < 0.20:
                     precip[i] = np.random.exponential(scale=3.5)
         t2m = 13.0 + 3.0 * np.sin(np.linspace(0, np.pi, n_days)) + np.random.normal(0, 1.2, n_days)
@@ -79,15 +79,15 @@ def fetch_nasa_data(lat=-12.06, lon=-75.21, start="20230101", end="20230630"):
 
 def run_validation():
     print("=" * 95)
-    print("VALIDACIÓN CIENTÍFICA DE EDO 5: EROSIÓN HÍDRICA DE LA CAPA FÉRTIL (AgroPhasor)")
-    print("Forzamiento Satelital Oficial: NASA GPM / IMERG / NASA POWER / SRTM / USDA SSURGO")
+    print("SCIENTIFIC VALIDATION OF ODE 5: TOPSOIL WATER EROSION (AgroPhasor)")
+    print("Official Satellite Forcing: NASA GPM / IMERG / NASA POWER / SRTM / USDA SSURGO")
     print("=" * 95)
 
-    # 1. Validar el catálogo oficial de parámetros JSON
-    print("\n[1/6] Validando catálogo JSON oficial (gemini-code-1794737993920.json)...")
+    # 1. Validate official JSON parameter catalog
+    print("\n[1/6] Validating official JSON catalog (gemini-code-1794737993920.json)...")
     val_json = validate_edo5_catalog(JSON_CATALOG)
     if not val_json["valid"]:
-        print(f"      ERROR en catálogo JSON: {val_json['errors']}")
+        print(f"      ERROR in JSON catalog: {val_json['errors']}")
         sys.exit(1)
     
     p_global = val_json["global_parameters_edo5"]
@@ -95,29 +95,29 @@ def run_validation():
     k_lab = p_global["k_er_labranza"]
     lam_b = p_global["lambda_B_ha_t"]
     xi_p = p_global["xi_P"]
-    print(f"      Catálogo 100% válido:")
-    print(f"      - k_er_cultivo: {k_cult} mm/(mm·día)")
-    print(f"      - k_er_labranza: {k_lab} mm/(mm·día) (Salto por labranza: {k_lab/k_cult:.2f}x)")
-    print(f"      - lambda_B: {lam_b} ha/t (Atenuación foliar)")
-    print(f"      - xi_P: {xi_p} (Arrastre mecánico de fósforo)")
+    print(f"      Catalog 100% valid:")
+    print(f"      - k_er_cultivo:  {k_cult} mm/(mm·day)")
+    print(f"      - k_er_labranza: {k_lab} mm/(mm·day) (Tillage jump: {k_lab/k_cult:.2f}x)")
+    print(f"      - lambda_B:      {lam_b} ha/t (Canopy attenuation)")
+    print(f"      - xi_P:          {xi_p} (Mechanical phosphorus drag)")
 
-    # 2. Descargar o cargar serie temporal NASA
-    print("\n[2/6] Obteniendo forzamiento de precipitación satelital NASA GPM / IMERG...")
+    # 2. Fetch or load NASA rainfall time series
+    print("\n[2/6] Obtaining satellite precipitation forcing NASA GPM / IMERG...")
     dates, precip, t_air = fetch_nasa_data()
     n_days = len(dates)
     total_rain = np.sum(precip)
     max_storm = np.max(precip)
     storm_day = int(np.argmax(precip))
-    print(f"      Precipitación total acumulada: {total_rain:.1f} mm en {n_days} días.")
-    print(f"      Evento de tormenta máxima: {max_storm:.1f} mm/día (Día {storm_day+1}).")
+    print(f"      Total cumulative rainfall: {total_rain:.1f} mm over {n_days} days.")
+    print(f"      Peak storm event: {max_storm:.1f} mm/day (Day {storm_day+1}).")
 
-    # 3. Evaluación Criterio 1: Modulación Topográfica SRTM (sin θ)
-    print("\n[3/6] Evaluando Criterio 1: Modulación topográfica SRTM...")
+    # 3. Evaluate Criterion 1: SRTM Topographic Modulation (sin theta)
+    print("\n[3/6] Evaluating Criterion 1: SRTM topographic modulation...")
     slopes = [0.0, 4.0, 12.0, 25.0]
-    labels_slopes = ["Plano (0°)", "Suave (4°)", "Ladera Media (12°)", "Pronunciada (25°)"]
+    labels_slopes = ["Flat (0°)", "Gentle (4°)", "Moderate Slope (12°)", "Steep (25°)"]
     h0_base = 400.0  # mm
     
-    # Suelo con cobertura intermedia (B = 2.0 t/ha)
+    # Soil with intermediate cover (B = 2.0 t/ha)
     sim_slopes = []
     for s in slopes:
         sim = simulate_edo5_timeseries(
@@ -131,16 +131,16 @@ def run_validation():
             lambda_b=lam_b
         )
         sim_slopes.append(sim)
-        print(f"      θ = {s:4.1f}° -> Pérdida acumulada: {sim['total_erosion_loss_mm']:6.3f} mm ({sim['erosion_loss_pct']:.3f}%)")
+        print(f"      θ = {s:4.1f}° -> Cumulative loss: {sim['total_erosion_loss_mm']:6.3f} mm ({sim['erosion_loss_pct']:.3f}%)")
     
-    assert sim_slopes[0]["total_erosion_loss_mm"] == 0.0, "Criterio 1 falló: En θ=0° la erosión debe ser estrictamente cero."
+    assert sim_slopes[0]["total_erosion_loss_mm"] == 0.0, "Criterion 1 failed: At theta=0° erosion must be strictly zero."
 
-    # 4. Evaluación Criterio 2: Escudo de Biomasa Foliar y Rastrojos (Landsat/MODIS/EDO4)
-    print("\n[4/6] Evaluando Criterio 2: Escudo vegetal de biomasa exp(-λ_B · B)...")
+    # 4. Evaluate Criterion 2: Foliar Biomass & Residue Shield (Landsat/MODIS/ODE4)
+    print("\n[4/6] Evaluating Criterion 2: Foliar biomass shield exp(-λ_B · B)...")
     biomass_levels = [0.0, 1.0, 4.0, 15.0]
-    biomass_labels = ["Desnudo (0 t/ha)", "Incipiente (1 t/ha)", "Frijol (4 t/ha)", "Maíz Maduro (15 t/ha)"]
+    biomass_labels = ["Bare (0 t/ha)", "Emerging (1 t/ha)", "Dry Bean (4 t/ha)", "Mature Maize (15 t/ha)"]
     sim_biomass = []
-    slope_test = 14.0  # Ladera típica
+    slope_test = 14.0  # Typical hillside slope
     for b in biomass_levels:
         sim = simulate_edo5_timeseries(
             precip_series=list(precip),
@@ -154,31 +154,31 @@ def run_validation():
         )
         sim_biomass.append(sim)
         prot_pct = (1.0 - math.exp(-lam_b * b)) * 100.0
-        print(f"      B = {b:4.1f} t/ha -> Protección: {prot_pct:5.1f}% | Pérdida de suelo: {sim['total_erosion_loss_mm']:.3f} mm")
+        print(f"      B = {b:4.1f} t/ha -> Protection: {prot_pct:5.1f}% | Soil loss: {sim['total_erosion_loss_mm']:.3f} mm")
     
-    # 5. Evaluación Criterio 3: Contraste de Rotaciones (Conservacionista vs Barbecho Lluvioso)
-    print("\n[5/6] Evaluando Criterio 3 & 4: Contraste rotacional y acoplamiento con Fósforo y Agua...")
-    # Rotación A: Cobertura permanente (Maíz 90 días -> rastrojo 20 días -> Frijol 70 días)
-    # Suelo protegido siempre con B >= 1.5 t/ha
+    # 5. Evaluate Criterion 3: Rotation Contrast (Conservationist vs Rainy Bare Fallow)
+    print("\n[5/6] Evaluating Criteria 3 & 4: Rotation contrast and Phosphorus/Water coupling...")
+    # Rotation A: Permanent cover (Maize 90 days -> residue 20 days -> Dry Bean 70 days)
+    # Soil continuously protected with B >= 1.5 t/ha
     biomass_rot_a = []
     trans_rot_a = []
     for d in range(n_days):
-        if d < 90:      # Maíz creciendo
+        if d < 90:      # Maize growing
             biomass_rot_a.append(0.5 + 18.0 * (d / 90.0))
             trans_rot_a.append(False)
-        elif d < 110:   # Transición con rastrojo abundante conservado (r_res = 0.40)
+        elif d < 110:   # Transition with abundant retained residue (r_res = 0.40)
             biomass_rot_a.append(4.0)
             trans_rot_a.append(True)
-        else:           # Frijol creciendo
+        else:           # Dry Bean growing
             biomass_rot_a.append(0.3 + 7.0 * ((d - 110) / 71.0))
             trans_rot_a.append(False)
 
-    # Rotación B: Monocultivo convencional con barbecho desnudo laboreado en plena época de lluvias
-    # (Días 10 a 60 con suelo totalmente expuesto B = 0 y labranza activa)
+    # Rotation B: Conventional monoculture with bare tilled fallow during peak rainy season
+    # (Days 15 to 75 with completely exposed soil B = 0 and active tillage)
     biomass_rot_b = []
     trans_rot_b = []
     for d in range(n_days):
-        if 15 <= d <= 75:  # Barbecho desnudo en pico de lluvia GPM
+        if 15 <= d <= 75:  # Bare fallow during peak GPM rains
             biomass_rot_b.append(0.0)
             trans_rot_b.append(True)
         elif d < 15:
@@ -212,87 +212,87 @@ def run_validation():
         initial_nutrients_kg_ha=init_nutrients
     )
 
-    # Métricas de Pareto f2
+    # Pareto f2 metrics
     f2_rot_a = compute_soil_pareto_metric_f2(h0_base, sim_rot_a["final_h_mm"], chemical_health_eta_n=0.88)
     f2_rot_b = compute_soil_pareto_metric_f2(h0_base, sim_rot_b["final_h_mm"], chemical_health_eta_n=0.45)
 
     print("\n" + "-" * 90)
-    print(f"RESULTADOS COMPARATIVOS DE LAS ESTRATEGIAS ROTACIONALES (Pendiente SRTM: 15°):")
+    print(f"COMPARATIVE RESULTS OF ROTATION STRATEGIES (SRTM Slope: 15°):")
     print("-" * 90)
-    print(f"Métrica                           Rotación A (Sostenible)     Rotación B (Barbecho Lluvioso)")
-    print(f"Pérdida de suelo fértil:          {sim_rot_a['total_erosion_loss_mm']:8.3f} mm               {sim_rot_b['total_erosion_loss_mm']:8.3f} mm")
-    print(f"Espesor fértil final H(T):        {sim_rot_a['final_h_mm']:8.3f} mm               {sim_rot_b['final_h_mm']:8.3f} mm")
-    print(f"Capacidad de campo final Wcc(H):  {sim_rot_a['final_w_cc_mm']:8.2f} mm               {sim_rot_b['final_w_cc_mm']:8.2f} mm")
-    print(f"Pérdida mecánica de Fósforo (P):  {sim_rot_a['cumulative_p_drag_kg_ha']:8.3f} kg/ha            {sim_rot_b['cumulative_p_drag_kg_ha']:8.3f} kg/ha")
-    print(f"Métrica de Pareto f2(π):          {f2_rot_a:8.4f}                  {f2_rot_b:8.4f} (Menor es mejor)")
+    print(f"Metric                            Rotation A (Sustainable)    Rotation B (Rainy Fallow)")
+    print(f"Fertile topsoil loss:             {sim_rot_a['total_erosion_loss_mm']:8.3f} mm               {sim_rot_b['total_erosion_loss_mm']:8.3f} mm")
+    print(f"Final fertile depth H(T):         {sim_rot_a['final_h_mm']:8.3f} mm               {sim_rot_b['final_h_mm']:8.3f} mm")
+    print(f"Final field capacity Wcc(H):      {sim_rot_a['final_w_cc_mm']:8.2f} mm               {sim_rot_b['final_w_cc_mm']:8.2f} mm")
+    print(f"Mechanical Phosphorus (P) loss:   {sim_rot_a['cumulative_p_drag_kg_ha']:8.3f} kg/ha            {sim_rot_b['cumulative_p_drag_kg_ha']:8.3f} kg/ha")
+    print(f"Pareto Metric f2(π):              {f2_rot_a:8.4f}                  {f2_rot_b:8.4f} (Lower is better)")
     print("-" * 90)
 
-    # 6. Generar gráficos científicos de validación
-    print("\n[6/6] Generando panel de visualización agrofísica (scratch/validacion_edo5_nasa.png)...")
+    # 6. Generate scientific validation charts
+    print("\n[6/6] Generating agro-physical visualization panel (scratch/validacion_edo5_nasa.png)...")
     fig, axes = plt.subplots(3, 2, figsize=(15, 12))
     fig.suptitle(
-        "Validación Científica de EDO 5: Erosión Hídrica de la Capa Fértil (AgroPhasor)\n"
-        "Forzamiento Multisatélite: NASA GPM / IMERG / NASA POWER / SRTM / USDA SSURGO",
+        "Scientific Validation of ODE 5: Topsoil Water Erosion (AgroPhasor)\n"
+        "Multi-Satellite Forcing: NASA GPM / IMERG / NASA POWER / SRTM / USDA SSURGO",
         fontsize=13, fontweight='bold', y=0.98
     )
 
     t_axis = np.arange(1, n_days + 1)
 
-    # Subplot 1: Lluvia NASA GPM / POWER
-    axes[0, 0].bar(t_axis, precip, color='dodgerblue', width=1.0, alpha=0.75, label='Lluvia Diaria P0(t) [mm/día]')
-    axes[0, 0].set_title("1. Forzamiento Meteorológico NASA GPM / IMERG / POWER", fontweight='bold', fontsize=10)
-    axes[0, 0].set_ylabel("Precipitación (mm/día)")
+    # Subplot 1: NASA GPM / POWER Rainfall
+    axes[0, 0].bar(t_axis, precip, color='dodgerblue', width=1.0, alpha=0.75, label='Daily Rainfall P0(t) [mm/day]')
+    axes[0, 0].set_title("1. Meteorological Forcing NASA GPM / IMERG / POWER", fontweight='bold', fontsize=10)
+    axes[0, 0].set_ylabel("Precipitation (mm/day)")
     axes[0, 0].grid(True, linestyle='--', alpha=0.5)
     axes[0, 0].legend(loc='upper right')
 
-    # Subplot 2: Modulación Topográfica SRTM
+    # Subplot 2: SRTM Topographic Modulation
     for i, s in enumerate(slopes):
         axes[0, 1].plot(t_axis, sim_slopes[i]["trajectory_h"], label=f"{labels_slopes[i]}", linewidth=2.0)
-    axes[0, 1].set_title("2. Modulación Topográfica SRTM (sin θ): Cero en Plano", fontweight='bold', fontsize=10)
-    axes[0, 1].set_ylabel("Espesor Capa Fértil H(t) [mm]")
+    axes[0, 1].set_title("2. SRTM Topographic Modulation (sin θ): Zero on Flat Terrain", fontweight='bold', fontsize=10)
+    axes[0, 1].set_ylabel("Fertile Layer Depth H(t) [mm]")
     axes[0, 1].grid(True, linestyle='--', alpha=0.5)
     axes[0, 1].legend(loc='lower left')
 
-    # Subplot 3: Escudo Vegetal Foliar
+    # Subplot 3: Foliar Vegetative Shield
     for i, b in enumerate(biomass_levels):
         axes[1, 0].plot(t_axis, sim_biomass[i]["trajectory_h"], label=f"{biomass_labels[i]}", linewidth=2.0)
-    axes[1, 0].set_title("3. Escudo Mecánico Foliar exp(-λ_B · B) en Ladera 14°", fontweight='bold', fontsize=10)
-    axes[1, 0].set_ylabel("Espesor Capa Fértil H(t) [mm]")
+    axes[1, 0].set_title("3. Mechanical Foliar Shield exp(-λ_B · B) on 14° Slope", fontweight='bold', fontsize=10)
+    axes[1, 0].set_ylabel("Fertile Layer Depth H(t) [mm]")
     axes[1, 0].grid(True, linestyle='--', alpha=0.5)
     axes[1, 0].legend(loc='lower left')
 
-    # Subplot 4: Trayectorias de Biomasa de las dos Rotaciones
-    axes[1, 1].plot(t_axis, biomass_rot_a, color='forestgreen', linewidth=2.2, label='Rotación A (Cobertura Continua)')
-    axes[1, 1].plot(t_axis, biomass_rot_b, color='crimson', linewidth=2.0, linestyle='--', label='Rotación B (Barbecho Desnudo en Lluvias)')
-    axes[1, 1].set_title("4. Dinámica de Cobertura Vegetal y Transición q(t)", fontweight='bold', fontsize=10)
-    axes[1, 1].set_ylabel("Biomasa B(t) [t/ha]")
+    # Subplot 4: Biomass Trajectories for Both Rotations
+    axes[1, 1].plot(t_axis, biomass_rot_a, color='forestgreen', linewidth=2.2, label='Rotation A (Continuous Cover)')
+    axes[1, 1].plot(t_axis, biomass_rot_b, color='crimson', linewidth=2.0, linestyle='--', label='Rotation B (Bare Fallow in Rains)')
+    axes[1, 1].set_title("4. Vegetation Cover Dynamics and Transition q(t)", fontweight='bold', fontsize=10)
+    axes[1, 1].set_ylabel("Biomass B(t) [t/ha]")
     axes[1, 1].grid(True, linestyle='--', alpha=0.5)
     axes[1, 1].legend(loc='upper left')
 
-    # Subplot 5: Desgaste Acumulativo de Suelo H(t) en las Dos Rotaciones
-    axes[2, 0].plot(t_axis, sim_rot_a["trajectory_h"], color='forestgreen', linewidth=2.5, label=f'Rotación A (Pérdida: {sim_rot_a["total_erosion_loss_mm"]:.2f} mm)')
-    axes[2, 0].plot(t_axis, sim_rot_b["trajectory_h"], color='crimson', linewidth=2.5, label=f'Rotación B (Pérdida: {sim_rot_b["total_erosion_loss_mm"]:.2f} mm)')
-    axes[2, 0].set_title("5. Desgaste Irreversible del Horizonte Orgánico H(t)", fontweight='bold', fontsize=10)
-    axes[2, 0].set_xlabel("Días de Simulación")
-    axes[2, 0].set_ylabel("Espesor Fértil H(t) [mm]")
+    # Subplot 5: Cumulative Soil Loss H(t) Across Both Rotations
+    axes[2, 0].plot(t_axis, sim_rot_a["trajectory_h"], color='forestgreen', linewidth=2.5, label=f'Rotation A (Loss: {sim_rot_a["total_erosion_loss_mm"]:.2f} mm)')
+    axes[2, 0].plot(t_axis, sim_rot_b["trajectory_h"], color='crimson', linewidth=2.5, label=f'Rotation B (Loss: {sim_rot_b["total_erosion_loss_mm"]:.2f} mm)')
+    axes[2, 0].set_title("5. Irreversible Organic Horizon Loss H(t)", fontweight='bold', fontsize=10)
+    axes[2, 0].set_xlabel("Simulation Days")
+    axes[2, 0].set_ylabel("Fertile Depth H(t) [mm]")
     axes[2, 0].grid(True, linestyle='--', alpha=0.5)
     axes[2, 0].legend(loc='lower left')
 
-    # Subplot 6: Retroalimentación Edáfica Wcc(H) y Arrastre de Fósforo
+    # Subplot 6: Edaphic Feedback Wcc(H) & Phosphorus Drag
     ax6 = axes[2, 1]
     ax6_twin = ax6.twinx()
-    l1 = ax6.plot(t_axis, sim_rot_a["trajectory_w_cc"], color='blue', linewidth=2.0, label='Wcc Rotación A (mm)')
-    l2 = ax6.plot(t_axis, sim_rot_b["trajectory_w_cc"], color='red', linewidth=2.0, linestyle=':', label='Wcc Rotación B (mm)')
+    l1 = ax6.plot(t_axis, sim_rot_a["trajectory_w_cc"], color='blue', linewidth=2.0, label='Wcc Rotation A (mm)')
+    l2 = ax6.plot(t_axis, sim_rot_b["trajectory_w_cc"], color='red', linewidth=2.0, linestyle=':', label='Wcc Rotation B (mm)')
     
-    # Pérdida acumulativa de P
+    # Cumulative P loss
     p_cum_a = np.cumsum([0.008 * sim_rot_a["trajectory_loss"][k] * 45.0 for k in range(n_days)])
     p_cum_b = np.cumsum([0.008 * sim_rot_b["trajectory_loss"][k] * 45.0 for k in range(n_days)])
-    l3 = ax6_twin.plot(t_axis, p_cum_b, color='darkorange', linewidth=2.0, label='Pérdida P Rot. B (kg/ha)')
+    l3 = ax6_twin.plot(t_axis, p_cum_b, color='darkorange', linewidth=2.0, label='P Loss Rot. B (kg/ha)')
 
-    ax6.set_title("6. Acoplamiento Edáfico: Reducción de Wcc y Arrastre de P", fontweight='bold', fontsize=10)
-    ax6.set_xlabel("Días de Simulación")
-    ax6.set_ylabel("Capacidad de Campo Wcc [mm]")
-    ax6_twin.set_ylabel("Arrastre Acumulado Fósforo [kg/ha]", color='darkorange')
+    ax6.set_title("6. Edaphic Coupling: Wcc Reduction & Phosphorus Drag", fontweight='bold', fontsize=10)
+    ax6.set_xlabel("Simulation Days")
+    ax6.set_ylabel("Field Capacity Wcc [mm]")
+    ax6_twin.set_ylabel("Cumulative Phosphorus Drag [kg/ha]", color='darkorange')
     ax6.grid(True, linestyle='--', alpha=0.5)
 
     lines = l1 + l2 + l3
@@ -303,9 +303,9 @@ def run_validation():
     output_png = os.path.join(os.path.dirname(__file__), "validacion_edo5_nasa.png")
     plt.savefig(output_png, dpi=200)
     plt.close()
-    print(f"      Gráfico generado exitosamente en: {output_png}")
+    print(f"      Chart generated successfully at: {output_png}")
     print("\n" + "=" * 95)
-    print("VALIDACIÓN DE EDO 5 COMPLETADA CON ÉXITO: 100% DE CRITERIOS FÍSICOS VERIFICADOS")
+    print("ODE 5 VALIDATION COMPLETED SUCCESSFULLY: 100% OF PHYSICAL CRITERIA VERIFIED")
     print("=" * 95)
 
 

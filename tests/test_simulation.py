@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AgroPhasor - Pruebas Unitarias de Simulación y Contrato CC-02
-Ejecutable con: python -m unittest discover tests
+AgroPhasor - Unit Tests for Simulation and CC-02 Contract
+Run with: python -m unittest discover tests
 """
 
 import unittest
@@ -9,14 +9,14 @@ import json
 import os
 import sys
 
-# Asegurar ruta al backend
+# Ensure backend is on sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(BASE_DIR, "backend"))
 
 from main import AgroPhasorHandler
 
 class DummyHandler(AgroPhasorHandler):
-    """Subclase mock para probar la lógica de procesamiento sin abrir sockets."""
+    """Mock subclass to test request processing logic without opening sockets."""
     def __init__(self):
         pass
 
@@ -25,7 +25,7 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.handler = DummyHandler()
 
     def test_simulation_payload_success(self):
-        """Verifica que un payload GeoJSON válido genere los 5 bloques de indicadores acordados."""
+        """Verify that a valid GeoJSON payload generates the 5 agreed indicator blocks."""
         sample_payload = {
             "version": "1.0-alpha",
             "lote_seleccionado_id": "lote-mantaro-01",
@@ -37,7 +37,7 @@ class TestAgroPhasorSimulation(unittest.TestCase):
                         "type": "Feature",
                         "id": "lote-mantaro-01",
                         "properties": {
-                            "name": "Lote Principal",
+                            "name": "Primary Lot",
                             "area_ha": 2.45
                         },
                         "geometry": {
@@ -59,12 +59,12 @@ class TestAgroPhasorSimulation(unittest.TestCase):
 
         result = self.handler.process_simulation(sample_payload)
         
-        # 1. Estado y metadatos
+        # 1. Status and metadata
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["meta"]["lote_id"], "lote-mantaro-01")
         self.assertEqual(result["meta"]["area_ha"], 2.45)
         
-        # 2. Cinco bloques de variables físicas por celda según Plan Maestro
+        # 2. Five physical variable blocks per cell as defined in the Master Plan
         ind = result["indicadores"]
         self.assertIn("humedad_radicular_W", ind)
         self.assertIn("temperatura_dosel_T", ind)
@@ -73,12 +73,12 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertIn("espesor_fertil_H", ind)
         self.assertIn("escudo_ambiental", ind)
 
-        # 3. Unidades y órdenes de magnitud
+        # 3. Units and magnitudes
         self.assertEqual(ind["humedad_radicular_W"]["unidad"], "mm")
         self.assertGreater(ind["humedad_radicular_W"]["valor"], 0)
         self.assertEqual(ind["temperatura_dosel_T"]["unidad"], "°C")
 
-        # Verificación específica de dinámica EDO 4 (Biomasa y Teledetección)
+        # Specific check for ODE 4 dynamics (Biomass and Remote Sensing)
         self.assertIn("valor", ind["biomasa_aerea_B"])
         self.assertEqual(ind["biomasa_aerea_B"]["unidad"], "t/ha")
         self.assertIn("tasa_crecimiento_diario", ind["biomasa_aerea_B"])
@@ -86,7 +86,7 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertIn("cobertura_foliar_pct", ind["biomasa_aerea_B"])
         self.assertIn("rendimiento_estimado_cosecha", ind["biomasa_aerea_B"])
 
-        # 4. Rotación recomendada de Pareto
+        # 4. Pareto-recommended rotation
         self.assertIn("rotacion_recomendada", result)
         rot = result["rotacion_recomendada"]
         self.assertIn("plan_actual", rot)
@@ -94,7 +94,7 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertIn("motivo_agronomico", rot)
 
     def test_priority_modes_affect_metrics(self):
-        """Verifica que los modos Máxima Resiliencia, Balance Óptimo y Mayor Ganancia ajusten el escudo."""
+        """Verify that Max Resilience, Balanced Optimal, and Max Profit modes adjust the shield."""
         payload_resilience = {"lote_seleccionado_id": "L1", "modo_prioridad": "maxima_resiliencia"}
         payload_optimo = {"lote_seleccionado_id": "L1", "modo_prioridad": "balance_optimo"}
         payload_profit = {"lote_seleccionado_id": "L1", "modo_prioridad": "mayor_ganancia"}
@@ -107,7 +107,7 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         shield_optimo = res_optimo["indicadores"]["escudo_ambiental"]["indice"]
         shield_profit = res_profit["indicadores"]["escudo_ambiental"]["indice"]
 
-        # Modo resiliencia prioriza escudo ambiental alto y selecciona ruta resiliente
+        # Resilience mode prioritizes a higher environmental shield and picks a resilient route
         self.assertGreater(shield_resilience, shield_profit)
         self.assertNotEqual(
             res_resilience["rotacion_recomendada"]["ruta_seleccionada"],
@@ -132,9 +132,9 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertEqual(water["pareto_frente"], profit["pareto_frente"])
 
     def test_liebig_minimum_and_shield_states(self):
-        """Verifica la lógica matemática de la Ley de Liebig y los 4 estados del escudo."""
-        # Simulación de evaluación física
-        # eta_N = min(1.0, 30 / 150) = 0.20 (Nitrógeno fuertemente limitante)
+        """Verify Liebig's Law math and the 4 environmental shield states."""
+        # Physical evaluation simulation
+        # eta_N = min(1.0, 30 / 150) = 0.20 (Nitrogen strongly limiting)
         # eta_P = min(1.0, 70 / 80) = 0.875
         # eta_K = min(1.0, 200 / 220) = 0.909
         fertN, fertP, fertK = 30, 70, 200
@@ -146,11 +146,11 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertEqual(eta_min, eta_N)
         self.assertAlmostEqual(eta_min, 0.20, places=2)
 
-        # Estados de escudo
-        # Azul Cobalto: Psi >= 0.70
-        # Violeta / Ámbar: 0.38 <= Psi < 0.70
-        # Rojo Intenso: Psi < 0.38
-        # Desactivado: stage == "transicion"
+        # Shield states
+        # Cobalt Blue: Psi >= 0.70
+        # Violet / Amber: 0.38 <= Psi < 0.70
+        # Deep Red: Psi < 0.38
+        # Deactivated: stage == "transicion"
         def classify_shield(psi, stage="cultivo"):
             if stage == "transicion":
                 return "desactivado"
@@ -166,7 +166,7 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertEqual(classify_shield(0.90, stage="transicion"), "desactivado")
 
     def test_places_endpoint_validation_and_search(self):
-        """Verifica validación de longitud y respuesta de /api/places con geocoder simulado."""
+        """Verify length validation and response of /api/places using a mocked geocoder."""
         import io
         from unittest.mock import patch
         import main as backend_main
@@ -198,15 +198,15 @@ class TestAgroPhasorSimulation(unittest.TestCase):
         self.assertEqual(payload, [{"name": "Huancayo, Junín, Perú", "lat": -12.0651, "lon": -75.2049}])
 
     def test_edo4_web_api_endpoints(self):
-        """Verifica que el servicio web de EDO 4 compute ciclos y valide con el catálogo oficial."""
+        """Verify that the ODE 4 web service computes cycles and validates against the official catalog."""
         from backend.services.parcel_edo4 import ParcelEDO4Service
         from backend.models.edo4_validator import validate_edo4_catalog
 
-        # 1. Validación de catálogo oficial gemini-code-179
+        # 1. Validate official catalog gemini-code-179
         val = validate_edo4_catalog("gemini-code-1794737993920.json")
         self.assertTrue(val["valid"])
 
-        # 2. Simulación de ciclo
+        # 2. Cycle simulation
         res = ParcelEDO4Service.simulate_crop_cycle(
             crop_id="maiz",
             f_rad_series_mj_m2=[20.0] * 15,
@@ -216,7 +216,7 @@ class TestAgroPhasorSimulation(unittest.TestCase):
             phosphorus_series_kg_ha=[40.0] * 15,
             potassium_series_kg_ha=[90.0] * 15,
         )
-        self.assertEqual(res["crop"], "Maíz")
+        self.assertEqual(res["crop"], "Maize")
         self.assertEqual(res["days_simulated"], 15)
         self.assertGreater(res["final_biomass_t_ha"], 0.0)
 

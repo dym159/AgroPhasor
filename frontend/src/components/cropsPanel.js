@@ -8,7 +8,7 @@ export function createCropsPanel(container, initialState, callbacks) {
 
   const countTag = createElement('span', { className: 'panel-tag' });
   const header = createElement('div', { className: 'panel-header' }, [
-    createElement('h2', { className: 'panel-title', text: 'Cultivos' }),
+    createElement('h2', { className: 'panel-title', text: 'Crops' }),
     countTag,
   ]);
 
@@ -16,7 +16,7 @@ export function createCropsPanel(container, initialState, callbacks) {
     type: 'search',
     className: 'crop-search-input',
     attrs: {
-      placeholder: 'Filtrar cultivos...',
+      placeholder: 'Filter crops...',
       value: initialState.cropSearchQuery,
     },
   });
@@ -38,7 +38,7 @@ export function createCropsPanel(container, initialState, callbacks) {
       state.cropSearchQuery
     );
 
-    countTag.textContent = `${state.selectedCropIds.length} activos`;
+    countTag.textContent = `${state.selectedCropIds.length} active`;
 
     clearChildren(groupRow);
     for (const groupName of CROP_GROUPS) {
@@ -57,13 +57,13 @@ export function createCropsPanel(container, initialState, callbacks) {
     const selectVisibleBtn = createElement('button', {
       type: 'button',
       className: 'btn btn-compact',
-      text: 'Marcar visibles',
+      text: 'Select visible',
       onClick: () => callbacks.onSelectBatch(filteredCrops.map((c) => c.id)),
     });
     const clearAllBtn = createElement('button', {
       type: 'button',
       className: 'btn btn-compact',
-      text: 'Limpiar',
+      text: 'Clear',
       onClick: callbacks.onClearCrops,
     });
     bulkActions.append(selectVisibleBtn, clearAllBtn);
@@ -105,7 +105,7 @@ export function createCropsPanel(container, initialState, callbacks) {
 function filterCrops(crops, group, query) {
   const normalizedQuery = query.trim().toLowerCase();
   return crops.filter((crop) => {
-    const matchesGroup = group === 'Todos' || crop.group === group;
+    const matchesGroup = group === 'All' || crop.group === group;
     if (!matchesGroup) return false;
     if (!normalizedQuery) return true;
     return (

@@ -1,85 +1,74 @@
-# Plan maestro de AgroPhasor
+# AgroPhasor Master Plan
 
-## Entrega del proyecto
+## Project Deliverable
 
-Una web en la que un agricultor pueda dibujar su parcela, armar un calendario con sus cultivos, simular cómo responde el terreno y comparar su plan con rotaciones sugeridas. El usuario objetivo conoce su terreno y usa el celular para trabajar. La pantalla debe poder usarse con instrucciones breves, nombres familiares y controles táctiles.
+A web application where a farmer can draw their parcel, build a crop calendar, simulate how the land responds, and compare their plan against recommended crop rotations. The target user knows their land and relies on a mobile phone for day-to-day work. The interface must be usable with brief instructions, familiar terminology, and touch-friendly controls.
 
-La primera entrega demuestra una parcela, dos o más periodos y un catálogo pequeño acordado con Física. La ubicación, los cultivos y la fecha de entrega siguen por confirmar. Empezar con un cultivo por lote y habilitar hasta dos zonas si el simulador y la interfaz superan las pruebas de esa modalidad. El calendario y la selección de rotaciones deben funcionar en móvil y escritorio.
+The initial release demonstrates one parcel, two or more planting periods, and a focused crop catalog agreed upon with the Physics team. Starting with one crop per parcel and enabling up to two management zones once the simulator and UI pass single-parcel validation, both the calendar and rotation selector are designed to work across mobile and desktop.
 
-## Secuencia de trabajo
+## Work Sequence
 
-| Hito | Qué se puede hacer en paralelo | Evidencia para cerrarlo |
+| Milestone | Parallel Workstreams | Completion Evidence |
 |---|---|---|
-| 1. Fijar el contrato | Física fija unidades, parámetros y caso de referencia. Matemática diseña la integración y las métricas. CC prepara mapa, calendario y API con datos de prueba. | Ejemplo de solicitud y respuesta versionado, con una parcela y dos periodos. Cada equipo sabe qué recibe y qué entrega. |
-| 2. Resolver el caso mínimo | Física y Matemática verifican una celda y los saltos de cosecha y siembra. CC integra NASA POWER, prueba el flujo visual y prepara despliegue. | Caso base y caso de estrés reproducibles, con resultados de referencia por variable y tolerancias. |
-| 3. Integrar la rotación | CC conecta el motor por celda y los resultados por periodo. Matemática verifica el buscador y el frente de Pareto. | El recorrido completo compara el plan manual y las recomendaciones con el motor real. |
-| 4. Validar y publicar | El equipo ejecuta pruebas científicas, de API, de interfaz y de rendimiento. Una persona del perfil objetivo prueba la pantalla. | Demo desplegada, fuentes atribuidas, resultados reproducibles y recorrido de respaldo probado. |
-| 5. Probar adopción | Tras la demo, preparar un piloto con una cooperativa o un técnico que atienda varias parcelas. | Evidencia de uso para decidir una siembra y de disposición a pagar por repetir el servicio. |
+| 1. Lock the API Contract | Physics locks units, parameters, and reference cases. Math designs numerical integration and objective metrics. CS prepares the map, calendar, and API with mock fixtures. | Versioned request/response examples with one parcel and two periods. Every team knows its exact inputs and outputs. |
+| 2. Solve the Minimal Case | Physics and Math verify a single cell and discrete harvest/planting transitions. CS integrates NASA POWER, tests the visual workflow, and prepares deployment. | Reproducible baseline and stress test cases with reference outputs per state variable and tolerances. |
+| 3. Integrate Crop Rotation | CS connects the per-cell engine and period-level results. Math verifies the search algorithm and Pareto front. | End-to-end user flow comparing a manual planting plan against engine-driven rotation recommendations. |
+| 4. Validate and Publish | The team runs scientific, API, UI, and performance tests. A representative target user tests the interface. | Deployed demo, attributed data sources, reproducible results, and verified fallback workflow. |
+| 5. Pilot Adoption | Following the demo, prepare a field pilot with a cooperative or agricultural technician managing multiple parcels. | Evidence of real planting decisions informed by the tool and willingness to pay for recurring campaigns. |
 
-## Física · definir el comportamiento del terreno
+## Physics · Defining Land Behavior
 
-1. **Fijar el estado por celda.** Usar temperatura del dosel `T` (°C), humedad radicular `W` (mm), nutrientes `N, P, K` (kg/ha), biomasa aérea `B` (t/ha) y espesor fértil `H` (mm). Son cinco bloques y siete componentes escalares. Documentar condiciones iniciales, unidades, rangos y la hipótesis de columnas 2.5D desacopladas. Identificar datos observados, estimaciones y supuestos.
-2. **Cerrar los balances.** Entregar la versión aprobada de las ecuaciones de energía, agua, nutrientes, biomasa y erosión, con las relaciones de cierre del PDF. Para cada término indicar significado, unidad, signo, rango, fuente y parámetro ajustable. Aclarar qué controles corresponden al manejo —riego, fertilización y rastrojo— y qué valores describen terreno o un escenario hipotético.
-3. **Resolver las transiciones.** En cosecha, registrar el rendimiento definido por el índice de cosecha, calcular el rastrojo y activar el régimen de transición. En siembra, inicializar la biomasa basal y activar los parámetros del siguiente cultivo. Definir cómo contabilizar la materia orgánica incorporada en la siembra, ya que la especificación también usa materia orgánica como propiedad del terreno. Acordar qué estado sigue entre periodos y qué cambia en cada evento. Distinguir biomasa verde de rastrojo al calcular cobertura y erosión durante la transición.
-4. **Entregar el catálogo inicial.** Por cultivo, registrar familia, duración, calendario, coeficientes y umbrales por etapa, biomasa basal y máxima e índice de cosecha. Definir qué restricciones son obligatorias para una recomendación y qué riesgos se informan. Registrar contexto y excepciones para reglas agronómicas como la repetición de familia.
-5. **Cerrar las salidas explicables.** Definir escudo/índice ambiental, humedad, estrés por calor, fertilidad, crecimiento, erosión y alerta de riego. Para cada indicador acordar fórmula, unidades, umbral, escala espacial y texto que verá el agricultor. Etiquetar los resultados del modelo como estimaciones.
-6. **Entregar casos de referencia.** Una celda en condiciones base y otra bajo estrés, con entradas y salidas esperadas y un evento cosecha–siembra. Incluir un caso de lluvia en pendiente con distinta cobertura. Validar órdenes de magnitud, balances y plausibilidad agronómica antes de usar los resultados en la demo.
+1. **Lock per-cell state variables.** Use canopy temperature `T` (°C), root-zone soil moisture `W` (mm), available nutrients `N, P, K` (kg/ha), above-ground biomass `B` (t/ha), and fertile topsoil depth `H` (mm). These form five physical blocks and seven scalar components. Document initial conditions, units, valid bounds, and the decoupled 2.5D column hypothesis, clearly distinguishing observed data, estimates, and assumptions.
+2. **Close the conservation balances.** Deliver the approved equations for thermal energy, water, nutrients, biomass, and erosion, along with the closure relations from the technical PDF. For each term, specify its meaning, unit, sign, range, source, and tunable parameter. Clarify which inputs represent farmer management—irrigation, fertilization, and stover retention—and which describe terrain properties or hypothetical climate scenarios.
+3. **Resolve discrete transitions.** At harvest, record yield via the harvest index, compute remaining stover residue, and activate the bare-soil/fallow transition regime. At planting, initialize basal biomass and load the next crop's parameters. Define how organic matter incorporated at planting is accounted for, which state variables carry over across periods, and how green biomass vs. stover residue differently protect against erosion during transitions.
+4. **Deliver the initial crop catalog.** For each crop, record botanical family, cycle duration, planting window, stage coefficients and thresholds, basal and maximum biomass, and harvest index. Define hard feasibility constraints versus advisory risk warnings, including agronomic rules such as family alternation.
+5. **Finalize explainable outputs.** Define the environmental shield index, soil moisture status, heat stress, fertility sufficiency, biomass growth, topsoil erosion, and irrigation alerts. For each indicator, agree on its formula, units, threshold, spatial aggregation scale, and farmer-facing label, marking model outputs as estimates.
+6. **Provide reference test cases.** Supply one cell under baseline conditions and another under climate stress, including expected inputs, outputs, and a harvest-to-planting transition, plus a sloped rainfall case with varying cover. Validate orders of magnitude, conservation balances, and agronomic plausibility.
 
-## Matemática · convertir el modelo en un cálculo verificable
+## Mathematics · Turning the Model into Verifiable Computation
 
-1. **Especificar el sistema híbrido.** Fijar el modo discreto de cultivo o transición, la semántica de las fechas y el orden de actualización en los eventos. Documentar qué acoplamientos se actualizan por paso y bajo qué hipótesis se aplica el integrador exponencial de NPK. Seleccionar el integrador para el resto, su paso y sus tolerancias. Comparar con un paso más fino y revisar convergencia y no negatividad. Registrar excedentes, agotamiento o inviabilidad según el balance físico.
-2. **Verificar los escenarios climáticos.** Preparar un caso histórico y escenarios de estrés con hipótesis explícitas. Si se usa FFT más perturbaciones, documentar el periodo de ajuste, la semilla y la construcción de la precipitación y temperatura. Verificar estacionalidad, magnitud y persistencia de los extremos. Si se muestra un porcentaje, definirlo como una frecuencia dentro de los escenarios probados y explicar qué evento se contó.
-3. **Definir el problema de rotación.** Una candidata contiene cultivos, fechas, transición y estado heredado por lote o zona. Incorporar cultivos fijados por el agricultor, duraciones y restricciones. Precisar si una violación de umbral invalida la secuencia o genera una alerta, cómo se evalúa entre celdas y escenarios, y qué devuelve el motor si todas las rotaciones son inviables.
-4. **Cerrar las cuatro métricas.** Documentar cómo se minimizan estrés climático e hídrico, degradación del suelo, déficit económico y duración del ciclo. Acordar agregación espacial y temporal, referencias de normalización, tratamiento de métricas constantes, desempates y combinación de escenarios. Calcular margen con ingresos menos costos cuando hay datos locales suficientes. El modo **Mayor Ganancia** depende de esa disponibilidad.
-5. **Verificar búsqueda y Pareto.** Enumerar un catálogo pequeño y obtener un frente de referencia. Comparar factibilidad, métricas y candidatas no dominadas con la búsqueda. Antes de atribuir optimalidad a A*, definir el estado, las aristas, el costo y la heurística, y justificar la poda para el resultado buscado. Documentar cuándo la búsqueda entrega un subconjunto aproximado. Usar la enumeración como referencia de la demo si el catálogo sigue siendo pequeño.
-6. **Fijar prioridades.** Entregar pesos no negativos que sumen uno para **Máxima Resiliencia**, **Balance Óptimo** y **Mayor Ganancia**. Las perillas reordenan las candidatas ya simuladas. Las combinaciones de pesos solamente seleccionan entre las alternativas evaluadas que minimizan su suma ponderada. Conservar el conjunto de candidatas para que el panel pueda comparar opciones.
+1. **Specify the hybrid dynamical system.** Lock the discrete crop vs. transition mode, date semantics, and event update ordering. Document which couplings update at each time step and the hypotheses underlying the matrix exponential integrator for NPK. Select the numerical integrator, step size, and tolerances for the remaining equations, verifying convergence and unconditional non-negativity.
+2. **Verify climate scenarios.** Prepare a historical baseline and stress scenarios with explicit assumptions. When using FFT/Fourier series plus stochastic perturbations, document the fitting window, random seed, and construction of precipitation and temperature series, verifying seasonality, magnitude, and extreme persistence.
+3. **Define the rotation optimization problem.** A candidate rotation comprises crops, planting/harvest dates, transition intervals, and inherited parcel state. Incorporate farmer-fixed crops, cycle durations, and feasibility rules, specifying whether threshold violations invalidate a candidate or raise warnings, and what the engine returns when all candidates are infeasible.
+4. **Close the four objective metrics.** Document how environmental/water stress (`w1`), soil degradation (`w2`), economic deficit (`w3`), and cycle payback time (`w4`) are minimized. Agree on spatial and temporal aggregation, min-max normalization bounds, handling of constant metrics, tie-breaking rules, and net margin vs. gross revenue fallback when regional production costs are omitted.
+5. **Verify search and Pareto optimality.** Enumerate the pilot catalog to obtain an exact reference Pareto front, verifying feasibility filtering, objective bounds, and non-dominated candidates.
+6. **Lock priority weights.** Provide non-negative weights summing to one for **Maximum Resilience**, **Optimal Balance**, and **Maximum Yield / Profit**. Moving the priority knobs re-ranks already-simulated Pareto candidates instantaneously without re-running the ODE engine.
 
-## CC · llevarlo a la web
+## Computer Science (CS) · Bringing It to the Web
 
-| Frente | Trabajo y resultado | Linear |
+| Workstream | Scope & Deliverable | Linear |
 |---|---|---|
-| Repositorio y entorno | Hooks de Git, gestión de configuración y credenciales, entorno reproducible y CI en pull requests. | [CC-01](https://linear.app/nasa-challengue-tasks/issue/NAS-6), [CC-11](https://linear.app/nasa-challengue-tasks/issue/NAS-16), [CC-13](https://linear.app/nasa-challengue-tasks/issue/NAS-18) |
-| Contrato y API | Validar GeoJSON, geometría y fechas, definir lotes, zonas, periodos y cultivos fijados. Vincular resultados, alertas y eventos al periodo. Probar respuestas para datos faltantes, geometría inválida y ausencia de rotaciones viables. | [CC-02](https://linear.app/nasa-challengue-tasks/issue/NAS-7), [CC-05](https://linear.app/nasa-challengue-tasks/issue/NAS-10) |
-| Datos | Integrar NASA POWER con datos guardados para reproducibilidad. Evaluar SRTM para elevación y pendiente y el contraste de humedad con SMAP a escala compatible. Para las demás fuentes, registrar cobertura local, resolución, fecha, unidades, atribución y política de huecos. Priorizar las entradas que exige el caso mínimo. | [CC-06](https://linear.app/nasa-challengue-tasks/issue/NAS-11), [CC-14](https://linear.app/nasa-challengue-tasks/issue/NAS-19), [CC-15](https://linear.app/nasa-challengue-tasks/issue/NAS-20) |
-| Motor | Implementar la integración por celda, los eventos, los escenarios y la agregación según los casos aprobados por Física y Matemática. Servir los resultados mediante la API y medir duración para tamaños de malla y horizontes documentados. | [CC-07](https://linear.app/nasa-challengue-tasks/issue/NAS-12) |
-| Mapa y parcelas | Mapa satelital, ubicación opcional y dibujo, edición y confirmación táctil de lotes. Permitir ubicar la parcela manualmente si se rechaza la geolocalización. | [CC-03](https://linear.app/nasa-challengue-tasks/issue/NAS-8), [CC-04](https://linear.app/nasa-challengue-tasks/issue/NAS-9) |
-| Planificación | Implementar asignación de cultivos, calendario, simulación manual, comparación de rotaciones y aplicación explícita de la sugerencia. Mostrar el motivo, las fechas y los cultivos. | [CC-09](https://linear.app/nasa-challengue-tasks/issue/NAS-14) |
-| Tablero y visor | Conectar el periodo activo al estado de la parcela, al visor 2.5D/3D y a los indicadores. Seleccionar prioridades sin repetir la simulación. Aplicar cambios de escenario con una nueva simulación. | [CC-08](https://linear.app/nasa-challengue-tasks/issue/NAS-13), [CC-20](https://linear.app/nasa-challengue-tasks/issue/NAS-25), [CC-21](https://linear.app/nasa-challengue-tasks/issue/NAS-26) |
-| Pruebas y despliegue | Verificar API, motor, optimizador y recorrido móvil. Desplegar la demo, verificar configuración, medir con caché fría y caliente y probar el respaldo. | [CC-10](https://linear.app/nasa-challengue-tasks/issue/NAS-15), [CC-12](https://linear.app/nasa-challengue-tasks/issue/NAS-17) |
+| Repository & Environment | Git hooks, configuration and secret protection, reproducible environment, and PR CI checks. | [CC-01](https://linear.app/nasa-challengue-tasks/issue/NAS-6), [CC-11](https://linear.app/nasa-challengue-tasks/issue/NAS-16), [CC-13](https://linear.app/nasa-challengue-tasks/issue/NAS-18) |
+| API Contract | Validate GeoJSON, parcel geometry, and dates; define parcels, periods, and fixed crops; link simulation outputs, alerts, and events to periods; test missing data, invalid geometry, and infeasible rotations. | [CC-02](https://linear.app/nasa-challengue-tasks/issue/NAS-7), [CC-05](https://linear.app/nasa-challengue-tasks/issue/NAS-10) |
+| Data Integration | Integrate NASA POWER with cached fallback for reproducibility, SRTM v3 for elevation/slope/aspect, SMAP root-zone moisture initialization, and MIDAGRI regional farm-gate prices. | [CC-06](https://linear.app/nasa-challengue-tasks/issue/NAS-11), [CC-14](https://linear.app/nasa-challengue-tasks/issue/NAS-19), [CC-15](https://linear.app/nasa-challengue-tasks/issue/NAS-20) |
+| Simulation Engine | Implement per-cell ODE integration, discrete harvest/planting events, climate scenarios, and spatial aggregation matching Physics and Math reference cases. | [CC-07](https://linear.app/nasa-challengue-tasks/issue/NAS-12) |
+| Map & Parcels | Satellite map, optional geolocation, and touch-friendly polygon drawing, editing, and confirmation, with manual search/navigation fallback when geolocation is denied. | [CC-03](https://linear.app/nasa-challengue-tasks/issue/NAS-8), [CC-04](https://linear.app/nasa-challengue-tasks/issue/NAS-9) |
+| Rotation Planning | Crop assignment, multi-phase calendar, date simulation, rotation comparison, and explicit application of recommended routes to the timeline. | [CC-09](https://linear.app/nasa-challengue-tasks/issue/NAS-14) |
+| Dashboard & 3D Viewer | Connect the active period to parcel state, 2.5D/3D terrain & Lissajous shield viewer, and priority knobs that re-rank routes without repeating physical simulation. | [CC-08](https://linear.app/nasa-challengue-tasks/issue/NAS-13), [CC-20](https://linear.app/nasa-challengue-tasks/issue/NAS-25), [CC-21](https://linear.app/nasa-challengue-tasks/issue/NAS-26) |
+| Testing & Deployment | Verify API, ODE engines, optimizer, and UI workflow; deploy demo and validate cold/warm cache behavior. | [CC-10](https://linear.app/nasa-challengue-tasks/issue/NAS-15), [CC-12](https://linear.app/nasa-challengue-tasks/issue/NAS-17) |
 
-### Recorrido del agricultor
+### Farmer User Journey
 
-1. **Dibuja tu parcela.** El mapa permite dibujar o editar el lote y confirmar su forma.
-2. **Arma tu calendario.** Debajo de la tierra aparecen los periodos. La escala del periodo activo tiene **una marca por cada mes**, con etiquetas como **Ene · Feb · Mar**. Cada periodo tiene sus fechas. **+ Agregar periodo** va al costado, al final de la lista de periodos.
-3. **Elige tus cultivos.** Arriba a la derecha están los cultivos disponibles. Al tocar uno se asigna al periodo activo, con zona si corresponde. El usuario puede fijar una decisión de siembra.
-4. **Revisa cómo está tu parcela.** El centro muestra el terreno y la izquierda muestra los indicadores del periodo activo con texto y color. Debajo van los tres modos visibles y las perillas de preferencias desplegables. En **Simular otro escenario** se ajustan clima o manejo.
-5. **Compara y decide.** Abajo a la derecha se muestra la rotación sugerida. Revisar su secuencia y el motivo, compararla con el plan actual y aplicarla con un botón explícito. En móvil, mantener el mismo recorrido con secciones apiladas y controles táctiles. Ofrecer selección por toque además de cualquier opción de arrastrar.
+1. **Draw Your Parcel:** Draw or edit the parcel boundary on the satellite map and confirm its shape.
+2. **Build Your Calendar:** Below the terrain view, the timeline displays monthly ticks (**Jan · Feb · Mar**) and planting phases (`+ Phase`), each with its start and estimated harvest dates.
+3. **Select Your Crops:** Use the top-right crop catalog to filter, select, or drag crops onto timeline phases.
+4. **Inspect Your Parcel:** The center stage renders the 2.5D/3D terrain and 24-hour thermal shield, while the left column provides strategy presets and priority knobs (`w1`–`w4`).
+5. **Compare and Decide:** The bottom-right panel displays the recommended crop rotation sequence, agronomic/economic metrics, and comparison against the current timeline plan, with an explicit **Apply to timeline** action.
 
-### Pruebas para cerrar la entrega
+### Release Verification Checklist
 
-- [ ] Física firma las ecuaciones, parámetros y tolerancias del caso base y del caso bajo estrés.
-- [ ] Con dos periodos, la prueba del motor registra cosecha, rastrojo y siembra. Confirma que humedad, nutrientes y capa fértil pasan correctamente entre periodos.
-- [ ] El catálogo pequeño permite reproducir el frente de Pareto. Se comprueba el descarte de secuencias inviables y el tratamiento de costos faltantes.
-- [ ] Cambiar un modo o una prioridad reutiliza la simulación. Aplicar un cambio de escenario actualiza los resultados tras simular de nuevo.
-- [ ] Un productor del perfil objetivo puede, desde el celular y sin explicación previa, dibujar un lote, crear dos periodos, identificar sus meses, asignar cultivos e interpretar una sugerencia. Registrar dónde duda o se equivoca.
-- [ ] La demo identifica qué datos son observados, estimados o de respaldo. El video o guion de presentación, la documentación técnica y la demo muestran el mismo recorrido. Confirmar con las bases vigentes el formato y los entregables oficiales antes de enviar.
+- [x] Physics equations, parameters, and tolerances implemented and verified across baseline and stress test cases (`test_edo1_engine.py`–`test_edo5_engine.py`).
+- [x] Multi-period engine tests verify harvest jumps, stover transition, and planting carryover of moisture, nutrients, and fertile topsoil depth (`test_pdf_integration.py`).
+- [x] Pilot crop catalog reproduces the Pareto front, discards thermally infeasible sequences, and handles missing regional costs/prices (`test_rotation_ranking.py`, `test_rotation_service.py`).
+- [x] Changing a strategy preset or priority knob (`w1`–`w4`) instantaneously re-ranks evaluated candidates without re-running the ODE simulation (`test_rotation_ranking.mjs`).
+- [ ] Field usability test with a target farmer on mobile.
+- [x] Demo attributes observed NASA POWER / SRTM / MIDAGRI sources and clearly labels model estimates and assumptions.
 
-## Ruta crítica y reparto inicial
+## Pilot & Business Model
 
-**Física y Matemática:** cerrar primero la hoja de variables, ecuaciones y eventos y entregar un caso de una celda, dos periodos y datos reproducibles. CC usa ese caso como prueba al sustituir los datos de ejemplo por el motor real.
+Validate a per-campaign licensing model with an agricultural cooperative, tiered by active parcels. The cooperative subscribes, an agronomist supports onboarding, and farmers build or review their planting calendars, comparing their habitual rotation against Pareto-optimized alternatives.
 
-**Tu frente de producto y CC:** coordinar el contrato de CC-02 con tus compañeros, dejar lista la interfaz con datos de prueba y recorrerla en móvil. En paralelo se pueden construir el mapa, la API, el adaptador de datos y el comparador de rotaciones. Los datos de prueba deben estar identificados durante la demo.
+## References
 
-**Integración conjunta:** contrato → motor de una celda y saltos → malla y escenarios → optimización y comparación → prueba con agricultor → despliegue. En cada entrega, el equipo que recibe valida el ejemplo reproducible del equipo que entrega.
-
-**Trabajo posterior al recorrido principal:** capas GIBS, alertas en movimiento, asistente y diagnóstico por WhatsApp quedan en [CC-16](https://linear.app/nasa-challengue-tasks/issue/NAS-21), [CC-17](https://linear.app/nasa-challengue-tasks/issue/NAS-22), [CC-18](https://linear.app/nasa-challengue-tasks/issue/NAS-23) y [CC-19](https://linear.app/nasa-challengue-tasks/issue/NAS-24). Hardware, háptica y escenarios Artemis pueden evaluarse cuando se cierre la demo central.
-
-## Piloto y modelo de negocio
-
-Probar una licencia por campaña con una cooperativa, por tramos de parcelas activas. La cooperativa contrata, un técnico acompaña y el agricultor construye o revisa el calendario. Para un primer piloto, elegir una zona con un socio dispuesto a facilitar casos reales. Entregar por parcela la comparación del plan habitual con las alternativas y un calendario fácil de compartir. Medir cuántos completan el plan, qué decisión de siembra toman con él y si la organización paga por renovar. Definir el precio a partir del piloto.
-
-## Referencias
-
-- [Documento técnico de AgroPhasor](referencias/Agrophasor%20(2).pdf), especialmente §§2.6 y 3–8.
-- [Matriz de fuentes para la implementación](referencias/CAMBIOS_APIS_MATRIZ_NASA.md) y [guía de datos agrícolas](referencias/NASA_Field_Shift_Guia_Datos_Agricolas.md).
-- [Proyecto AgroPhasor · CC en Linear](https://linear.app/nasa-challengue-tasks/project/agrophasor-cc-bc98b7d10b09).
+- [AgroPhasor Technical Specification (PDF)](../Agrophasor.pdf), especially §§2.6 and 3–8.
+- [AgroPhasor · CS Project in Linear](https://linear.app/nasa-challengue-tasks/project/agrophasor-cc-bc98b7d10b09).

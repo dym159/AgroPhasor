@@ -1,12 +1,12 @@
 """
-Suite de Pruebas Unitarias para EDO 2: Balance Hidrológico Radicular (AgroPhasor).
-Verifica:
-1. Validación estricta del catálogo JSON de parámetros para EDO 2.
-2. Fronteras físicas de conservación de masa y corte de escorrentía (0 <= W <= Wcc).
-3. Respuesta de conductancia estomática y transiciones de confort, estrés y marchitez.
-4. Efecto de modulación topográfica SRTM (pendiente 0° vs ladera).
-5. Activación de alertas de riego y cálculo exacto de la lámina de reposición.
-6. Respuesta hídrica diferenciada entre Maíz y Frijol calibrados desde el JSON.
+Unit Test Suite for ODE 2: Root-Zone Hydrological Balance (AgroPhasor).
+Verifies:
+1. Strict validation of the JSON parameter catalog for ODE 2.
+2. Physical boundaries for mass conservation and runoff cutoff (0 <= W <= Wcc).
+3. Stomatal conductance response and comfort, stress, and wilting transitions.
+4. SRTM topographic modulation effect (0° flat vs hillside slope).
+5. Irrigation alert triggering and exact replenishment depth calculation.
+6. Contrasting water dynamics between JSON-calibrated Maize and Dry Bean.
 """
 
 import math
@@ -29,20 +29,20 @@ JSON_PATH = os.path.join(BASE_DIR, "gemini-code-1794737993920.json")
 class TestEDO2Engine(unittest.TestCase):
 
     def test_json_catalog_validation_success(self):
-        """Verifica que el archivo gemini-code-1794737993920.json sea 100% válido para EDO 2."""
-        self.assertTrue(os.path.exists(JSON_PATH), f"No existe el archivo {JSON_PATH}")
+        """Verify that gemini-code-1794737993920.json is 100% valid for ODE 2."""
+        self.assertTrue(os.path.exists(JSON_PATH), f"File does not exist: {JSON_PATH}")
         
         result = validate_edo2_catalog(JSON_PATH)
-        self.assertTrue(result["valid"], f"Falló validación de JSON: {result['errors']}")
+        self.assertTrue(result["valid"], f"JSON validation failed: {result['errors']}")
         self.assertEqual(len(result["errors"]), 0)
         self.assertGreaterEqual(result["crops_validated_count"], 2)
         
-        # Verificar constantes globales para EDO 2
+        # Verify global constants for ODE 2
         global_p = result["global_parameters_edo2"]
         self.assertAlmostEqual(global_p["E_suelo0_mm_dia"], 4.2)
         self.assertAlmostEqual(global_p["lambda_B_ha_t"], 0.45)
         
-        # Verificar límites de Maíz
+        # Verify Maize limits
         crops = result["crops_summary"]
         self.assertIn("Maiz_Zea_mays", crops)
         maiz = crops["Maiz_Zea_mays"]
@@ -53,7 +53,7 @@ class TestEDO2Engine(unittest.TestCase):
         self.assertEqual(maiz["W_crit_mm"], 212.0)  # 300 - 0.55*(300 - 140)
         self.assertEqual(maiz["RAW_mm"], 88.0)
         
-        # Verificar límites de Frijol
+        # Verify Dry Bean limits
         self.assertIn("Frijol_Phaseolus_vulgaris", crops)
         frijol = crops["Frijol_Phaseolus_vulgaris"]
         self.assertEqual(frijol["Zr_mm"], 600.0)
@@ -64,20 +64,20 @@ class TestEDO2Engine(unittest.TestCase):
         self.assertEqual(frijol["RAW_mm"], 43.2)
 
     def test_json_catalog_validation_catches_invalid_parameters(self):
-        """Verifica que el validador rechace catálogos con errores físicos en EDO 2."""
+        """Verify that the validator rejects catalogs with physical errors in ODE 2."""
         invalid_catalog = {
             "constantes_globales": {
-                "E_suelo0_mm_dia": -5.0,  # Inválido: negativo
-                "lambda_B_ha_t": 0.0      # Inválido: <= 0
+                "E_suelo0_mm_dia": -5.0,  # Invalid: negative
+                "lambda_B_ha_t": 0.0      # Invalid: <= 0
             },
             "suelo_desnudo_transicion": {
-                "gamma_max": 0.05         # Inválido: debe ser 0 en suelo desnudo
+                "gamma_max": 0.05         # Invalid: must be 0 on bare soil
             },
             "cultivos": {
                 "Cultivo_Invalido": {
-                    "Zr_mm": -100.0,       # Inválido: negativo
-                    "p_agotamiento": 1.5,  # Inválido: > 1
-                    "gamma_max": 0.0       # Inválido: <= 0 para cultivo vivo
+                    "Zr_mm": -100.0,       # Invalid: negative
+                    "p_agotamiento": 1.5,  # Invalid: > 1
+                    "gamma_max": 0.0       # Invalid: <= 0 for living crop
                 }
             }
         }
@@ -91,15 +91,15 @@ class TestEDO2Engine(unittest.TestCase):
 
     def test_physical_boundaries_and_runoff_generation(self):
         """
-        Criterio 1: Acotamiento estricto 0 <= W <= Wcc.
-        Si la precipitación supera la capacidad de campo, el excedente debe ser
-        descartado exactamente como escorrentía superficial sin saturar numéricamente el suelo.
+        Criterion 1: Strict bounding 0 <= W <= Wcc.
+        If precipitation exceeds field capacity, the surplus must be shed cleanly
+        as surface runoff without numerically oversaturating the soil.
         """
         crop = get_crop_parameters("maiz")
         limits = compute_soil_limits(crop, theta_fc=0.30, theta_wp=0.14)
         w_cc = limits.w_cc  # e.g., 300 mm
         
-        # Caso 1: Suelo ya en Wcc que recibe una lluvia torrencial de 150 mm
+        # Case 1: Soil already at Wcc receiving a torrential 150 mm storm
         step = solve_edo2_step(
             w_current_mm=w_cc,
             precip_mm=150.0,
@@ -114,7 +114,7 @@ class TestEDO2Engine(unittest.TestCase):
         self.assertGreater(step.runoff_mm, 140.0)
         self.assertAlmostEqual(step.soil_water_mm + step.runoff_mm, w_cc + step.infiltration_mm - step.etc_mm, places=2)
 
-        # Caso 2: Suelo seco sometido a drenaje no puede ser negativo
+        # Case 2: Dry soil subjected to drainage cannot become negative
         step_dry = solve_edo2_step(
             w_current_mm=0.5,
             precip_mm=0.0,
@@ -127,10 +127,10 @@ class TestEDO2Engine(unittest.TestCase):
 
     def test_stomatal_conductance_transitions(self):
         """
-        Criterio 2: Dinámica de regulación estomática gamma_c(W):
-        - W >= W_crit: Confort hídrico (gamma_rel = 1.0).
-        - W_pmp < W < W_crit: Estrés con decaimiento lineal de apertura.
-        - W <= W_pmp: Marchitez permanente (gamma_rel = 0.0, Escudo Rojo).
+        Criterion 2: Stomatal regulation dynamics gamma_c(W):
+        - W >= W_crit: Water comfort (gamma_rel = 1.0).
+        - W_pmp < W < W_crit: Water stress with linear aperture decay.
+        - W <= W_pmp: Permanent wilting point (gamma_rel = 0.0, Red Shield).
         """
         crop = get_crop_parameters("maiz")
         limits = compute_soil_limits(crop, theta_fc=0.30, theta_wp=0.14)
@@ -138,7 +138,7 @@ class TestEDO2Engine(unittest.TestCase):
         w_crit = limits.w_crit
         w_pmp = limits.w_pmp
 
-        # Zona 1: Confort óptimo (W en capacidad de campo Wcc = 300 mm > Wcrit = 212 mm)
+        # Zone 1: Optimal comfort (W at field capacity Wcc = 300 mm > Wcrit = 212 mm)
         step_opt = solve_edo2_step(
             w_current_mm=w_cc,
             precip_mm=0.0,
@@ -154,7 +154,7 @@ class TestEDO2Engine(unittest.TestCase):
         self.assertFalse(step_opt.is_irrigation_needed)
         self.assertFalse(step_opt.is_wilting)
 
-        # Zona 2: Estrés medio (punto medio entre Wpmp y Wcrit)
+        # Zone 2: Moderate stress (midpoint between Wpmp and Wcrit)
         w_mid = (w_crit + w_pmp) / 2.0
         step_stress = solve_edo2_step(
             w_current_mm=w_mid,
@@ -170,7 +170,7 @@ class TestEDO2Engine(unittest.TestCase):
         self.assertTrue(step_stress.is_irrigation_needed)
         self.assertFalse(step_stress.is_wilting)
 
-        # Zona 3: Marchitez permanente (W <= Wpmp)
+        # Zone 3: Permanent wilting point (W <= Wpmp)
         step_wilt = solve_edo2_step(
             w_current_mm=w_pmp - 5.0,
             precip_mm=0.0,
@@ -187,9 +187,9 @@ class TestEDO2Engine(unittest.TestCase):
 
     def test_bare_soil_transition_regime(self):
         """
-        Verifica el régimen de q(t) = Transición (barbecho / rastrojo):
-        La transpiración vegetal se anula completamente y solo actúa la evaporación
-        del suelo protegida por el rastrojo remanente.
+        Verify the q(t) = Transition (fallow / residue) regime:
+        Plant transpiration drops strictly to zero and only soil evaporation
+        protected by remaining crop residue acts.
         """
         crop = get_crop_parameters("maiz")
         step_trans = solve_edo2_step(
@@ -209,10 +209,10 @@ class TestEDO2Engine(unittest.TestCase):
 
     def test_topographic_slope_srtm_effect(self):
         """
-        Criterio 3: Modulación por pendiente SRTM:
-        - Infiltración efectiva se reduce por cos(theta).
-        - Drenaje gravitacional lateral se acelera por sin(theta).
-        Bajo idéntica precipitación y clima, una ladera empinada retiene menos agua que un llano.
+        Criterion 3: SRTM slope modulation:
+        - Effective infiltration decreases by cos(theta).
+        - Lateral gravitational drainage increases by sin(theta).
+        Under identical rainfall and weather, a steep slope retains less water than flat terrain.
         """
         crop = get_crop_parameters("frijol")
         w_start = 120.0
@@ -245,15 +245,15 @@ class TestEDO2Engine(unittest.TestCase):
 
     def test_irrigation_alerts_and_replenishment(self):
         """
-        Criterio 4: Alertas de riego y lámina sugerida (PDF Sec. 2.6.2):
-        Isugerido = (Wcc - W) / eta_riego
-        Aplicar Isugerido debe compensar el déficit hídrico exactamente hacia Wcc.
+        Criterion 4: Irrigation alerts and suggested depth (PDF Sec. 2.6.2):
+        Isugerido = (Wcc - W) / eta_irrigation
+        Applying Isugerido must compensate the water deficit back to Wcc.
         """
         crop = get_crop_parameters("maiz")
         limits = compute_soil_limits(crop, theta_fc=0.30, theta_wp=0.14)
         eta_riego = 0.85
         
-        # Humedad por debajo del umbral crítico
+        # Soil moisture below critical threshold
         w_deficit = limits.w_crit - 10.0
         step_alert = solve_edo2_step(
             w_current_mm=w_deficit,
@@ -270,8 +270,7 @@ class TestEDO2Engine(unittest.TestCase):
         expected_lamina = round((limits.w_cc - step_alert.soil_water_mm) / eta_riego, 2)
         self.assertAlmostEqual(step_alert.suggested_irrigation_mm, expected_lamina, places=1)
 
-        # Al aplicar la lámina Isugerido con demanda evaporativa nula (o sumando ETc)
-        # se verifica la reposición exacta: W_next + ETc = Wcc
+        # Applying suggested depth Isugerido and adding ETc verifies exact replenishment: W_next + ETc = Wcc
         step_replenished = solve_edo2_step(
             w_current_mm=step_alert.soil_water_mm,
             precip_mm=0.0,
@@ -288,10 +287,10 @@ class TestEDO2Engine(unittest.TestCase):
 
     def test_crop_contrast_maiz_vs_frijol_timeseries(self):
         """
-        Simulación temporal comparativa:
-        Frijol (Zr = 600 mm, p = 0.45) tiene menor capacidad de retención (RAW = 43.2 mm)
-        que el Maíz (Zr = 1000 mm, p = 0.55, RAW = 88 mm).
-        Iniciando ambos a capacidad de campo (W0 = Wcc), Frijol entra en estrés hídrico mucho antes.
+        Comparative time-series simulation:
+        Dry Bean (Zr = 600 mm, p = 0.45) has lower water retention capacity (RAW = 43.2 mm)
+        than Maize (Zr = 1000 mm, p = 0.55, RAW = 88 mm).
+        Starting both at field capacity (W0 = Wcc), Dry Bean enters water stress much sooner.
         """
         precip = [0.0] * 20
         t_air = [20.0] * 20
@@ -322,7 +321,7 @@ class TestEDO2Engine(unittest.TestCase):
             theta_wp=0.14
         )
 
-        # Frijol entra en estrés en menos días y acumula más días en estrés
+        # Dry Bean enters stress in fewer days and accumulates more stress days
         self.assertGreater(sim_frijol["summary"]["stress_days"], sim_maiz["summary"]["stress_days"])
 
 

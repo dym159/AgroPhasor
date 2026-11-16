@@ -76,13 +76,13 @@ class TestParcelEDO1(unittest.TestCase):
                     self.assertLessEqual(psi, 1)
                     expected = comfort * cell["water_condition_index"] * cell["eta_nutrientes"]
                     self.assertAlmostEqual(psi, expected, delta=0.0002)
-                # Verifica que EDO 4 y EDO 5 se hayan resuelto por celda
+                # Verify that ODE 4 and ODE 5 were solved per cell
                 self.assertIn("biomass_t_ha", cell)
                 self.assertIn("ndvi_satelital", cell)
                 self.assertIn("erosion_loss_mm", cell)
                 self.assertIn("h_current_mm", cell)
             self.assertGreater(len({cell["mean_canopy_temp"] for cell in result["cells"]}), 1)
-            # Verifica agregados de lote para EDO 4 y EDO 5
+            # Verify lot-level aggregates for ODE 4 and ODE 5
             self.assertIn("lot_mean_biomass_t_ha", result)
             self.assertIn("lot_mean_ndvi", result)
             self.assertIn("lot_mean_erosion_loss_mm", result)

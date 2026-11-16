@@ -24,13 +24,13 @@ export function mountTerrainVisualizer(container, state, callbacks) {
   const bareSoil = createElement('button', {
     type: 'button',
     className: 'btn',
-    text: 'Suelo desnudo',
+    text: 'Bare soil',
     onClick: callbacks.onToggleBareSoil,
   });
   const retry = createElement('button', {
     type: 'button',
     className: 'btn',
-    text: 'Reintentar',
+    text: 'Retry',
     onClick: callbacks.onRetrySimulation,
   });
   const toolbar = createElement('div', { className: 'stage-toolbar' }, [
@@ -42,31 +42,31 @@ export function mountTerrainVisualizer(container, state, callbacks) {
       retry,
       bareSoil,
       createElement('button', {
-        type: 'button', className: 'btn', text: 'Cambiar terreno', onClick: callbacks.onBackToMap,
+        type: 'button', className: 'btn', text: 'Change parcel', onClick: callbacks.onBackToMap,
       }),
       createElement('button', {
-        type: 'button', className: 'btn btn-danger', text: 'Eliminar terreno', onClick: callbacks.onDeleteTerrain,
+        type: 'button', className: 'btn btn-danger', text: 'Remove parcel', onClick: callbacks.onDeleteTerrain,
       }),
     ]),
   ]);
 
   const canvas = createElement('canvas', {
     className: 'terrain-canvas',
-    attrs: { tabindex: 0, 'aria-label': 'Terreno 3D. Usa las flechas para girar.' },
+    attrs: { tabindex: 0, 'aria-label': '3D terrain. Use arrow keys to rotate.' },
   });
   const hourControl = createElement('input', { type: 'range', attrs: {
-    min: 0, max: 23, value: 12, 'aria-label': 'Hora del escudo',
+    min: 0, max: 23, value: 12, 'aria-label': 'Shield hour',
   } });
   hourControl.addEventListener('input', () => {
     hour = hourControl.valueAsNumber;
     drawScene();
   });
-  const hourLabel = createElement('label', {}, ['Hora del escudo', hourControl]);
+  const hourLabel = createElement('label', {}, ['Shield hour', hourControl]);
   toolbar.append(hourLabel);
   const context = canvas.getContext('2d');
   const legend = createElement('div', { className: 'terrain-legend' }, [
-    createElement('div', {}, ['Escudo · crítico', createElement('span', { className: 'terrain-legend-shield' }), 'Óptimo']),
-    createElement('div', {}, ['Suelo fértil', createElement('span', { className: 'terrain-legend-soil' }), 'Roca']),
+    createElement('div', {}, ['Shield · critical', createElement('span', { className: 'terrain-legend-shield' }), 'Optimal']),
+    createElement('div', {}, ['Fertile soil', createElement('span', { className: 'terrain-legend-soil' }), 'Bedrock']),
   ]);
   const shieldStatus = createElement('div', { className: 'terrain-legend', attrs: { role: 'status' } });
   const view = createElement('div', { className: 'terrain-canvas-wrap' }, [
@@ -175,7 +175,7 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     const shieldCells = sorted.filter(({ cell }) => cell?.shield_enabled);
     if (!shieldCells.length) return;
 
-    // Toda la cuadrícula comparte una cota, incluso sobre las celdas erosionadas.
+    // The entire grid shares a single baseline elevation, even across eroded cells.
     const shieldZ = Math.max(...sorted.map(({ z }) => z)) + 0.22;
     for (const { cell, center, polygons } of shieldCells) {
       const air = cell.hourly_air_temps;
@@ -217,11 +217,13 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     diagnostics.hidden = !simulation;
     if (simulation) {
       const water = simulation.irrigation_alert
-        ? `Riego sugerido · ${Number(simulation.suggested_irrigation_mm).toFixed(1)} mm`
-        : 'Humedad sobre el umbral de riego';
+        ? `Suggested irrigation · ${Number(simulation.suggested_irrigation_mm).toFixed(1)} mm`
+        : 'Soil moisture above irrigation threshold';
       const fertility = Number(simulation.lot_mean_eta_nutrientes);
-      diagnostics.textContent = `${water} · Suficiencia de nutrientes ${Math.round(fertility * 100)} %`
-        + (simulation.plan_simulation ? ' · Escenario histórico 2023' : '');
+      const forecastTag = simulation.montecarlo_confidence_pct != null
+        ? ` · MC confidence ${simulation.montecarlo_confidence_pct}% (${simulation.climate_forecast?.mc_scenarios ?? ''} scenarios)`
+        : simulation.plan_simulation ? ` · ${simulation.climate_source || 'Plan scenario'}` : '';
+      diagnostics.textContent = `${water} · Nutrient sufficiency ${Math.round(fertility * 100)}%${forecastTag}`;
     }
     retry.hidden = !nextState.parcelSimulationFailed;
     bareSoil.classList.toggle('btn-active', nextState.isBareSoil);
@@ -229,9 +231,9 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     const hasShield = nextState.parcelSimulationResult?.cells.some((cell) => cell.shield_enabled);
     shieldStatus.hidden = Boolean(hasShield);
     shieldStatus.textContent = nextState.isBareSoil
-      ? 'Suelo desnudo · escudo desactivado'
-      : nextState.parcelSimulationFailed || nextState.parcelSimulationResult ? 'Escudo no disponible'
-      : 'Calculando el escudo…';
+      ? 'Bare soil · thermal shield disabled'
+      : nextState.parcelSimulationFailed || nextState.parcelSimulationResult ? 'Thermal shield unavailable'
+      : 'Computing thermal shield…';
     if (!nextState.parcelSimulationResult && !previewRequested) {
       previewRequested = true;
       buildTerrainFromSatellite(nextState.selectedParcel).then((model) => {

@@ -1,4 +1,4 @@
-// Construye la malla 2.5D del terreno a partir de SRTM v3 (EDO 1) o Open-Meteo + tesela satelital Esri.
+// Builds the 2.5D terrain mesh from SRTM v3 (ODE 1) or Open-Meteo + Esri satellite tile.
 
 const ELEVATION_API_URL = 'https://api.open-meteo.com/v1/elevation';
 const ESRI_TILE_BASE_URL =
@@ -25,7 +25,7 @@ export async function buildTerrainFromSatellite(parcel, rows = 6, cols = 8, edo1
     cols,
     gridPoints,
     cellColors,
-    sourceLabel: edo1Result?.cells?.length ? 'SRTM v3 + NASA POWER' : 'DEM Satelital',
+    sourceLabel: edo1Result?.cells?.length ? 'SRTM v3 + NASA POWER' : 'Satellite DEM',
     lotMeanTemp: edo1Result?.lot_mean_temp ?? null,
     ...variation,
   };
@@ -146,7 +146,7 @@ function computeSpanSlopeMeters(gridPoints) {
   return Math.round((latSpan + lngSpan) * 4200);
 }
 
-// Sólo genera elevación visual cuando la variación entre celdas supera el umbral físico.
+// Only generate visual relief when elevation variation across cells exceeds the physical threshold.
 export function computeElevationVariation(elevations, thresholdMeters = VARIATION_THRESHOLD_METERS) {
   if (!elevations?.length) {
     return {

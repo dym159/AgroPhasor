@@ -2,7 +2,7 @@ import { parcelFootprint } from './parcel-geometry.js';
 
 export const decodeTerrarium = (r, g, b) => r * 256 + g + b / 256 - 32768;
 export const metersPerWorldPixel = y => 156543.03392804097 / Math.cosh(Math.PI * (1 - 2 * y / 256));
-// Realce exclusivamente visual, acotado para conservar el encuadre del visor.
+// Purely visual enhancement, bounded to preserve viewport framing.
 export const exaggerateRelief = height => 55 * Math.tanh(height * 4 / 55);
 export function reliefColor(level, erosion = 0) {
   const amount = Math.min(1, Math.abs(level));
@@ -14,7 +14,7 @@ export function reliefColor(level, erosion = 0) {
   return `rgb(${rgb.join(',')})`;
 }
 
-// Caché compartida por el mapa y el visor. Nunca sustituir un DEM ausente por montañas inventadas.
+// Cache shared between map and viewer. Never replace a missing DEM with invented mountains.
 export class TerrainSurface {
   constructor() {
     this.tiles = new Map();
@@ -35,12 +35,12 @@ export class TerrainSurface {
     const key = `${z}/${x}/${y}`;
     if (this.tiles.has(key)) return;
     if (this.pending.has(key)) return this.pending.get(key);
-    if (Date.now() - (this.failures.get(key) || 0) < 30000) throw new Error('DEM no disponible');
+    if (Date.now() - (this.failures.get(key) || 0) < 30000) throw new Error('DEM unavailable');
     const promise = new Promise((resolve, reject) => {
       const image = new Image();
       image.crossOrigin = 'anonymous';
-      const timer = setTimeout(() => { image.src = ''; reject(new Error('Tiempo de espera DEM')); }, 12000);
-      image.onerror = () => { clearTimeout(timer); reject(new Error('No se pudo cargar el DEM')); };
+      const timer = setTimeout(() => { image.src = ''; reject(new Error('DEM timeout')); }, 12000);
+      image.onerror = () => { clearTimeout(timer); reject(new Error('Failed to load DEM')); };
       image.onload = () => {
         clearTimeout(timer);
         try {
@@ -52,7 +52,7 @@ export class TerrainSurface {
           const heights = new Float32Array(256 * 256);
           for (let i = 0; i < heights.length; i++) heights[i] = decodeTerrarium(...rgba.subarray(i * 4, i * 4 + 3));
           this.tiles.set(key, heights);
-          // Mantener acotada la memoria al explorar el mapa.
+          // Keep cache memory bounded while exploring the map.
           while (this.tiles.size > 128) this.tiles.delete(this.tiles.keys().next().value);
           resolve();
         } catch (error) { reject(error); }
@@ -117,7 +117,7 @@ export class TerrainSurface {
     const u = (x - f.minX) / f.width, v = (y - f.minY) / f.height;
     const distance = (v - 0.5) * f.height * metersPerWorldPixel(y);
     const slope = Math.tan((this.controls.slopeTheta ?? 8) * Math.PI / 180) - Math.tan(8 * Math.PI / 180);
-    // Erosión amplificada 250 veces para poder ver pérdidas de milímetros.
+    // Erosion amplified 250x to make millimeter losses visible.
     const erosion = (this.physics.erosionSinkingMm || 0) / 1000 * 250;
     return distance * slope - erosion * (0.4 + 0.6 * Math.sin(Math.PI * u) ** 2 * Math.sin(Math.PI * v) ** 2);
   }

@@ -7,7 +7,7 @@ export function renderStrategyPanel(container, state, callbacks) {
   clearChildren(container);
 
   const header = createElement('div', { className: 'panel-header' }, [
-    createElement('h2', { className: 'panel-title', text: 'Estrategias' }),
+    createElement('h2', { className: 'panel-title', text: 'Strategies' }),
   ]);
   const list = createElement('div', { className: 'strategy-list panel-scroll' });
 

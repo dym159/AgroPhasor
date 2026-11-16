@@ -1,29 +1,29 @@
 """
-Motor Agrofísico de Resolución de EDO 4 (AgroPhasor).
-Implementa la ecuación diferencial de Crecimiento de Biomasa y Descomposición de Rastrojo B_{i,j}(t) (t/ha),
-sus relaciones constitutivas biofísicas, saltos discretos híbridos de cosecha y siembra,
-y calibración con teledetección satelital (Landsat/MODIS/GEDI), conforme a AgroPhasor.pdf (Secciones 3.2.4, 3.3, 3.4 y 1.5).
+Agrophysical Solver Engine for ODE 4 (AgroPhasor).
+Implements the differential equation for Biomass Growth and Stover Decomposition B_{i,j}(t) (t/ha),
+its biophysical constitutive relations, hybrid discrete harvest and planting jumps,
+and satellite remote-sensing projection/calibration (Landsat/MODIS/GEDI), per AgroPhasor.pdf (Sections 3.2.4, 3.3, 3.4, and 1.5).
 
-Ecuaciones gobernantes:
-1. Régimen de Cultivo Activo q(t) = Cultivo(c_k):
+Governing equations:
+1. Active Crop Regime q(t) = Crop(c_k):
    dB/dt = k_p,c * f_rad(t) * eta_T(T) * f_W(W) * eta_N(N,P,K) * (1 - B / B_max) - k_m,c(T) * B
-   donde:
-   - k_p,c: Eficiencia de conversión fotoquímica [t / (ha · (MJ/m² o W/m²))]
-   - f_rad: Radiación fotosintéticamente activa incidente proyectada (NASA POWER + SRTM)
-   - eta_T(T): Campana de confort térmico fotosintético (NASA POWER / ECOSTRESS / EDO 1)
-   - f_W(W): Factor de limitación hídrica W / (W + K_W) (NASA SMAP / GPM / EDO 2)
-   - eta_N: Ley del Mínimo de Liebig min(N/(N+KN), P/(P+KP), K/(K+KK)) (USDA SSURGO / EDO 3)
-   - (1 - B / B_max): Freno biológico / saturación logística de capacidad de carga (FAO GAEZ / GEDI)
-   - k_m,c(T): Tasa de respiración de mantenimiento modulada por temperatura (Q10)
+   where:
+   - k_p,c: Photochemical radiation-conversion efficiency [t / (ha · (MJ/m² or W/m²))]
+   - f_rad: Projected incident photosynthetically active radiation (NASA POWER + SRTM)
+   - eta_T(T): Photosynthetic thermal comfort envelope (NASA POWER / ECOSTRESS / ODE 1)
+   - f_W(W): Water limitation factor W / (W + K_W) (NASA SMAP / GPM / ODE 2)
+   - eta_N: Liebig's Law of the Minimum min(N/(N+KN), P/(P+KP), K/(K+KK)) (USDA SSURGO / ODE 3)
+   - (1 - B / B_max): Biological carrying capacity / logistic saturation brake (FAO GAEZ / GEDI)
+   - k_m,c(T): Temperature-modulated maintenance respiration rate (Q10)
 
-2. Régimen de Transición / Rastrojo q(t) = Transición:
+2. Transition / Stover Regime q(t) = Transition:
    dB/dt = - k_dec * B
 
-3. Saltos Discretos de Transición Híbrida:
-   - Cosecha: Rendimiento comercial Y_k = HI * (1 - r_res) * B(t^-)
-              Biomasa residual retenida: B(t^+) = r_res * B(t^-)
-   - Siembra: Incorporación de rastrojo remanente a materia orgánica delta_OM = xi_OM * B(t^-)
-              Inicialización de biomasa basal germinativa: B(t^+) = B0,c_k+1
+3. Discrete Hybrid Transition Jumps:
+   - Harvest: Commercial yield Y_k = HI * (1 - r_res) * B(t^-)
+              Retained residual stover: B(t^+) = r_res * B(t^-)
+   - Planting: Residual stover incorporation into organic matter delta_OM = xi_OM * B(t^-)
+               Basal germination biomass initialization: B(t^+) = B0,c_k+1
 """
 
 import math
@@ -35,37 +35,37 @@ from backend.models.crop_parameters import CropParameters, get_crop_parameters
 
 @dataclass
 class EDO4StepOutput:
-    """Resultado agrofísico de un paso de simulación de EDO 4."""
-    biomass_t_ha: float              # Biomasa aérea resultante B(t+dt) [t/ha]
-    db_dt: float                     # Tasa neta de cambio dB/dt [t/(ha · día)]
-    gross_growth_t_ha: float         # Fotosíntesis neta bruta acumulada en el paso [t/ha]
-    maintenance_loss_t_ha: float     # Pérdida respiratoria de mantenimiento [t/ha]
-    eta_thermal: float               # Eficiencia térmica fotosintética eta_T [0, 1]
-    eta_water: float                 # Factor de disponibilidad hídrica f_W [0, 1]
-    eta_nutrients: float             # Eficiencia química por Ley del Mínimo eta_N [0, 1]
-    limiting_nutrient: str           # Nutriente más limitante ('N', 'P', 'K' o 'None')
-    logistic_brake: float            # Factor de freno logístico (1 - B/Bmax) [0, 1]
-    canopy_cover_fraction: float     # Fracción de cobertura vegetal efectiva (1 - e^(-lambda_B * B)) [0, 1]
-    simulated_ndvi: float            # NDVI satelital equivalente (Landsat / MODIS proxy)
-    is_growth_active: bool           # True si está en fotosíntesis neta positiva
-    is_drought_arrest: bool          # Alerta de paro de crecimiento por sequía extrema
-    is_thermal_arrest: bool          # Alerta de paro de fotosíntesis por estrés térmico/helada
-    is_nutrient_arrest: bool         # Alerta de bloqueo por agotamiento químico
+    """Agrophysical output of a single ODE 4 simulation step."""
+    biomass_t_ha: float              # Resulting above-ground biomass B(t+dt) [t/ha]
+    db_dt: float                     # Net rate of change dB/dt [t/(ha · day)]
+    gross_growth_t_ha: float         # Gross accumulated photosynthesis in step [t/ha]
+    maintenance_loss_t_ha: float     # Maintenance respiration loss [t/ha]
+    eta_thermal: float               # Photosynthetic thermal efficiency eta_T [0, 1]
+    eta_water: float                 # Water availability factor f_W [0, 1]
+    eta_nutrients: float             # Liebig chemical efficiency eta_N [0, 1]
+    limiting_nutrient: str           # Most limiting nutrient ('N', 'P', 'K', or 'None')
+    logistic_brake: float            # Logistic saturation brake (1 - B/Bmax) [0, 1]
+    canopy_cover_fraction: float     # Effective canopy cover fraction (1 - e^(-lambda_B * B)) [0, 1]
+    simulated_ndvi: float            # Equivalent satellite NDVI (Landsat / MODIS proxy)
+    is_growth_active: bool           # True when net photosynthesis is positive
+    is_drought_arrest: bool          # Growth arrest alert due to extreme drought
+    is_thermal_arrest: bool          # Photosynthesis arrest alert due to frost/heat stress
+    is_nutrient_arrest: bool         # Growth arrest alert due to chemical depletion
 
 
 @dataclass
 class EDO4HarvestResult:
-    """Resultado del evento discreto de cosecha y transición."""
+    """Result of a discrete harvest and transition event."""
     crop_name: str
     biomass_pre_harvest_t_ha: float  # B(t_s^-)
     harvest_index_hi: float          # HI
     residue_fraction_rres: float     # r_res
     commercial_yield_t_ha: float     # Y_k = HI * (1 - r_res) * B(t^-)
     residue_left_t_ha: float         # B(t_s^+) = r_res * B(t^-)
-    market_price_usd_t: float        # P_mercado (USDA AMS)
-    gross_revenue_usd_ha: float      # Y_k * P_mercado
-    base_cost_usd_ha: float          # Costo de insumos y labor
-    net_margin_usd_ha: float         # Margen neto por hectárea
+    market_price_usd_t: float        # Market price (USDA AMS)
+    gross_revenue_usd_ha: float      # Y_k * Market price
+    base_cost_usd_ha: float          # Input and labor cost
+    net_margin_usd_ha: float         # Net margin per hectare
 
 
 def thermal_photosynthetic_efficiency(
@@ -76,9 +76,9 @@ def thermal_photosynthetic_efficiency(
     t_lethal_c: float = 45.0
 ) -> float:
     """
-    Campana de eficiencia térmica fotosintética eta_T(T) (PDF Sec. 3.3 y 1.3):
+    Photosynthetic thermal efficiency bell curve eta_T(T) (PDF Sec. 3.3 and 1.3):
     eta_T = max(0, 1 - ((T - T_opt) / delta_T_tol)^2)
-    Anulación estricta fuera de fronteras de supervivencia: T <= T_helada o T >= T_letal.
+    Strictly zero outside survival boundaries: T <= T_frost or T >= T_lethal.
     """
     if temp_canopy_c <= t_frost_c or temp_canopy_c >= t_lethal_c:
         return 0.0
@@ -95,13 +95,13 @@ def water_limitation_factor(
     epsilon: float = 1e-4
 ) -> float:
     """
-    Factor de limitación hídrica f_W(W) (PDF Sec. 3.2.4 y 3.3):
-    Saturación f_W = W / (W + K_W). K_W se estima de los umbrales
-    cuando el llamador no proporciona un valor calibrado.
+    Water limitation factor f_W(W) (PDF Sec. 3.2.4 and 3.3):
+    Saturation f_W = W / (W + K_W). K_W is estimated from thresholds
+    when the caller does not provide a calibrated value.
     """
     
     if k_w_mm is None:
-        # Calibración biofísica automática de K_W a partir de los límites radiculares
+        # Automatic biophysical calibration of K_W from root hydraulic limits
         k_w_mm = max(1.0, 0.5 * (w_crit_mm - w_pmp_mm))
         
     usable_water = max(0.0, soil_water_mm)
@@ -119,9 +119,9 @@ def liebig_nutrient_efficiency(
     epsilon: float = 1e-4
 ) -> Tuple[float, str]:
     """
-    Factor químico fotosintético bajo la Ley del Mínimo de Liebig (PDF Sec. 3.3 y 1.2):
+    Photosynthetic chemical factor under Liebig's Law of the Minimum (PDF Sec. 3.3 and 1.2):
     eta_N = min( N/(N+KN), P/(P+KP), K/(K+KK) )
-    Retorna (eta_N, limiting_nutrient).
+    Returns (eta_N, limiting_nutrient).
     """
     f_n = max(0.0, nitrogen_kg_ha) / max(epsilon, max(0.0, nitrogen_kg_ha) + k_n)
     f_p = max(0.0, phosphorus_kg_ha) / max(epsilon, max(0.0, phosphorus_kg_ha) + k_p)
@@ -141,9 +141,9 @@ def liebig_nutrient_efficiency(
 
 def biomass_to_canopy_cover(biomass_t_ha: float, lambda_b: float = 0.45) -> float:
     """
-    Fracción de cobertura foliar del dosel f_cover (PDF Sec. 3.3):
+    Canopy foliar cover fraction f_cover (PDF Sec. 3.3):
     f_cover = 1 - exp(-lambda_B * B)
-    Controla el sombreo del suelo, la atenuación de la evaporación directa y el escudo contra erosión.
+    Controls soil shading, direct evaporation attenuation, and erosion shielding.
     """
     return max(0.0, min(1.0, 1.0 - math.exp(-lambda_b * max(0.0, biomass_t_ha))))
 
@@ -155,9 +155,9 @@ def biomass_to_satellite_ndvi(
     lambda_b: float = 0.45
 ) -> float:
     """
-    Proyección teórica de biomasa simulada a índice de vegetación satelital NDVI (Landsat / MODIS):
-    NDVI = NDVI_suelo + (NDVI_max - NDVI_suelo) * (1 - exp(-lambda_B * B))
-    Permite el contraste directo del estado del gemelo digital con las pasadas de satélite.
+    Theoretical projection of simulated biomass onto satellite NDVI (Landsat / MODIS):
+    NDVI = NDVI_soil + (NDVI_max - NDVI_soil) * (1 - exp(-lambda_B * B))
+    Enables direct comparison between digital twin state and satellite overpasses.
     """
     cover = biomass_to_canopy_cover(biomass_t_ha, lambda_b)
     ndvi = ndvi_soil + (ndvi_max - ndvi_soil) * cover
@@ -172,7 +172,7 @@ def satellite_ndvi_to_biomass(
     b_max_t_ha: float = 20.0
 ) -> float:
     """
-    Inversión empírica de teledetección: estima biomasa [t/ha] a partir de NDVI satelital.
+    Empirical remote-sensing inversion: estimates biomass [t/ha] from satellite NDVI.
     """
     if ndvi <= ndvi_soil:
         return 0.0
@@ -200,25 +200,25 @@ def solve_edo4_step(
     epsilon: float = 1e-5
 ) -> EDO4StepOutput:
     """
-    Resuelve un paso temporal dt de EDO 4 para una celda (i, j).
+    Solves one time step dt of ODE 4 for a grid cell (i, j).
     
-    Aplica una integración exacta exponencial condicionada:
+    Applies an exact conditioned exponential integration:
     dB/dt = A * (1 - B / Bmax) - km * B
-    que se reescribe linealmente como:
+    rewritten linearly as:
     dB/dt + lambda_eff * B = A
-    con lambda_eff = (A / Bmax) + km >= 0.
+    with lambda_eff = (A / Bmax) + km >= 0.
     
-    Esta formulación analítica garantiza:
-    1. Estabilidad incondicional (no explota ante pasos dt grandes).
-    2. Acotamiento físico estricto 0 <= B(t) <= Bmax.
-    3. Conservación de biomasa y decaimiento monótono exacto en modo transición.
+    This analytical formulation guarantees:
+    1. Unconditional stability (does not blow up for large dt steps).
+    2. Strict physical bounds 0 <= B(t) <= Bmax.
+    3. Biomass conservation and exact monotonic decay in transition mode.
     """
     b_curr = max(0.0, min(crop.B_max_t_ha, float(b_current_t_ha)))
 
     if not q_is_crop:
-        # Modo Transición / Suelo Desnudo / Descomposición de Rastrojo:
+        # Transition / Bare Soil / Stover Decomposition Mode:
         # dB/dt = - k_dec * B
-        # Solución exacta: B(t+dt) = B(t) * exp(-k_dec * dt)
+        # Exact solution: B(t+dt) = B(t) * exp(-k_dec * dt)
         k_dec_eff = k_dec_daily * (q10 ** ((temp_canopy_c - 20.0) / 10.0))
         k_dec_eff = max(0.001, min(0.15, k_dec_eff))
         
@@ -247,8 +247,8 @@ def solve_edo4_step(
             is_nutrient_arrest=False
         )
 
-    # Modo Cultivo Activo q(t) = Cultivo(c_k)
-    # 1. Factores constitutivos de limitación
+    # Active Crop Mode q(t) = Crop(c_k)
+    # 1. Constitutive limiting factors
     eta_T = thermal_photosynthetic_efficiency(
         temp_canopy_c=temp_canopy_c,
         t_opt_c=crop.T_opt,
@@ -274,22 +274,22 @@ def solve_edo4_step(
         k_k=crop.K_K
     )
 
-    # 2. Tasa fotosintética potencial bruta A [t / (ha · día)]
+    # 2. Gross potential photosynthetic rate A [t / (ha · day)]
     # A = kp_c * f_rad * eta_T * eta_W * eta_N
     a_flux = crop.kp_c * max(0.0, f_rad_daily_mj_m2) * eta_T * eta_W * eta_N
 
-    # 3. Respiración de mantenimiento modulada térmicamente por Q10
+    # 3. Thermally modulated maintenance respiration via Q10
     km_base = getattr(crop, "km_c", 0.008)
     temp_factor_q10 = q10 ** ((temp_canopy_c - 20.0) / 10.0)
     km_eff = max(0.001, km_base * temp_factor_q10)
 
-    # 4. Integrador analítico incondicionalmente estable
+    # 4. Unconditionally stable analytical integrator
     # dB/dt = A * (1 - B/Bmax) - km * B = A - (A/Bmax + km)*B
     b_max = max(1.0, crop.B_max_t_ha)
     lambda_eff = (a_flux / b_max) + km_eff
     
     if lambda_eff > epsilon:
-        # Estado asintótico estacionario de equilibrio
+        # Asymptotic steady-state equilibrium
         b_inf = a_flux / lambda_eff
         # B(t+dt) = b_inf + (B(t) - b_inf) * exp(-lambda_eff * dt)
         exp_factor = math.exp(-lambda_eff * dt_days)
@@ -297,11 +297,11 @@ def solve_edo4_step(
     else:
         b_next = b_curr
 
-    # Acotamiento físico estricto
+    # Strict physical bounds
     b_next = max(0.0, min(b_max, b_next))
     db_dt = (b_next - b_curr) / dt_days
 
-    # Diagnósticos y componentes
+    # Diagnostics and components
     logistic_brake = max(0.0, 1.0 - (b_curr / b_max))
     gross_growth = a_flux * logistic_brake * dt_days
     maint_loss = km_eff * b_curr * dt_days
@@ -339,10 +339,10 @@ def execute_harvest_event(
     market_price_usd_t: Optional[float] = None
 ) -> EDO4HarvestResult:
     """
-    Ejecuta el salto discreto de cosecha (PDF Sec. 3.4 y 1.1):
-    1. Rendimiento comercial cosechable: Y_k = HI * (1 - r_res) * B(t_s^-)
-    2. Rastrojo protector remanente en campo: B(t_s^+) = r_res * B(t_s^-)
-    3. Valoración económica basada en precios USDA AMS Market News.
+    Executes the discrete harvest jump (PDF Sec. 3.4 and 1.1):
+    1. Commercial harvestable yield: Y_k = HI * (1 - r_res) * B(t_s^-)
+    2. Protective stover residue retained in field: B(t_s^+) = r_res * B(t_s^-)
+    3. Economic valuation based on USDA AMS Market News prices.
     """
     hi = getattr(crop, "HI", 0.45)
     if residue_fraction_rres is None:
@@ -388,7 +388,7 @@ def simulate_edo4_timeseries(
     dt_days: float = 1.0
 ) -> Dict[str, Any]:
     """
-    Ejecuta una serie temporal completa de EDO 4 para una celda a lo largo de n días.
+    Runs a complete ODE 4 time-series simulation for one cell over n days.
     """
     n_steps = len(f_rad_series_mj_m2)
     current_b = crop.B0_t_ha if b0_t_ha is None else b0_t_ha

@@ -1,32 +1,32 @@
 """
-Adaptador de Integración de Fuentes de Datos Satelitales y Agronómicas para EDO 4.
-AgroPhasor - Qillawasi / Universidad Nacional de Ingeniería.
+Satellite and Agronomic Data Source Integration Adapter for ODE 4.
+AgroPhasor - Qillawasi / National University of Engineering (UNI).
 
-Mapea, normaliza y alimenta las 22 fuentes de datos satelitales y de campo (NASA, USDA, USGS, FAO)
-a los parámetros, variables exógenas y estados del motor de EDO 4 (Crecimiento de Biomasa B_{i,j}(t)):
+Maps, normalizes, and feeds 22 satellite and field data sources (NASA, USDA, USGS, FAO)
+into the parameters, exogenous forcing variables, and state of the ODE 4 engine (Biomass Growth B_{i,j}(t)):
 
-1.  NASA POWER: Radiación solar incidente (ALLSKY_SFC_SW_DWN), T2M, RH2M.
-2.  SMAP: Humedad del suelo en la zona radicular W(t) y detección temprana de estrés hídrico.
-3.  GPM & IMERG: Precipitación acumulada P0(t) para recarga del balance radicular.
-4.  Landsat y MODIS/VIIRS: Series temporales de NDVI / EVI para contrastar B(t).
-5.  SRTM: Elevación (z), pendiente (theta) y orientación (psi) para proyectar f_rad.
-6.  ECOSTRESS: Temperatura superficial de dosel (LST) y evapotranspiración (ET).
-7.  USDA Ag Data Commons: Ensayos agronómicos, fenología local y parámetros de manejo.
-8.  Web Soil Survey (WSS): Mapas oficiales de suelo, capacidad de infiltración y drenaje.
-9.  Cropland Data Layer (CDL/CropScape): Rotación histórica (30m) y cultivos basales.
-10. PRISM Climate Data: Climatología de alta resolución corregida topográficamente.
-11. USDA NRCS SSURGO/STATSGO2: Materia orgánica (OM), CIC y capacidad de campo (Wcc, Wpmp).
-12. NAIP: Ortoimágenes aéreas de 1 m para calibración de cobertura foliar fina.
-13. USGS NLCD: Clasificación de cobertura del suelo y zonas de amortiguamiento.
-14. NLDAS / GLDAS: Asimilación continua de variables agroclimáticas subdiarias.
-15. FAO GAEZ: Potencial agroecológico regional y techo genético de biomasa (B_max).
-16. CoCoRaHS: Validación in-situ comunitaria de lluvia para calibrar GPM.
-17. USGS NWIS: Caudales y acuíferos para determinar disponibilidad de riego.
-18. USDA AMS Market News: Precios de mercado de materias primas (P_mercado) para el margen de Y_k.
-19. USDA NASS QuickStats: Estadísticas históricas de rendimiento y calibración de HI.
-20. OpenET: Evapotranspiración real a escala de parcela para balance de agua.
-21. USFS LANDFIRE: Dinámica de cobertura vegetal y biomasa perenne circundante.
-22. GEDI: Mediciones Lidar Nivel 4 de estructura y biomasa aérea sobre el terreno.
+1.  NASA POWER: Incident solar radiation (ALLSKY_SFC_SW_DWN), T2M, RH2M.
+2.  SMAP: Root-zone soil moisture W(t) and early water-stress detection.
+3.  GPM & IMERG: Cumulative precipitation P0(t) for root-zone balance recharge.
+4.  Landsat & MODIS/VIIRS: NDVI / EVI time series to benchmark simulated B(t).
+5.  SRTM: Elevation (z), slope (theta), and aspect (psi) for f_rad projection.
+6.  ECOSTRESS: Canopy Land Surface Temperature (LST) and evapotranspiration (ET).
+7.  USDA Ag Data Commons: Agronomic trials, local phenology, and management parameters.
+8.  Web Soil Survey (WSS): Official soil maps, infiltration capacity, and drainage.
+9.  Cropland Data Layer (CDL/CropScape): Historical rotation (30m) and baseline crops.
+10. PRISM Climate Data: Topographically corrected high-resolution climatology.
+11. USDA NRCS SSURGO/STATSGO2: Organic matter (OM), CEC, and field capacity (Wcc, Wpmp).
+12. NAIP: 1 m aerial orthoimagery for fine canopy-cover calibration.
+13. USGS NLCD: Land cover classification and buffer zones.
+14. NLDAS / GLDAS: Continuous sub-daily agroclimatic variable assimilation.
+15. FAO GAEZ: Regional agroecological potential and genetic biomass ceiling (B_max).
+16. CoCoRaHS: Community in-situ rain gauge validation for GPM calibration.
+17. USGS NWIS: Streamflow and aquifer levels to determine irrigation availability.
+18. USDA AMS Market News: Commodity market prices for Y_k economic margin.
+19. USDA NASS QuickStats: Historical yield statistics and Harvest Index (HI) calibration.
+20. OpenET: Field-scale actual evapotranspiration for water balance verification.
+21. USFS LANDFIRE: Vegetation cover dynamics and surrounding perennial biomass.
+22. GEDI: Level-4 Lidar measurements of canopy structure and above-ground biomass.
 """
 
 from dataclasses import dataclass
@@ -47,22 +47,22 @@ from backend.core.edo4_engine import (
 
 @dataclass
 class EnvironmentalForcingEDO4:
-    """Vector consolidado de forzamiento biofísico diario para una celda (i, j)."""
+    """Consolidated daily biophysical forcing vector for a cell (i, j)."""
     date_str: str
-    f_rad_daily_mj_m2: float         # Radiación solar incidente proyectada (NASA POWER + SRTM)
-    temp_canopy_c: float             # Temperatura efectiva del dosel (EDO 1 / ECOSTRESS / NASA POWER)
-    soil_water_mm: float             # Humedad útil en zona radicular (SMAP / EDO 2 / SSURGO)
-    nitrogen_kg_ha: float            # Nitrógeno disponible en suelo (SSURGO / Ag Data Commons / EDO 3)
-    phosphorus_kg_ha: float          # Fósforo asimilable en suelo (SSURGO / EDO 3)
-    potassium_kg_ha: float           # Potasio asimilable en suelo (SSURGO / EDO 3)
-    satellite_observed_ndvi: Optional[float] = None  # NDVI observado (Landsat / MODIS / Sentinel-2)
-    observed_biomass_gedi_t_ha: Optional[float] = None  # Biomasa observada por Lidar GEDI L4
+    f_rad_daily_mj_m2: float         # Projected incident solar radiation (NASA POWER + SRTM)
+    temp_canopy_c: float             # Effective canopy temperature (ODE 1 / ECOSTRESS / NASA POWER)
+    soil_water_mm: float             # Available root-zone water (SMAP / ODE 2 / SSURGO)
+    nitrogen_kg_ha: float            # Available soil Nitrogen (SSURGO / Ag Data Commons / ODE 3)
+    phosphorus_kg_ha: float          # Available soil Phosphorus (SSURGO / ODE 3)
+    potassium_kg_ha: float           # Available soil Potassium (SSURGO / ODE 3)
+    satellite_observed_ndvi: Optional[float] = None  # Observed NDVI (Landsat / MODIS / Sentinel-2)
+    observed_biomass_gedi_t_ha: Optional[float] = None  # Lidar-observed biomass GEDI L4
 
 
 class EDO4DataAdapter:
     """
-    Adaptador unificado que transforma entradas satelitales y edáficas en el flujo
-    de forzamiento y calibración requerido por EDO 4.
+    Unified adapter transforming satellite and edaphic inputs into the forcing
+    and calibration stream required by ODE 4.
     """
 
     @staticmethod
@@ -77,22 +77,22 @@ class EDO4DataAdapter:
         date_str: str = "2026-01-01"
     ) -> EnvironmentalForcingEDO4:
         """
-        Construye el vector de forzamiento diario combinando satélites y modelos de terreno:
+        Builds the daily forcing vector combining satellite observations and terrain models:
         
-        - f_rad: ALLSKY_SFC_SW_DWN de NASA POWER modulado por factor topográfico SRTM G(theta, psi).
-        - temp_canopy: Si ECOSTRESS LST está disponible se utiliza directamente como temperatura
-          real del dosel; si no, se usa T2M de NASA POWER ajustada por gradiente altitudinal SRTM.
-        - soil_water: Humedad radicular derivada de SMAP GWETROOT combinada con Wcc de SSURGO.
-        - nutrients: N, P, K iniciales o actualizados calibrados con SSURGO / Ag Data Commons.
+        - f_rad: NASA POWER ALLSKY_SFC_SW_DWN modulated by SRTM topographic factor G(theta, psi).
+        - temp_canopy: Uses ECOSTRESS LST directly when available; otherwise NASA POWER T2M
+          adjusted by SRTM elevation lapse rate.
+        - soil_water: Root-zone moisture derived from SMAP GWETROOT scaled by SSURGO Wcc.
+        - nutrients: Initial or updated N, P, K calibrated from SSURGO / Ag Data Commons.
         """
-        # 1. Radiación incidente (NASA POWER) y proyección topográfica (SRTM)
+        # 1. Incident radiation (NASA POWER) and topographic projection (SRTM)
         rad_raw_mj = float(nasa_power_day.get("ALLSKY_SFC_SW_DWN", 18.5))
         slope_deg = float(cell_terrain.get("slope_deg", 0.0))
         aspect_deg = float(cell_terrain.get("aspect_deg", 180.0))
         g_topo = topographic_solar_factor(slope_deg, aspect_deg)
         f_rad_projected = max(0.0, rad_raw_mj * g_topo)
 
-        # 2. Temperatura del dosel (ECOSTRESS LST vs NASA POWER T2M + SRTM lapse rate)
+        # 2. Canopy temperature (ECOSTRESS LST vs NASA POWER T2M + SRTM lapse rate)
         if ecostress_lst_c is not None and not math.isnan(ecostress_lst_c):
             t_canopy = float(ecostress_lst_c)
         else:
@@ -101,8 +101,8 @@ class EDO4DataAdapter:
             ref_alt_m = float(cell_terrain.get("ref_altitude_m", 3000.0))
             t_canopy = lapse_rate_air_temperature(t_nasa, alt_m, ref_alt_m)
 
-        # 3. Humedad radicular (NASA SMAP + SSURGO / WSS)
-        # Si se provee fracción SMAP (0.0 a 1.0), se escala por la capacidad de campo de SSURGO
+        # 3. Root-zone moisture (NASA SMAP + SSURGO / WSS)
+        # If SMAP wetness fraction (0.0 to 1.0) is provided, scale by SSURGO field capacity
         w_fc = float(nutrients_ssurgo.get("W_cc_mm", 100.0))
         w_pmp = float(nutrients_ssurgo.get("W_pmp_mm", 30.0))
         if "smap_wetness" in soil_smap_s2:
@@ -111,7 +111,7 @@ class EDO4DataAdapter:
         else:
             w_soil = float(soil_smap_s2.get("soil_water_mm", 65.0))
 
-        # 4. Macronutrientes (USDA SSURGO / Ag Data Commons / EDO 3)
+        # 4. Macronutrients (USDA SSURGO / Ag Data Commons / ODE 3)
         n_avail = float(nutrients_ssurgo.get("N_kg_ha", 45.0))
         p_avail = float(nutrients_ssurgo.get("P_kg_ha", 25.0))
         k_avail = float(nutrients_ssurgo.get("K_kg_ha", 60.0))
@@ -136,16 +136,16 @@ class EDO4DataAdapter:
         gedi_max_biomass_t_ha: Optional[float] = None
     ) -> CropParameters:
         """
-        Calibra los parámetros de EDO 4 del cultivo utilizando las fuentes oficiales:
-        - B_max_t_ha: acotado por FAO GAEZ y biomasa estructural de GEDI L4.
-        - HI: calibrado contra estadísticas de producción de USDA NASS QuickStats.
+        Calibrates ODE 4 crop parameters using official reference datasets:
+        - B_max_t_ha: constrained by FAO GAEZ and GEDI L4 structural biomass.
+        - HI: calibrated against USDA NASS QuickStats historical yields.
         """
         base_crop = get_crop_parameters(crop_id)
         
-        # Ajuste de B_max_t_ha
+        # Adjust B_max_t_ha
         candidates = [base_crop.B_max_t_ha]
         if fao_gaez_yield_potential_t_ha is not None and fao_gaez_yield_potential_t_ha > 0:
-            # Si FAO GAEZ provee rendimiento comercial potencial, B_max ≈ Y_pot / HI
+            # If FAO GAEZ supplies potential commercial yield, B_max ≈ Y_pot / HI
             hi_est = getattr(base_crop, "HI", 0.45)
             b_max_fao = fao_gaez_yield_potential_t_ha / hi_est
             candidates.append(b_max_fao)
@@ -155,16 +155,15 @@ class EDO4DataAdapter:
 
         calibrated_b_max = round(sum(candidates) / len(candidates), 2)
 
-        # Ajuste de Harvest Index HI con USDA NASS
+        # Adjust Harvest Index HI with USDA NASS
         calibrated_hi = base_crop.HI
         if nass_historical_county_yield_t_ha is not None and nass_historical_county_yield_t_ha > 0:
-            # Verificación de plausibilidad
+            # Plausibility check
             implied_hi = nass_historical_county_yield_t_ha / calibrated_b_max
             if 0.10 <= implied_hi <= 0.85:
                 calibrated_hi = round(0.5 * (base_crop.HI + implied_hi), 3)
 
-        # Retorna el cultivo con parámetros actualizados
-        # Como CropParameters es frozen dataclass, usamos __dict__ para reconstruir
+        # Return crop dataclass with updated parameters
         crop_dict = dict(base_crop.__dict__)
         crop_dict["B_max_t_ha"] = calibrated_b_max
         crop_dict["HI"] = calibrated_hi
@@ -179,10 +178,10 @@ class EDO4DataAdapter:
         market_price_usd_t: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Ejecuta la simulación de ciclo completo de EDO 4 y la contrasta con:
-        1. Las observaciones de NDVI satelital (Landsat 8/9, Sentinel-2, MODIS/VIIRS).
-        2. La estimación de biomasa de Lidar GEDI L4.
-        3. El rendimiento comercial y los ingresos según USDA AMS Market News.
+        Runs the full-cycle ODE 4 simulation and benchmarks it against:
+        1. Satellite NDVI observations (Landsat 8/9, Sentinel-2, MODIS/VIIRS).
+        2. GEDI L4 Lidar biomass estimates.
+        3. Commercial yield and revenue per USDA AMS Market News.
         """
         curr_b = b0_t_ha if b0_t_ha is not None else crop.B0_t_ha
         
@@ -204,13 +203,13 @@ class EDO4DataAdapter:
             )
             curr_b = step_res.biomass_t_ha
 
-            # Contraste satelital Landsat / MODIS NDVI
+            # Satellite NDVI comparison (Landsat / MODIS)
             ndvi_err = None
             if f.satellite_observed_ndvi is not None:
                 ndvi_err = round(step_res.simulated_ndvi - f.satellite_observed_ndvi, 3)
                 ndvi_residuals.append(abs(ndvi_err))
 
-            # Contraste de biomasa GEDI L4
+            # GEDI L4 biomass comparison
             gedi_err = None
             if f.observed_biomass_gedi_t_ha is not None:
                 gedi_err = round(curr_b - f.observed_biomass_gedi_t_ha, 3)
@@ -232,7 +231,7 @@ class EDO4DataAdapter:
                 "canopy_cover": step_res.canopy_cover_fraction
             })
 
-        # Cosecha al final del ciclo
+        # Harvest event at end of cycle
         harvest = execute_harvest_event(
             biomass_pre_harvest_t_ha=curr_b,
             crop=crop,

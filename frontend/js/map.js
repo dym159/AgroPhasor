@@ -1,8 +1,8 @@
 import { metersPerWorldPixel } from './terrain.js';
 
 /**
- * AgroPhasor - Integración de Mapa Leaflet y Geoman
- * Manejo de dibujo, edición de vértices, eliminación, capas satelitales y controles táctiles.
+ * AgroPhasor - Leaflet and Geoman Map Integration
+ * Handles drawing, vertex editing, deletion, satellite layers, and touch controls.
  */
 
 import { CONFIG } from './config.js';
@@ -39,7 +39,7 @@ function createImageryTile({ x, y, z }, done) {
     };
     image.onerror = () => {
       if (sourceZoom === lowestZoom) {
-        done(new Error('No se encontró imagen para esta tesela.'), tile);
+        done(new Error('No image found for this tile.'), tile);
         return;
       }
       sourceZoom -= 1;
@@ -66,25 +66,25 @@ export class MapManager {
   }
 
   /**
-   * Inicializar el mapa y la barra de Geoman
+   * Initialize the map and Geoman toolbar
    */
   init() {
     const loc = CONFIG.DEFAULT_LOCATION;
 
-    // Crear instancia de mapa Leaflet optimizada para dispositivos móviles táctiles
+    // Create Leaflet map instance optimized for touch mobile devices
     this.map = L.map(this.containerId, {
       center: [loc.latitude, loc.longitude],
       zoom: loc.zoom,
       maxZoom: 21,
-      zoomControl: false, // Reubicaremos el control de zoom para pantallas móviles
+      zoomControl: false, // Reposition zoom control for mobile screens
       tap: true,
       touchZoom: true
     });
 
-    // Control de zoom en posición cómoda
+    // Place zoom control in a convenient corner
     L.control.zoom({ position: 'topright' }).addTo(this.map);
 
-    // 1. Capas base y capas NASA GIBS
+    // 1. Base layers and NASA GIBS overlays
     const ImageryLayer = L.GridLayer.extend({ createTile: createImageryTile });
     this.baseLayers.esriSatellite = new ImageryLayer({
       attribution: CONFIG.MAP_LAYERS.esriSatellite.attribution,
@@ -111,29 +111,29 @@ export class MapManager {
       attribution: CONFIG.MAP_LAYERS.nasaHls.attribution
     });
 
-    // Añadir satélite y etiquetas por defecto
+    // Add satellite imagery and labels by default
     this.baseLayers.esriSatellite.addTo(this.map);
     this.baseLayers.esriLabels.addTo(this.map);
 
-    // Selector para superponer capa satelital NASA GIBS HLS Sentinel-2
+    // Layer switcher for NASA GIBS HLS Sentinel-2 overlay
     L.control.layers(null, { [CONFIG.MAP_LAYERS.nasaHls.name]: this.overlayLayers.nasaHls }, {
       position: 'topright'
     }).addTo(this.map);
 
     this.locationLayer = L.layerGroup().addTo(this.map);
 
-    // 2. Configurar Geoman (Leaflet-Geoman Free)
+    // 2. Configure Geoman (Leaflet-Geoman Free)
     this.setupGeoman();
 
-    // 2.1 Configurar patrón de malla de escudo
+    // 2.1 Configure shield mesh grid overlay
     this.setupMapGrid();
 
-    // 3. Suscribirse a cambios del gestor de lotes
+    // 3. Subscribe to lot manager updates
     this.lotesManager.subscribe((lotes, selected) => {
       this.syncMapWithLotes(lotes, selected);
     });
 
-    // 4. Si no hay lotes guardados, cargar parcela demo del Valle del Mantaro
+    // 4. If no lots are saved, load the Mantaro Valley demo parcel
     if (this.lotesManager.getAll().length === 0) {
       this.loadDemoParcel();
     }
@@ -142,7 +142,7 @@ export class MapManager {
   }
 
   /**
-   * Configurar patrón SVG de malla digital para el efecto de escudo
+   * Configure digital terrain grid overlay for the shield effect
    */
   setupMapGrid() {
     const terrain = this.terrain;
@@ -163,12 +163,12 @@ export class MapManager {
           const vertex = (x, y) => {
             const h = sample(x, y);
             if (h === null) return [x, y];
-            // Relieve local en vista cenital: resaltar curvatura sin desplazar la georreferencia.
+            // Local relief in top-down view: highlight curvature without shifting georeferencing.
             const neighbors = [sample(x - 64, y), sample(x + 64, y), sample(x, y - 64), sample(x, y + 64)];
             const reference = neighbors.every(v => v !== null) ? neighbors.reduce((a, b) => a + b, 0) / 4 : h;
             return [x, y - 30 * Math.tanh((h - reference) / Math.max(0.2, mpp * 1.5))];
           };
-          // Sombreado por normales del mismo DEM que utiliza el visor 3D.
+          // Slope shading using normals from the same DEM used by the 3D viewer.
           for (let x = 0; x < size.x; x += 16) for (let y = 0; y < size.y; y += 16) {
             const west = sample(x, y + 8), east = sample(x + 16, y + 8);
             const north = sample(x + 8, y), south = sample(x + 8, y + 16);
@@ -185,7 +185,7 @@ export class MapManager {
           }
           ctx.strokeStyle = 'rgba(210, 245, 255, 0.28)'; ctx.lineWidth = 0.7;
           ctx.beginPath();
-          // Margen para que las curvas coincidan sin costuras entre teselas.
+          // Overlap margin so grid curves align seamlessly across tiles.
           for (let x = -32; x <= size.x + 32; x += 32) {
             for (let y = -32; y <= size.y + 32; y += 4) {
               const p = vertex(x, y); if (y === -32) ctx.moveTo(...p); else ctx.lineTo(...p);
@@ -210,26 +210,26 @@ export class MapManager {
     this.map.getPane('parcelGrid').style.zIndex = 350;
     this.map.getPane('parcelGrid').style.pointerEvents = 'none';
     this.gridLayer = new Grid({ pane: 'parcelGrid', tileSize: 256, opacity: 0.45,
-      pmIgnore: true, attribution: 'Relieve: <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen Terrain Tiles</a>' }).addTo(this.map);
+      pmIgnore: true, attribution: 'Relief: <a href="https://registry.opendata.aws/terrain-tiles/">Mapzen Terrain Tiles</a>' }).addTo(this.map);
   }
 
   /**
-   * Configurar barra de herramientas Geoman con controles táctiles amigables
+   * Configure Geoman toolbar with touch-friendly controls
    */
   setupGeoman() {
     if (!this.map.pm) {
-      console.error("Leaflet-Geoman no está cargado en el entorno global.");
+      console.error("Leaflet-Geoman is not loaded in the global scope.");
       return;
     }
 
-    // Idioma español
+    // Set UI language to English
     try {
-      this.map.pm.setLang('es');
+      this.map.pm.setLang('en');
     } catch {
-      // Ignorar si no está registrado el paquete de idioma
+      // Ignore if the language pack is not registered
     }
 
-    // Configuración global de dibujo de Geoman
+    // Global Geoman drawing configuration
     this.map.pm.setGlobalOptions({
       snappable: true,
       snapDistance: 25,
@@ -250,15 +250,15 @@ export class MapManager {
       }
     });
 
-    // Añadir controles principales requeridos por el plan maestro:
-    // "Usar Leaflet-Geoman para dibujar, editar y eliminar contornos"
+    // Add primary controls required by the master plan:
+    // "Use Leaflet-Geoman to draw, edit, and delete contours"
     this.map.pm.addControls({
       position: 'topleft',
       drawPolygon: true,
       drawRectangle: true,
       editMode: true,
       dragMode: true,
-      cutPolygon: true, // Permite partir en 2 zonas
+      cutPolygon: true, // Allows splitting into 2 zones
       removalMode: true,
       drawMarker: false,
       drawCircleMarker: false,
@@ -268,7 +268,7 @@ export class MapManager {
       rotateMode: false
     });
 
-    // Eventos de creación
+    // Creation events
     this.map.on('pm:create', (e) => {
       if (e.shape === 'Polygon' || e.shape === 'Rectangle') {
         const layer = e.layer;
@@ -285,13 +285,13 @@ export class MapManager {
       }
     });
 
-    // Eventos de corte (división en 2 zonas)
+    // Cut events (splitting into 2 zones)
     this.map.on('pm:cut', (e) => {
-      console.log("Polígono cortado en zonas:", e);
-      // Actualizar referencias si se divide un lote
+      console.log("Polygon cut into zones:", e);
+      // Update references if a lot is split
     });
 
-    // Evento de eliminación por Geoman
+    // Deletion event via Geoman
     this.map.on('pm:remove', (e) => {
       const layer = e.layer;
       const loteId = layer._agroLoteId;
@@ -303,17 +303,17 @@ export class MapManager {
   }
 
   /**
-   * Conectar eventos a cada capa de polígono individual
+   * Bind events to each individual polygon layer
    */
   bindLayerEvents(layer, loteId) {
     layer._agroLoteId = loteId;
 
-    // Al tocar o hacer clic sobre el polígono en el mapa, seleccionarlo
+    // Select the lot when tapping or clicking the polygon on the map
     layer.on('click', () => {
       this.lotesManager.select(loteId);
     });
 
-    // Al editar vértices o mover
+    // When editing vertices or dragging
     layer.on('pm:edit', () => {
       this.lotesManager.updateGeometry(loteId, layer);
     });
@@ -328,13 +328,13 @@ export class MapManager {
   }
 
   /**
-   * Sincronizar el mapa cuando cambian los lotes en el LotesManager
+   * Synchronize the map when lots change in LotesManager
    */
   syncMapWithLotes(lotes, selected) {
     const existingIds = new Set(this.layersByLoteId.keys());
     const currentIds = new Set(lotes.map(l => l.id));
 
-    // Eliminar capas en mapa que ya no existan en el gestor
+    // Remove map layers that no longer exist in the manager
     for (const [id, layer] of this.layersByLoteId.entries()) {
       if (!currentIds.has(id)) {
         this.map.removeLayer(layer);
@@ -342,11 +342,11 @@ export class MapManager {
       }
     }
 
-    // Crear o actualizar capas existentes
+    // Create or update existing layers
     lotes.forEach(lote => {
       let layer = this.layersByLoteId.get(lote.id);
       if (!layer) {
-        // Reconstruir la capa desde su GeoJSON (por ejemplo tras recargar de localStorage)
+        // Rebuild layer from its GeoJSON (e.g., after reloading from localStorage)
         const geojsonFeature = {
           type: "Feature",
           geometry: lote.geometry
@@ -356,7 +356,7 @@ export class MapManager {
           style: () => this.getPolygonStyle(lote, selected && selected.id === lote.id)
         });
 
-        // Extraer la primera capa polígono
+        // Extract the first polygon layer
         tempGeoJsonGroup.eachLayer(l => {
           layer = l;
         });
@@ -368,7 +368,7 @@ export class MapManager {
         }
       }
 
-      // Actualizar estilo visual según si está seleccionado o confirmado
+      // Update visual style according to selection and confirmation state
       if (layer) {
         const isSelected = selected && selected.id === lote.id;
         layer.setStyle(this.getPolygonStyle(lote, isSelected));
@@ -395,16 +395,16 @@ export class MapManager {
       }),
       onEachFeature: ({ properties: cell }, layer) => {
         layer.bindTooltip(
-          `Celda ${cell.cell_id} · ${cell.latitude.toFixed(5)}°, ${cell.longitude.toFixed(5)}°<br>`
-          + `Dosel medio ${cell.mean_canopy_temp} °C · mín. ${cell.min_canopy_temp} °C · máx. ${cell.max_canopy_temp} °C<br>`
-          + `SRTM ${cell.altitude_m.toFixed(0)} m · pendiente ${cell.slope_deg.toFixed(1)}°`
+          `Cell ${cell.cell_id} · ${cell.latitude.toFixed(5)}°, ${cell.longitude.toFixed(5)}°<br>`
+          + `Mean canopy ${cell.mean_canopy_temp} °C · min ${cell.min_canopy_temp} °C · max ${cell.max_canopy_temp} °C<br>`
+          + `SRTM ${cell.altitude_m.toFixed(0)} m · slope ${cell.slope_deg.toFixed(1)}°`
         );
       }
     }).addTo(this.map);
   }
 
   /**
-   * Estilo visual según estado y selección con estética de "Escudo Protector"
+   * Visual style by state and selection with "Protective Shield" aesthetics
    */
   getPolygonStyle(lote, isSelected) {
     const isConfirmed = lote.status === "confirmed";
@@ -431,7 +431,7 @@ export class MapManager {
   }
 
   /**
-   * Actualizar estilo del lote
+   * Update lot layer style
    */
   updateLayerStyles(loteId, isSelected) {
     const layer = this.layersByLoteId.get(loteId);
@@ -442,7 +442,7 @@ export class MapManager {
   }
 
   /**
-   * Centrar el mapa sobre el lote seleccionado
+   * Center map on the selected lot
    */
   zoomToLote(loteId) {
     const layer = this.layersByLoteId.get(loteId);
@@ -452,7 +452,7 @@ export class MapManager {
   }
 
   /**
-   * Alternar entre mapa satelital y mapa vectorial
+   * Switch between satellite imagery and vector street map
    */
   toggleBaseLayer(layerKey) {
     if (this.baseLayers[layerKey]) {
@@ -471,27 +471,27 @@ export class MapManager {
   }
 
   /**
-   * Centrar el mapa en una localidad encontrada por el buscador
+   * Center map on a place returned by search
    */
   centerOnPlace(lat, lon, zoom = 15) {
     this.map.setView([lat, lon], zoom);
   }
 
   /**
-   * Geolocalización del usuario ("Mi Ubicación") con manejo de permisos
+   * User geolocation ("My Location") with permission handling
    */
   locateUser(onSuccess, onError) {
     if (!window.isSecureContext || !navigator.geolocation) {
       if (onError) {
-        onError(new Error("La ubicación requiere un navegador compatible y una página segura. Puedes navegar por el mapa manualmente."));
+        onError(new Error("Location access requires a supported browser and secure context. You can pan the map manually."));
       }
       return;
     }
 
     const locationErrors = {
-      1: "La ubicación está bloqueada. Permítela en los ajustes de este sitio.",
-      2: "El dispositivo no pudo determinar tu ubicación. Revisa los servicios de ubicación e inténtalo de nuevo.",
-      3: "Se agotó el tiempo para obtener tu ubicación. Revisa si hay una solicitud de permiso pendiente e inténtalo de nuevo."
+      1: "Location permission is blocked. Allow it in this site's settings.",
+      2: "The device could not determine your location. Check location services and try again.",
+      3: "Location lookup timed out. Check for any pending permission prompt and try again."
     };
 
     let waiting = true;
@@ -502,12 +502,12 @@ export class MapManager {
     const handleError = ({ code }) => {
       if (!waiting) return;
       finish();
-      const message = locationErrors[code] || "No se pudo obtener tu ubicación.";
-      console.warn("Geolocalización rechazada o inaccesible, manteniendo parcela demo:", message);
-      if (onError) onError(new Error(`${message} Puedes navegar por el mapa manualmente.`));
+      const message = locationErrors[code] || "Could not determine your location.";
+      console.warn("Geolocation denied or unavailable, keeping demo parcel:", message);
+      if (onError) onError(new Error(`${message} You can pan the map manually.`));
     };
 
-    // El plazo del navegador puede excluir el tiempo de espera del permiso.
+    // Browser timeout may exclude permission prompt wait time.
     const timeout = window.setTimeout(() => handleError({ code: 3 }), 25000);
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
@@ -527,7 +527,7 @@ export class MapManager {
           weight: 2.5
         }).addTo(this.locationLayer);
 
-        userMarker.bindPopup("📍 Estás aquí").openPopup();
+        userMarker.bindPopup("📍 You are here").openPopup();
         this.map.setView(position, 15);
         if (onSuccess) onSuccess(coords);
       },
@@ -537,10 +537,10 @@ export class MapManager {
   }
 
   /**
-   * Cargar la parcela de demostración del Valle del Mantaro (-12.06, -75.21)
+   * Load the Mantaro Valley demo parcel (-12.06, -75.21)
    */
   loadDemoParcel() {
-    // Polígono de ~2.4 ha en terrazas agrícolas de Junín
+    // ~2.4 ha polygon on agricultural terraces in Junin
     const demoCoords = [
       [-12.0592, -75.2115],
       [-12.0588, -75.2095],
@@ -551,18 +551,18 @@ export class MapManager {
     const demoPolygon = L.polygon(demoCoords);
     demoPolygon.addTo(this.map);
 
-    const lote = this.lotesManager.createLote(demoPolygon, "Lote 1: Parcela El Mantaro");
+    const lote = this.lotesManager.createLote(demoPolygon, "Lot 1: Mantaro Parcel");
     demoPolygon._agroLoteId = lote.id;
     this.layersByLoteId.set(lote.id, demoPolygon);
     this.bindLayerEvents(demoPolygon, lote.id);
 
-    // Confirmarla inicialmente para que el usuario pueda simular de inmediato
+    // Confirm initially so the user can simulate right away
     this.lotesManager.confirmLote(lote.id);
     this.map.fitBounds(demoPolygon.getBounds(), { padding: [60, 60] });
   }
 
   /**
-   * Activar manualmente la herramienta de dibujo de polígono con Geoman
+   * Manually activate the Geoman polygon drawing tool
    */
   startDrawPolygon() {
     if (this.map.pm) {
@@ -571,7 +571,7 @@ export class MapManager {
   }
 
   /**
-   * Activar modo de edición de vértices del polígono
+   * Activate polygon vertex editing mode
    */
   startEditMode() {
     if (this.map.pm) {

@@ -1,7 +1,7 @@
 {
   "name": "agrophasor",
   "version": "1.0.0",
-  "description": "Gemelo Digital Mecanicista y Optimizador Espaciotemporal de Rotación de Cultivos bajo Estrés Climático - NASA Space Apps Challenge 2026",
+  "description": "Mechanistic Digital Twin and Spatiotemporal Crop Rotation Optimizer under Climate Stress - NASA Space Apps Challenge 2026",
   "main": "frontend/js/app.js",
   "type": "module",
   "scripts": {

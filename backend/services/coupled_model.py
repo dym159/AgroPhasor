@@ -1,5 +1,6 @@
 """Coupled daily column model used by rotation trajectories."""
 from dataclasses import replace
+from backend.core.climate_generator import mc_day_to_weather
 from backend.core.edo1_engine import solve_edo1_step
 from backend.core.edo2_engine import compute_soil_limits, solve_edo2_step, relative_stomatal_conductance
 from backend.core.edo3_engine import solve_edo3_step, SoilChemicalProperties
@@ -9,9 +10,21 @@ from backend.core.physics import thermal_comfort_index
 
 
 def advance_day(state, crop, weather, slope, irrigation=0, growing=True, soil_om=3.0):
-    """State holds water in mm independently of crop root depth."""
+    """Advance all 5 coupled ODEs by one day.
+
+    ``weather`` accepts a 4-tuple ``(rain_mm, temp_c, rh_pct, rad_mj_m2_day)``,
+    a 5-tuple ``(..., t_soil_7d_c)``, or a Monte Carlo climate dictionary with
+    keys ``T_NASA``, ``e_a_kPa``, ``f_rad_W_m2``, ``P0_mm``, ``T_soil_7d``.
+    State holds water in mm independently of crop root depth.
+    """
     water, npk, depth, biomass, history = state
-    rain, air, humidity, radiation = weather
+    if isinstance(weather, dict):
+        rain, air, humidity, radiation, t_soil_override = mc_day_to_weather(weather)
+    elif len(weather) == 5:
+        rain, air, humidity, radiation, t_soil_override = weather
+    else:
+        rain, air, humidity, radiation = weather
+        t_soil_override = None
     limits = compute_soil_limits(crop, depth_mm=depth)
     crop = replace(crop, W_fc=limits.w_cc, W_pmp=limits.w_pmp, W_crit=limits.w_crit)
     thermal_crop = crop if growing else replace(crop, gamma_max=0, lambda_gamma_max=0,
@@ -19,11 +32,12 @@ def advance_day(state, crop, weather, slope, irrigation=0, growing=True, soil_om
     canopy = solve_edo1_step(air, air, radiation / .0864, humidity, water,
                              thermal_crop, dt_seconds=86400).t_canopy_c
     temperatures = (*history, air)[-7:]
+    t_soil = t_soil_override if t_soil_override is not None else sum(temperatures) / len(temperatures)
     hyd = solve_edo2_step(water, rain, air, humidity, slope, crop,
                          irrigation_mm=irrigation, biomass_t_ha=biomass,
                          is_crop=growing, depth_mm=depth, canopy_temp_c=canopy)
     erosion = solve_edo5_step(depth, rain, slope, biomass, is_transition=not growing)
-    chemistry = solve_edo3_step(*npk, water, limits.w_cc, sum(temperatures)/len(temperatures),
+    chemistry = solve_edo3_step(*npk, water, limits.w_cc, t_soil,
                                 crop, soil=SoilChemicalProperties(om_pct=soil_om), biomass_t_ha=biomass,
                                 erosion_rate_mm_day=erosion.erosion_loss_step_mm, is_crop=growing)
     growth = solve_edo4_step(biomass, radiation, canopy, water, *npk, crop, q_is_crop=growing)
@@ -38,6 +52,21 @@ def advance_day(state, crop, weather, slope, irrigation=0, growing=True, soil_om
          "viable": not growing or crop.T_frost < canopy < crop.T_lethal,
          "water_stress": 1 - hyd.gamma_c_relative},
     )
+
+
+def avanzar_un_dia_celda(
+    state,
+    crop,
+    clima_dia,
+    slope: float,
+    irrigation: float = 0.0,
+    growing: bool = True,
+    soil_om: float = 3.0,
+    altitude_offset_c: float = 0.0,
+):
+    """Advance a single 30x30 m cell using a Monte Carlo daily climate dictionary."""
+    weather = mc_day_to_weather(clima_dia, altitude_offset_c=altitude_offset_c) if isinstance(clima_dia, dict) else clima_dia
+    return advance_day(state, crop, weather, slope, irrigation=irrigation, growing=growing, soil_om=soil_om)
 
 
 def incorporate_residue(organic_matter_pct, residue_t_ha, depth_mm, bulk_density_t_m3=1.3):

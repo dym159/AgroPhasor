@@ -7,7 +7,7 @@ export function renderParcelBar(container, state, callbacks) {
 
   const { selectedParcel, centerMode, hasActiveTerrain, parcelSimulationResult } = state;
   const isTerrainView = centerMode === 'terrain';
-  const titleText = hasActiveTerrain ? selectedParcel.name : 'Sin terreno seleccionado';
+  const titleText = hasActiveTerrain ? selectedParcel.name : 'No parcel selected';
 
   const nameEl = createElement('span', {
     className: 'parcel-bar-name',
@@ -19,7 +19,7 @@ export function renderParcelBar(container, state, callbacks) {
     infoChildren.push(
       createElement('span', {
         className: 'panel-tag',
-        text: `Dosel: ${parcelSimulationResult.lot_mean_temp} °C · ${parcelSimulationResult.cells_count} celdas SRTM`,
+        text: `Canopy: ${parcelSimulationResult.lot_mean_temp} °C · ${parcelSimulationResult.cells_count} SRTM cells`,
       })
     );
   }
@@ -29,14 +29,14 @@ export function renderParcelBar(container, state, callbacks) {
   const selectMapBtn = createElement('button', {
     type: 'button',
     className: `btn ${!isTerrainView ? 'btn-active' : ''}`,
-    text: 'Mapa',
+    text: 'Map',
     onClick: () => callbacks.onChangeMode('select'),
   });
 
   const terrainViewBtn = createElement('button', {
     type: 'button',
     className: `btn ${isTerrainView ? 'btn-primary' : ''}`,
-    text: 'Vista 3D',
+    text: '3D View',
     attrs: hasActiveTerrain ? {} : { disabled: 'true' },
     onClick: () => {
       if (!hasActiveTerrain) return;
@@ -47,7 +47,7 @@ export function renderParcelBar(container, state, callbacks) {
   const deleteTerrainBtn = createElement('button', {
     type: 'button',
     className: 'btn btn-danger',
-    text: 'Eliminar terreno',
+    text: 'Remove parcel',
     attrs: hasActiveTerrain ? {} : { disabled: 'true' },
     onClick: callbacks.onDeleteTerrain,
   });

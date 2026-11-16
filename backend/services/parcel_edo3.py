@@ -1,7 +1,7 @@
 """
-Servicio de Simulación de Parcela para EDO 3 (Dinámica Vectorial de Macronutrientes).
-Conecta el forzamiento agroclimático, parámetros de suelo (SSURGO/WSS) y secuencias de cultivo
-con el motor agrofísico `edo3_engine`.
+Parcel Simulation Service for ODE 3 (Macronutrient Vector Dynamics).
+Connects agroclimatic forcing, soil properties (SSURGO/WSS), and crop sequences
+to the `edo3_engine` agrophysical solver.
 """
 
 from typing import Dict, Any, List, Optional, Tuple
@@ -19,11 +19,11 @@ from backend.core.edo3_engine import (
 
 
 class ParcelEDO3Service:
-    """Servicio agrofísico para la ejecución de simulaciones de EDO 3 a nivel de parcela."""
+    """Agrophysical service for running parcel-level ODE 3 simulations."""
 
     @staticmethod
     def validate_catalog(catalog_path_or_dict: Any) -> Dict[str, Any]:
-        """Valida formalmente un archivo o diccionario JSON para EDO 3."""
+        """Formally validates a JSON file or dictionary for ODE 3."""
         return validate_edo3_catalog(catalog_path_or_dict)
 
     @staticmethod
@@ -45,14 +45,14 @@ class ParcelEDO3Service:
         custom_catalog_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Ejecuta la simulación temporal de EDO 3 para un cultivo y perfil de suelo dados.
+        Runs the ODE 3 time-series simulation for a given crop and soil profile.
         """
         crop = get_crop_parameters(crop_id)
 
         if custom_catalog_path:
             validation = validate_edo3_catalog(custom_catalog_path)
             if not validation["valid"]:
-                raise ValueError(f"Catálogo customizado inválido para EDO 3: {validation['errors']}")
+                raise ValueError(f"Invalid custom catalog for ODE 3: {validation['errors']}")
 
         phi_chem = calculate_phi_ph_ec(ph, ec_ds_m)
         soil = SoilChemicalProperties(
@@ -93,8 +93,8 @@ class ParcelEDO3Service:
         dt_days: float = 1.0
     ) -> Dict[str, Any]:
         """
-        Simula una secuencia de rotación multietapa (ej: Maíz -> Barbecho/Rastrojo -> Leguminosa).
-        Cada etapa en `stages` contiene:
+        Simulates a multi-stage rotation sequence (e.g., Maize -> Fallow/Stover -> Legume).
+        Each stage in `stages` contains:
         - 'crop_id': str
         - 'duration_days': int
         - 'is_crop': bool
@@ -125,7 +125,7 @@ class ParcelEDO3Service:
             stg_w = w_series[time_offset:time_offset + days]
             stg_t = t_soil_series[time_offset:time_offset + days]
 
-            # Si faltan días en la serie meteorológica, replicar el último valor
+            # If weather series is shorter than stage duration, pad with the last available value
             if len(stg_w) < days:
                 last_w = stg_w[-1] if stg_w else 80.0
                 stg_w = stg_w + [last_w] * (days - len(stg_w))

@@ -5,12 +5,12 @@ import numpy as np
 
 def fetch_nasa_data(lat=-12.06, lon=-75.21, start="20230101", end="20230131"):
     """
-    Obtiene series de tiempo diarias de NASA POWER:
-    - PRECTOTCORR: Precipitación corregida (mm/día)
-    - T2M: Temperatura media a 2m (°C)
-    - RH2M: Humedad relativa a 2m (%)
-    - ALLSKY_SFC_SW_DWN: Radiación solar incidente (MJ/m2/día)
-    - GWETROOT: Humedad del suelo en zona radicular (0-1) modelo MERRA-2/SMAP
+    Fetch daily time series from NASA POWER:
+    - PRECTOTCORR: Bias-corrected precipitation (mm/day)
+    - T2M: Mean air temperature at 2 m (°C)
+    - RH2M: Relative humidity at 2 m (%)
+    - ALLSKY_SFC_SW_DWN: Incident solar radiation (MJ/m2/day)
+    - GWETROOT: Root-zone soil wetness (0-1), MERRA-2/SMAP model
     """
     url = (
         f"https://power.larc.nasa.gov/api/temporal/daily/point?"
@@ -24,25 +24,25 @@ def fetch_nasa_data(lat=-12.06, lon=-75.21, start="20230101", end="20230131"):
 
 class SoilHydrologyEDO2:
     def __init__(self, 
-                 theta_fc=0.32,      # Capacidad de campo (m3/m3 - Franco arcilloso de SSURGO/WSS)
-                 theta_wp=0.15,      # Punto de marchitez permanente (m3/m3)
-                 H_soil=400.0,       # Profundidad radicular efectiva Zr / espesor (mm)
-                 slope_deg=10.0,     # Pendiente SRTM (grados)
-                 p_c=0.50,           # Fracción de agotamiento permisible (FAO 56)
-                 gamma_max=1.8,      # Conductancia estomática / factor transpirativo max (mm/(kPa*día))
-                 E_suelo_0=2.0,      # Evaporación basal de suelo descubierta (mm/día)
-                 lambda_B=0.4,       # Extinción de radiación por biomasa foliar
-                 B=3.5,              # Biomasa aérea (t/ha)
-                 kd=0.04,            # Coeficiente de drenaje gravitacional dependiente de ladera
-                 eta_riego=0.85):    # Eficiencia de riego por goteo/aspersión
+                 theta_fc=0.32,      # Field capacity (m3/m3 - Clay loam from SSURGO/WSS)
+                 theta_wp=0.15,      # Permanent wilting point (m3/m3)
+                 H_soil=400.0,       # Effective root depth Zr / soil thickness (mm)
+                 slope_deg=10.0,     # SRTM slope (degrees)
+                 p_c=0.50,           # Allowable depletion fraction (FAO 56)
+                 gamma_max=1.8,      # Stomatal conductance / max transpiration factor (mm/(kPa*day))
+                 E_suelo_0=2.0,      # Bare soil basal evaporation (mm/day)
+                 lambda_B=0.4,       # Radiation extinction by leaf biomass
+                 B=3.5,              # Aboveground biomass (t/ha)
+                 kd=0.04,            # Slope-dependent gravitational drainage coefficient
+                 eta_riego=0.85):    # Drip/sprinkler irrigation efficiency
         
         self.H_soil = H_soil
         self.theta_fc = theta_fc
         self.theta_wp = theta_wp
-        self.W_cc = theta_fc * H_soil   # ej: 0.32 * 400 = 128 mm
-        self.W_pmp = theta_wp * H_soil  # ej: 0.15 * 400 = 60 mm
+        self.W_cc = theta_fc * H_soil   # e.g., 0.32 * 400 = 128 mm
+        self.W_pmp = theta_wp * H_soil  # e.g., 0.15 * 400 = 60 mm
         self.p_c = p_c
-        # Umbral crítico de estrés hídrico (Wcrit)
+        # Critical water stress threshold (Wcrit)
         self.W_crit = self.W_cc - self.p_c * (self.W_cc - self.W_pmp) # 128 - 0.5*(68) = 94 mm
         
         self.slope_rad = math.radians(slope_deg)
@@ -57,7 +57,7 @@ class SoilHydrologyEDO2:
         self.eta_riego = eta_riego
 
     def vpd_kpa(self, T_air, rh):
-        # Fórmula de Tetens
+        # Tetens formula
         es = 0.6108 * math.exp((17.27 * T_air) / (T_air + 237.3))
         ea = es * (rh / 100.0)
         return max(0.0, es - ea)
@@ -81,15 +81,15 @@ class SoilHydrologyEDO2:
         else:
             transp = 0.0
             
-        # Evaporación directa del suelo sombreado por biomasa/rastrojo
+        # Direct soil evaporation shaded by canopy biomass / residue
         evap_suelo = self.E_suelo_0 * (W / max(eps, self.W_cc)) * math.exp(-self.lambda_B * self.B)
         return transp + evap_suelo
 
     def step(self, W, P0, I_irr, T_air, rh, dt=1.0, is_crop=True):
         """
-        Integración de EDO 2 en un paso temporal dt (días):
+        ODE 2 integration over time step dt (days):
         dW/dt = P0*cos(theta) + eta_riego*I - ETc(T, W) - kd*sin(theta)*W
-        con corte de saturación W_cc y runoff instantáneo.
+        with saturation cutoff W_cc and instant surface runoff.
         """
         ETc = self.evapotranspiration(W, T_air, rh, is_crop=is_crop)
         drainage = self.kd * self.sin_theta * W
@@ -107,4 +107,4 @@ class SoilHydrologyEDO2:
             
         return W_next, ETc, drainage, runoff, dW_dt
 
-print("Clase SoilHydrologyEDO2 definida exitosamente.")
+print("SoilHydrologyEDO2 class defined successfully.")
