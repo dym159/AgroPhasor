@@ -20,9 +20,20 @@ import math
 import unittest
 
 from backend.models.crop_parameters import CROP_CATALOG, get_crop_parameters
-from backend.core.edo1_engine import solve_edo1_step
+from backend.core.edo1_engine import (
+    solve_edo1_step,
+    compute_lissajous_area,
+    compute_lissajous_shield_index,
+    compute_shield_state_and_color,
+)
 from backend.core.edo2_engine import solve_edo2_step
 from backend.core.edo4_engine import solve_edo4_step, biomass_to_satellite_ndvi
+from backend.core.edo5_engine import (
+    solve_edo5_step,
+    compute_soil_color,
+    compute_soil_vitality_index,
+    compute_terrain_height_variation,
+)
 from backend.core.satellite_calibration import (
     calibrate_edo1_thermal,
     calibrate_edo2_hydrology,
@@ -286,6 +297,60 @@ class TestAgronomicValidation(unittest.TestCase):
         self.assertEqual(pure_soil.f[1], min(c.f[1] for c in candidates))
         self.assertEqual(pure_profit.f[2], min(c.f[2] for c in candidates))
         self.assertEqual(pure_speed.f[3], min(c.f[3] for c in candidates))
+
+    def test_6_lissajous_area_drives_shield_strength_and_color(self):
+        """
+        Verifica que el área de la curva de Lissajous A_L gobierne la intensidad y el color
+        del escudo: Área baja -> ROJO (249,64,70), Área alta -> AZUL (42,155,255).
+        """
+        low_shield = compute_shield_state_and_color(lissajous_area=1.5, psi_environmental=0.15, is_crop=True)
+        mid_shield = compute_shield_state_and_color(lissajous_area=18.0, psi_environmental=0.50, is_crop=True)
+        high_shield = compute_shield_state_and_color(lissajous_area=85.0, psi_environmental=0.95, is_crop=True)
+        off_shield = compute_shield_state_and_color(lissajous_area=50.0, psi_environmental=0.90, is_crop=False)
+
+        self.assertLess(low_shield["eta_lissajous"], mid_shield["eta_lissajous"])
+        self.assertLess(mid_shield["eta_lissajous"], high_shield["eta_lissajous"])
+
+        self.assertEqual(low_shield["shield_state"], "rojo_intenso")
+        self.assertEqual(mid_shield["shield_state"], "violeta_ambar")
+        self.assertEqual(high_shield["shield_state"], "azul_cobalto")
+        self.assertFalse(off_shield["shield_enabled"])
+
+        # En área baja domina el canal Rojo (R > B); en área alta domina el canal Azul (B > R)
+        r_low, _, b_low = low_shield["shield_color_rgb"]
+        r_high, _, b_high = high_shield["shield_color_rgb"]
+        self.assertGreater(r_low, b_low)
+        self.assertGreater(b_high, r_high)
+
+    def test_7_terrain_height_by_precipitation_and_soil_color_by_nutrients_moisture(self):
+        """
+        Verifica:
+        1. Variación de la altura del terreno en función directa de las precipitaciones P_0(t).
+        2. Cambio del color del terreno entre Marrón (101,67,33) y Gris (128,128,128)
+           dependiendo de la cantidad de nutrientes (eta_N) y la humedad (S_W).
+        """
+        h_dry = compute_terrain_height_variation(precip_mm=0.0, accumulated_erosion_mm=2.0, slope_deg=8.0, altitude_m=3200.0)
+        h_mod = compute_terrain_height_variation(precip_mm=20.0, accumulated_erosion_mm=2.0, slope_deg=8.0, altitude_m=3200.0)
+        h_storm = compute_terrain_height_variation(precip_mm=70.0, accumulated_erosion_mm=2.0, slope_deg=8.0, altitude_m=3200.0)
+
+        self.assertEqual(h_dry["rain_height_variation_mm"], 0.0)
+        self.assertGreater(h_mod["rain_height_variation_mm"], h_dry["rain_height_variation_mm"])
+        self.assertGreater(h_storm["rain_height_variation_mm"], h_mod["rain_height_variation_mm"])
+        # A mayor precipitación, mayor hundimiento (menor cota z_visual_m)
+        self.assertLess(h_storm["z_visual_m"], h_mod["z_visual_m"])
+        self.assertLess(h_mod["z_visual_m"], h_dry["z_visual_m"])
+
+        # Color del terreno: rico en nutrientes y húmedo -> Marrón (101, 67, 33)
+        color_fertile_wet = compute_soil_color(retention_ratio=1.0, eta_nutrientes=1.0, water_saturation=1.0)
+        # Suelo con nutrientes medios y humedad media -> Tono intermedio
+        color_medium = compute_soil_color(retention_ratio=1.0, eta_nutrientes=0.5, water_saturation=0.5)
+        # Suelo sin nutrientes y seco -> Gris (128, 128, 128)
+        color_depleted_dry = compute_soil_color(retention_ratio=1.0, eta_nutrientes=0.0, water_saturation=0.0)
+
+        self.assertEqual(color_fertile_wet, (101, 67, 33))
+        self.assertEqual(color_depleted_dry, (128, 128, 128))
+        self.assertTrue(color_fertile_wet[0] < color_medium[0] < color_depleted_dry[0])
+        self.assertTrue(color_fertile_wet[2] < color_medium[2] < color_depleted_dry[2])
 
 
 if __name__ == "__main__":

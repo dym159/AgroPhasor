@@ -1,5 +1,36 @@
 // La escala visual exagera el desgaste en mm respecto al desnivel SRTM en m.
 const SINK_PER_MM = 0.0006;
+const RAIN_SINK_PER_MM = 0.0012;
+
+export function lissajousShieldScore(lissajousArea, psi = null, aLRef = 18.0, omegaL = 0.55) {
+  const area = Math.max(0, Number(lissajousArea) || 0);
+  const ref = Math.max(1e-4, Number(aLRef) || 18.0);
+  const etaL = area / (area + ref);
+  if (psi === null || psi === undefined) return Math.max(0, Math.min(1, etaL));
+  const wL = Math.max(0, Math.min(1, Number(omegaL) || 0.55));
+  const psiClamped = Math.max(0, Math.min(1, Number(psi) || 0));
+  return Math.max(0, Math.min(1, wL * etaL + (1 - wL) * psiClamped));
+}
+
+export function soilColorRgb({
+  retentionRatio = 1,
+  etaNutrientes = null,
+  waterSaturation = null,
+  omegaNutrientes = 0.55,
+  omegaHumedad = 0.45,
+} = {}) {
+  const hRatio = Math.max(0, Math.min(1, Number(retentionRatio)));
+  let vitality = hRatio;
+  if (etaNutrientes !== null || waterSaturation !== null) {
+    const nut = Math.max(0, Math.min(1, Number(etaNutrientes ?? 1)));
+    const hum = Math.max(0, Math.min(1, Number(waterSaturation ?? 1)));
+    const sumW = Math.max(1e-6, omegaNutrientes + omegaHumedad);
+    vitality = hRatio * ((omegaNutrientes / sumW) * nut + (omegaHumedad / sumW) * hum);
+  }
+  const brown = [101, 67, 33];
+  const gray = [128, 128, 128];
+  return gray.map((g, i) => Math.round(g + (brown[i] - g) * vitality));
+}
 
 export function buildParcelSimulationMesh(parcel, cells) {
   const lats = parcel.polygon.map(([lat]) => lat);
@@ -24,12 +55,20 @@ export function buildParcelSimulationMesh(parcel, cells) {
     const polygons = type === 'MultiPolygon'
       ? coordinates
       : type === 'Polygon' ? [coordinates] : [[parcel.polygon.map(([lat, lon]) => [lon, lat])]];
+    const rgb = cell.soil_color_rgb ?? soilColorRgb({
+      retentionRatio: cell.soil_retention_ratio ?? 1,
+      etaNutrientes: cell.eta_nutrientes ?? null,
+      waterSaturation: cell.water_condition_index ?? null,
+    });
+    const rainDropMm = Number(cell.rain_height_variation_mm) || 0;
     return {
       cell,
       center: position([cell.longitude, cell.latitude]),
       polygons: polygons.map((rings) => rings.map((ring) => ring.map(position))),
-      z: (cell.altitude_m - minElevation) * elevationScale - cell.accumulated_erosion_mm * SINK_PER_MM,
-      color: `rgb(${cell.soil_color_rgb.join(',')})`,
+      z: (cell.altitude_m - minElevation) * elevationScale
+        - (cell.accumulated_erosion_mm ?? 0) * SINK_PER_MM
+        - rainDropMm * RAIN_SINK_PER_MM,
+      color: `rgb(${rgb.join(',')})`,
     };
   });
   return {

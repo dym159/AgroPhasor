@@ -52,31 +52,11 @@ export class AgroPhysicsEngine {
     const cooling = (W / this.BASELINE.W_max) * 2.8 + (rRes * 1.2);
     const T = Number((this.BASELINE.T_base + deltaText - cooling).toFixed(1));
 
-    // 3. EROSIÓN HÍDRICA Y HUNDIMIENTO DEL SUELO
-    // Ecuación de pérdida de suelo: pendiente sin(theta), energía de lluvia (1 + deltaP0/100) y protección por rastrojo
-    const slopeRad = (slopeTheta * Math.PI) / 180;
-    const sinTheta = Math.sin(slopeRad);
-    const rainEnergy = Math.max(0.2, 1.0 + (deltaP0 / 100));
-    const residueCoverProtection = 1.0 - (rRes * 0.88); // 88% reducción max con rastrojo
-    
-    // Tasa anual de erosión (mm/año)
-    const erosionRateMmYear = Number((4.5 * sinTheta * rainEnergy * residueCoverProtection).toFixed(2));
-    
-    // Hundimiento físico para visualización 2.5D (mm perdidos en escenario simulado)
-    const erosionSinkingMm = Math.min(65, erosionRateMmYear * 6.5);
-    const currentH = Math.max(120, this.BASELINE.H_base - erosionSinkingMm);
-
-    // Color de la tierra: Fértil marrón oscuro (#1b3a24 / #3b2314) -> Gris rocoso (#52525b / #71717a)
-    // Factor de degradación (0 = 100% fértil, 1 = suelo totalmente degradado y rocoso)
-    const degradationFactor = Math.min(1.0, (erosionSinkingMm / 55) * 0.6 + (1 - (W / this.BASELINE.W_max)) * 0.4);
-    const soilColor = this.interpolateSoilColor(degradationFactor);
-
-    // 4. SALUD QUÍMICA POR LEY DEL MÍNIMO DE LIEBIG (eta_nutrientes)
+    // 3. SALUD QUÍMICA POR LEY DEL MÍNIMO DE LIEBIG (eta_nutrientes)
     const eta_N = Math.min(1.0, Math.max(0.1, fertN / this.BASELINE.N_opt));
     const eta_P = Math.min(1.0, Math.max(0.1, fertP / this.BASELINE.P_opt));
     const eta_K = Math.min(1.0, Math.max(0.1, fertK / this.BASELINE.K_opt));
 
-    // El nutriente con menor disponibilidad determina el crecimiento
     let limitingNutrient = "Nitrógeno (N)";
     let eta_nutrientes = eta_N;
 
@@ -91,6 +71,28 @@ export class AgroPhysicsEngine {
 
     eta_nutrientes = Number(eta_nutrientes.toFixed(3));
 
+    // 4. VARIACIÓN DE ALTURA DEL TERRENO EN FUNCIÓN DE LA PRECIPITACIÓN Y PENDIENTE
+    const slopeRad = (slopeTheta * Math.PI) / 180;
+    const sinTheta = Math.sin(slopeRad);
+    const rainEnergy = Math.max(0.2, 1.0 + (deltaP0 / 100));
+    const betaSplash = 0.25;
+    const rainTopographicFactor = betaSplash + (1.0 - betaSplash) * sinTheta;
+    const residueCoverProtection = 1.0 - (rRes * 0.88);
+    
+    // Tasa anual de erosión/desgaste pluvial (mm/año) gobernada por la lluvia
+    const erosionRateMmYear = Number((5.2 * rainEnergy * rainTopographicFactor * residueCoverProtection).toFixed(2));
+    
+    // Hundimiento físico para visualización 2.5D (mm perdidos por precipitaciones)
+    const erosionSinkingMm = Math.min(65, erosionRateMmYear * 6.5);
+    const currentH = Math.max(120, this.BASELINE.H_base - erosionSinkingMm);
+    const retentionRatio = currentH / this.BASELINE.H_base;
+
+    // Color de la tierra (Marrón fértil <-> Gris árido/degradado) dependiendo de nutrientes y humedad
+    const waterSaturation = Math.max(0, Math.min(1, (W - 25) / (this.BASELINE.W_max - 25)));
+    const soilVitalityIndex = Math.max(0, Math.min(1, retentionRatio * (0.55 * eta_nutrientes + 0.45 * waterSaturation)));
+    const degradationFactor = Math.min(1.0, 1.0 - soilVitalityIndex);
+    const soilColor = this.interpolateSoilColor(degradationFactor);
+
     // 5. BIOMASA AÉREA B (t/ha)
     let B = 0;
     if (stage === "cultivo") {
@@ -99,7 +101,9 @@ export class AgroPhysicsEngine {
       B = Number((15.5 * eta_nutrientes * waterFactor * tempFactor).toFixed(1));
     }
 
-    // 6. ÍNDICE DE ESCUDO AMBIENTAL (Psi) Y SUS 4 ESTADOS
+    // 6. ÁREA DE LISSAJOUS Y ESCUDO AMBIENTAL (Psi: ROJO [área baja] <-> AZUL [área buena])
+    let lissajousArea = 0;
+    let eta_lissajous = 0;
     let Psi = 0;
     let shieldState = "desactivado";
     let shieldColor = "#64748b";
@@ -113,28 +117,27 @@ export class AgroPhysicsEngine {
     } else {
       const waterResilience = Math.min(1.0, W / 140);
       const thermalResilience = Math.max(0.1, 1.0 - Math.max(0, (Math.abs(T - 16.5) - 2) * 0.12));
-      const soilResilience = Math.max(0.1, 1.0 - degradationFactor);
+      // Área del ciclo de histéresis de Lissajous A_L (°C²) proporcional a la apertura estomática y confort
+      lissajousArea = Number((32.0 * waterResilience * thermalResilience * (0.5 + 0.5 * eta_nutrientes)).toFixed(2));
+      eta_lissajous = Number((lissajousArea / (lissajousArea + 18.0)).toFixed(3));
 
-      // Ponderación de resiliencia
-      Psi = Number((
-        0.35 * waterResilience +
-        0.30 * eta_nutrientes +
-        0.20 * thermalResilience +
-        0.15 * soilResilience
-      ).toFixed(2));
+      const psiBio = waterResilience * thermalResilience * eta_nutrientes;
+      Psi = Number((0.55 * eta_lissajous + 0.45 * psiBio).toFixed(2));
 
-      // Clasificación rigurosa en los 3 estados activos
+      // Color continuo ROJO (249,64,70) -> AZUL (42,155,255) según el área/nivel del escudo
+      const rCol = Math.round(249 + (42 - 249) * Psi);
+      const gCol = Math.round(64 + (155 - 64) * Psi);
+      const bCol = Math.round(70 + (255 - 70) * Psi);
+      shieldColor = `rgb(${rCol}, ${gCol}, ${bCol})`;
+
       if (Psi >= 0.70) {
         shieldState = "azul_cobalto";
-        shieldColor = "#2563eb"; // Azul Cobalto
         shieldName = "Azul Cobalto (Óptima Resiliencia)";
       } else if (Psi >= 0.38) {
         shieldState = "violeta_ambar";
-        shieldColor = "#8b5cf6"; // Violeta / Ámbar
         shieldName = "Violeta / Ámbar (Estrés Moderado)";
       } else {
         shieldState = "rojo_intenso";
-        shieldColor = "#dc2626"; // Rojo Intenso
         shieldName = "Rojo Intenso (Estrés Crítico)";
       }
     }
@@ -174,7 +177,10 @@ export class AgroPhysicsEngine {
       eta_K: Number(eta_K.toFixed(2)),
       limitingNutrient,
 
-      // Escudo ambiental
+      // Escudo ambiental y área de Lissajous
+      lissajousArea,
+      eta_lissajous,
+      soilVitalityIndex: Number(soilVitalityIndex.toFixed(3)),
       Psi,
       shieldState, // "azul_cobalto" | "violeta_ambar" | "rojo_intenso" | "desactivado"
       shieldColor,

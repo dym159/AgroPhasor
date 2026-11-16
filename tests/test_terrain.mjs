@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TerrainSurface, decodeTerrarium } from '../frontend/js/terrain.js';
 import { Escudo3DViewer } from '../frontend/js/escudo3d.js';
-import { buildParcelSimulationMesh, shieldColor } from '../frontend/src/services/parcelSimulationMesh.js';
+import {
+  buildParcelSimulationMesh,
+  shieldColor,
+  lissajousShieldScore,
+  soilColorRgb,
+} from '../frontend/src/services/parcelSimulationMesh.js';
 
 test('Terrarium decodes altitude, including fractional and negative elevations', () => {
   assert.equal(decodeTerrarium(137, 219, 68), 2523.265625);
@@ -43,6 +48,15 @@ test('The active 3D view keeps cell geometry and applies cumulative soil loss to
   assert.equal(shieldColor(0), 'rgb(249,64,70)');
   assert.equal(shieldColor(0.5), 'rgb(146,110,163)');
   assert.equal(shieldColor(1), 'rgb(42,155,255)');
+  // Lissajous area drives shield score (low area -> red, high area -> blue)
+  assert(lissajousShieldScore(1.0, 0.2) < lissajousShieldScore(60.0, 0.9));
+  // Precipitation variation lowers terrain height z
+  const rainCell = { ...cell, rain_height_variation_mm: 25 };
+  const { cells: [baseCell, rainyMeshCell] } = buildParcelSimulationMesh(parcel, [cell, rainCell]);
+  assert(rainyMeshCell.z < baseCell.z);
+  // Soil color transitions between brown [101,67,33] and gray [128,128,128] with nutrients & moisture
+  assert.deepEqual(soilColorRgb({ retentionRatio: 1, etaNutrientes: 1, waterSaturation: 1 }), [101, 67, 33]);
+  assert.deepEqual(soilColorRgb({ retentionRatio: 1, etaNutrientes: 0, waterSaturation: 0 }), [128, 128, 128]);
 });
 
 test('Slope and spatial erosion affect the shared surface only inside the parcel, preserving holes', () => {
