@@ -81,18 +81,22 @@ def replay_plan(result, phases, selected_date):
             [hourly["RH2M"][ts] for ts in timestamps], water, thermal_crop)
         eta_n = compute_liebig_factor(*nutrients, crop.K_N, crop.K_P, crop.K_K)[0]
         eta_w = relative_stomatal_conductance(water, limits)
-        raw_indices = [thermal_comfort_index(t, crop.T_opt, crop.delta_T_tol) * eta_w * eta_n
-                       for t in thermal["t_canopy_hourly"]]
+        thermal_comfort = [thermal_comfort_index(t, crop.T_opt, crop.delta_T_tol) for t in thermal["t_canopy_hourly"]]
+        raw_indices = [tc * eta_w * eta_n for tc in thermal_comfort]
+        mean_tc = sum(thermal_comfort) / max(1, len(thermal_comfort))
         mean_psi = sum(raw_indices) / max(1, len(raw_indices))
+        al_eff = thermal["lissajous_area"] * eta_w * mean_tc
         shield_eval = compute_shield_state_and_color(
-            lissajous_area=thermal["lissajous_area"] * eta_w,
+            lissajous_area=al_eff,
             psi_environmental=mean_psi,
             is_crop=growing,
         )
-        omega_l = float(GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.55))
         eta_l = shield_eval["eta_lissajous"]
         indices = [round(p, 4) for p in raw_indices]
-        shield_scores = [round(omega_l * eta_l + (1.0 - omega_l) * p, 4) for p in raw_indices]
+        shield_scores = [
+            compute_shield_state_and_color(lissajous_area=al_eff, psi_environmental=p, is_crop=growing)["shield_score"]
+            for p in raw_indices
+        ]
 
         height_var = compute_terrain_height_variation(
             precip_mm=rain,

@@ -304,12 +304,17 @@ class TestAgronomicValidation(unittest.TestCase):
         del escudo: Área baja -> ROJO (249,64,70), Área alta -> AZUL (42,155,255).
         """
         low_shield = compute_shield_state_and_color(lissajous_area=0.4, psi_environmental=0.15, is_crop=True)
-        mid_shield = compute_shield_state_and_color(lissajous_area=4.0, psi_environmental=0.50, is_crop=True)
-        high_shield = compute_shield_state_and_color(lissajous_area=14.0, psi_environmental=0.95, is_crop=True)
+        mid_shield = compute_shield_state_and_color(lissajous_area=1.5, psi_environmental=0.32, is_crop=True)
+        high_shield = compute_shield_state_and_color(lissajous_area=14.0, psi_environmental=0.80, is_crop=True)
         off_shield = compute_shield_state_and_color(lissajous_area=50.0, psi_environmental=0.90, is_crop=False)
 
         self.assertLess(low_shield["eta_lissajous"], mid_shield["eta_lissajous"])
         self.assertLess(mid_shield["eta_lissajous"], high_shield["eta_lissajous"])
+
+        # A igual condición ambiental, mayor área de Lissajous incrementa estrictamente el puntaje del escudo
+        s_small = compute_shield_state_and_color(lissajous_area=0.2, psi_environmental=0.55, is_crop=True)["shield_score"]
+        s_large = compute_shield_state_and_color(lissajous_area=10.0, psi_environmental=0.55, is_crop=True)["shield_score"]
+        self.assertGreater(s_large, s_small)
 
         self.assertEqual(low_shield["shield_state"], "rojo_intenso")
         self.assertEqual(mid_shield["shield_state"], "violeta_ambar")

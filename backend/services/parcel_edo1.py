@@ -556,14 +556,23 @@ def simulate_parcel(payload):
             for t in thermal["hourly_canopy_temps"]
         ]
         hourly_psi_raw = [value * eta_water * edo3_step.eta_nutrientes for value in thermal_comfort]
+        mean_tc = sum(thermal_comfort) / max(1, len(thermal_comfort))
         mean_psi_raw = sum(hourly_psi_raw) / max(1, len(hourly_psi_raw))
+        al_eff = thermal.get("lissajous_area", 0.0) * eta_water * mean_tc
         shield_eval = compute_shield_state_and_color(
-            lissajous_area=thermal.get("lissajous_area", 0.0) * eta_water,
+            lissajous_area=al_eff,
             psi_environmental=mean_psi_raw,
             is_crop=is_crop,
         )
-        omega_l = float(GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.55))
         eta_l = shield_eval["eta_lissajous"]
+        hourly_shields = [
+            compute_shield_state_and_color(
+                lissajous_area=al_eff,
+                psi_environmental=psi_h,
+                is_crop=is_crop,
+            )["shield_score"]
+            for psi_h in hourly_psi_raw
+        ] if is_crop else None
 
         # Color del terreno entre Marrón (101,67,33) y Gris (128,128,128) según nutrientes, humedad y H
         coupled_soil_color = compute_soil_color(
@@ -589,9 +598,7 @@ def simulate_parcel(payload):
             hourly_environmental_index=[
                 round(psi_h, 4) for psi_h in hourly_psi_raw
             ] if is_crop else None,
-            hourly_shield_score=[
-                round(omega_l * eta_l + (1.0 - omega_l) * psi_h, 4) for psi_h in hourly_psi_raw
-            ] if is_crop else None,
+            hourly_shield_score=hourly_shields,
             soil_water_mm=edo2_step.soil_water_mm,
             etc_mm=edo2_step.etc_mm,
             drainage_mm=edo2_step.drainage_mm,

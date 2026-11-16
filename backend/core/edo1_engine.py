@@ -125,7 +125,7 @@ def compute_lissajous_shield_index(
     area = max(0.0, float(lissajous_area))
     if a_l_max is not None and a_l_max > 0:
         return round(max(0.0, min(1.0, area / float(a_l_max))), 4)
-    ref = float(a_l_ref if a_l_ref is not None else GLOBAL_CONSTANTS.get("A_L_ref_C2", 2.0))
+    ref = float(a_l_ref if a_l_ref is not None else GLOBAL_CONSTANTS.get("A_L_ref_C2", 0.9))
     ref = max(1e-4, ref)
     return round(max(0.0, min(1.0, area / (area + ref))), 4)
 
@@ -136,11 +136,14 @@ def compute_shield_state_and_color(
     is_crop: bool = True,
     omega_lissajous: Optional[float] = None,
     a_l_ref: Optional[float] = None,
+    psi_ref: Optional[float] = None,
+    psi_exp: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Evalúa el estado del Escudo Ambiental y Térmico y su espectro cromático continuo
     entre ROJO [249, 64, 70] (área baja / estrés crítico) y AZUL [42, 155, 255]
-    (área amplia / condición óptima) según AgroPhasor.pdf (Sección 2.6.1).
+    (área amplia / condición óptima) según la curva de Hill calibrada por biomas
+    (Selva, Desiertos, Campos Andinos, Campos Templados y Heladas).
     """
     if not is_crop:
         return {
@@ -159,11 +162,17 @@ def compute_shield_state_and_color(
         omega_l = float(
             omega_lissajous
             if omega_lissajous is not None
-            else GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.65)
+            else GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.10)
         )
         omega_l = max(0.0, min(1.0, omega_l))
+        p_ref = max(1e-4, float(psi_ref if psi_ref is not None else GLOBAL_CONSTANTS.get("escudo_psi_ref", 0.28)))
+        p_exp = max(0.1, float(psi_exp if psi_exp is not None else GLOBAL_CONSTANTS.get("escudo_psi_exp", 2.0)))
         psi_clamped = max(0.0, min(1.0, float(psi_environmental)))
-        score = omega_l * eta_l + (1.0 - omega_l) * psi_clamped
+        if psi_clamped <= 0.0:
+            score = 0.0
+        else:
+            f_psi = math.pow(psi_clamped, p_exp) / (math.pow(psi_clamped, p_exp) + math.pow(p_ref, p_exp))
+            score = f_psi * ((1.0 - omega_l) + omega_l * eta_l)
     else:
         score = eta_l
 
