@@ -384,12 +384,13 @@ def log_parcel_telemetry(day, reference, series, ref_altitude_m, result):
 
 
 def simulate_parcel(payload):
+    from backend.core.edo1_engine import compute_shield_state_and_color
     from backend.core.edo2_engine import compute_soil_limits, relative_stomatal_conductance, solve_edo2_step
     from backend.core.edo3_engine import SoilChemicalProperties, solve_edo3_step
     from backend.core.edo4_engine import execute_harvest_event, solve_edo4_step
-    from backend.core.edo5_engine import solve_edo5_step
+    from backend.core.edo5_engine import solve_edo5_step, compute_soil_color, compute_soil_vitality_index
     from backend.core.physics import thermal_comfort_index
-    from backend.models.crop_parameters import CROP_CATALOG, get_crop_parameters
+    from backend.models.crop_parameters import CROP_CATALOG, GLOBAL_CONSTANTS, get_crop_parameters
     from backend.services.simulation_service import SimulationService
 
     if not isinstance(payload, dict):
@@ -546,19 +547,47 @@ def simulate_parcel(payload):
             crop=crop_param
         )
 
-        # Se combina T horaria con W y NPK resultantes del paso diario.
+        # Se combina T horaria con W, NPK y el Área de Lissajous A_L resultantes del paso.
         eta_water = relative_stomatal_conductance(edo2_step.soil_water_mm, water_limits) if is_crop else 0.0
+        span_w_soil = max(1e-4, water_limits.w_cc - water_limits.w_pmp)
+        soil_water_sat = max(0.0, min(1.0, (edo2_step.soil_water_mm - water_limits.w_pmp) / span_w_soil)) if water_limits.w_cc > 0 else 0.0
         thermal_comfort = [
             thermal_comfort_index(t, crop_param.T_opt, crop_param.delta_T_tol)
             for t in thermal["hourly_canopy_temps"]
         ]
+        hourly_psi_raw = [value * eta_water * edo3_step.eta_nutrientes for value in thermal_comfort]
+        mean_psi_raw = sum(hourly_psi_raw) / max(1, len(hourly_psi_raw))
+        shield_eval = compute_shield_state_and_color(
+            lissajous_area=thermal.get("lissajous_area", 0.0) * eta_water,
+            psi_environmental=mean_psi_raw,
+            is_crop=is_crop,
+        )
+        omega_l = float(GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.55))
+        eta_l = shield_eval["eta_lissajous"]
+
+        # Color del terreno entre Marrón (101,67,33) y Gris (128,128,128) según nutrientes, humedad y H
+        coupled_soil_color = compute_soil_color(
+            retention_ratio=edo5_step.soil_retention_ratio,
+            eta_nutrientes=edo3_step.eta_nutrientes,
+            water_saturation=soil_water_sat,
+        )
+        coupled_soil_vitality = compute_soil_vitality_index(
+            retention_ratio=edo5_step.soil_retention_ratio,
+            eta_nutrientes=edo3_step.eta_nutrientes,
+            water_saturation=soil_water_sat,
+        )
+
         thermal.update(
             shield_enabled=is_crop,
             rain_exposure_alert=not is_crop,
+            eta_lissajous=eta_l if is_crop else 0.0,
+            shield_score=shield_eval["shield_score"] if is_crop else 0.0,
+            shield_state=shield_eval["shield_state"],
+            shield_color_rgb=shield_eval["shield_color_rgb"],
             hourly_thermal_comfort=[round(value, 4) for value in thermal_comfort] if is_crop else None,
             water_condition_index=round(eta_water, 4) if is_crop else None,
             hourly_environmental_index=[
-                round(value * eta_water * edo3_step.eta_nutrientes, 4) for value in thermal_comfort
+                round(omega_l * eta_l + (1.0 - omega_l) * psi_h, 4) for psi_h in hourly_psi_raw
             ] if is_crop else None,
             soil_water_mm=edo2_step.soil_water_mm,
             etc_mm=edo2_step.etc_mm,
@@ -582,9 +611,12 @@ def simulate_parcel(payload):
             h_initial_mm=edo5_step.h_initial_mm,
             erosion_loss_mm=edo5_step.erosion_loss_step_mm,
             accumulated_erosion_mm=edo5_step.accumulated_erosion_mm,
+            rain_height_variation_mm=edo5_step.rain_height_variation_mm,
+            visual_height_delta_m=edo5_step.visual_height_delta_m,
             dh_dt_mm_day=edo5_step.dh_dt_mm_day,
             soil_retention_ratio=edo5_step.soil_retention_ratio,
-            soil_color_rgb=edo5_step.soil_color_rgb,
+            soil_vitality_index=coupled_soil_vitality,
+            soil_color_rgb=coupled_soil_color,
             p_drag_kg_ha=edo5_step.nutrient_drag_kg_ha.get("P", 0.0)
         )
 

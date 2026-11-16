@@ -11,9 +11,9 @@ T(t + dt) = T_eq + (T(t) - T_eq) * exp(-dt / tau_eff)
 
 import math
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
-from backend.models.crop_parameters import CropParameters
+from backend.models.crop_parameters import CropParameters, GLOBAL_CONSTANTS
 from backend.core.physics import (
     actual_vapor_pressure,
     saturation_vapor_pressure,
@@ -113,6 +113,92 @@ def compute_lissajous_area(t_air_series: List[float], t_canopy_series: List[floa
     return float(abs(area) * 0.5)
 
 
+def compute_lissajous_shield_index(
+    lissajous_area: float,
+    a_l_ref: Optional[float] = None,
+    a_l_max: Optional[float] = None,
+) -> float:
+    """
+    Convierte el área de Lissajous A_L [°C²] en el índice normalizado de escudo eta_L in [0, 1].
+    Curvas con mayor área poseen mayor capacidad amortiguadora del dosel (mejor escudo -> 1.0);
+    curvas colapsadas o de área baja tienen escudo bajo (-> 0.0).
+    """
+    area = max(0.0, float(lissajous_area))
+    if a_l_max is not None and a_l_max > 0:
+        return round(max(0.0, min(1.0, area / float(a_l_max))), 4)
+    ref = float(a_l_ref if a_l_ref is not None else GLOBAL_CONSTANTS.get("A_L_ref_C2", 18.0))
+    ref = max(1e-4, ref)
+    return round(max(0.0, min(1.0, area / (area + ref))), 4)
+
+
+def compute_shield_state_and_color(
+    lissajous_area: float,
+    psi_environmental: Optional[float] = None,
+    is_crop: bool = True,
+    omega_lissajous: Optional[float] = None,
+    a_l_ref: Optional[float] = None,
+) -> Dict[str, Any]:
+    """
+    Evalúa el estado del Escudo Ambiental y Térmico y su espectro cromático continuo
+    entre ROJO [249, 64, 70] (área baja / estrés crítico) y AZUL [42, 155, 255]
+    (área amplia / condición óptima) según AgroPhasor.pdf (Sección 2.6.1).
+    """
+    if not is_crop:
+        return {
+            "shield_enabled": False,
+            "lissajous_area": 0.0,
+            "eta_lissajous": 0.0,
+            "shield_score": 0.0,
+            "shield_state": "desactivado",
+            "shield_label": "Desactivado (Suelo Desnudo)",
+            "shield_color_rgb": (100, 116, 139),
+            "shield_color_css": "rgb(100,116,139)",
+        }
+
+    eta_l = compute_lissajous_shield_index(lissajous_area, a_l_ref=a_l_ref)
+    if psi_environmental is not None:
+        omega_l = float(
+            omega_lissajous
+            if omega_lissajous is not None
+            else GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.55)
+        )
+        omega_l = max(0.0, min(1.0, omega_l))
+        psi_clamped = max(0.0, min(1.0, float(psi_environmental)))
+        score = omega_l * eta_l + (1.0 - omega_l) * psi_clamped
+    else:
+        score = eta_l
+
+    score = round(max(0.0, min(1.0, score)), 4)
+
+    # Interpolación lineal continua (Lerp): ROJO (249, 64, 70) -> AZUL (42, 155, 255)
+    c_red = (249.0, 64.0, 70.0)
+    c_blue = (42.0, 155.0, 255.0)
+    r = int(round(c_red[0] + (c_blue[0] - c_red[0]) * score))
+    g = int(round(c_red[1] + (c_blue[1] - c_red[1]) * score))
+    b = int(round(c_red[2] + (c_blue[2] - c_red[2]) * score))
+
+    if score >= 0.70:
+        state_key = "azul_cobalto"
+        label = "Azul Cobalto (Óptimo)"
+    elif score >= 0.38:
+        state_key = "violeta_ambar"
+        label = "Violeta / Ámbar (Estrés Moderado)"
+    else:
+        state_key = "rojo_intenso"
+        label = "Rojo Intenso (Estrés Crítico)"
+
+    return {
+        "shield_enabled": True,
+        "lissajous_area": round(max(0.0, float(lissajous_area)), 2),
+        "eta_lissajous": eta_l,
+        "shield_score": score,
+        "shield_state": state_key,
+        "shield_label": label,
+        "shield_color_rgb": (r, g, b),
+        "shield_color_css": f"rgb({r},{g},{b})",
+    }
+
+
 def simulate_canopy_diurnal_cycle(
     t_ext_hourly: List[float],
     f_rad_wm2_hourly: List[float],
@@ -153,6 +239,8 @@ def simulate_canopy_diurnal_cycle(
         frost_alerts.append(step_res.is_frost_risk)
         
     al_area = compute_lissajous_area(t_ext_hourly, canopy_temps)
+    mean_comfort = sum(comfort_indices) / float(len(comfort_indices)) if comfort_indices else 0.0
+    shield_info = compute_shield_state_and_color(al_area, psi_environmental=mean_comfort, is_crop=True)
     
     mean_temp = sum(canopy_temps) / float(len(canopy_temps))
     max_temp = max(canopy_temps)
@@ -165,6 +253,10 @@ def simulate_canopy_diurnal_cycle(
         "fever_alerts": fever_alerts,
         "frost_alerts": frost_alerts,
         "lissajous_area": round(al_area, 2),
+        "eta_lissajous": shield_info["eta_lissajous"],
+        "shield_score": shield_info["shield_score"],
+        "shield_state": shield_info["shield_state"],
+        "shield_color_rgb": shield_info["shield_color_rgb"],
         "mean_canopy_temp": round(mean_temp, 2),
         "max_canopy_temp": round(max_temp, 2),
         "min_canopy_temp": round(min_temp, 2)

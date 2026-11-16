@@ -1,13 +1,17 @@
 """Replay dated phases on each terrain cell with the coupled daily solver."""
 from datetime import date, timedelta
 from dataclasses import replace
-from backend.core.edo1_engine import simulate_canopy_diurnal_cycle
+from backend.core.edo1_engine import simulate_canopy_diurnal_cycle, compute_shield_state_and_color
 from backend.core.edo2_engine import compute_soil_limits, relative_stomatal_conductance
 from backend.core.edo3_engine import compute_liebig_factor
 from backend.core.physics import thermal_comfort_index
-from backend.core.edo4_engine import execute_harvest_event
-from backend.core.edo5_engine import compute_soil_color
-from backend.models.crop_parameters import CROP_CATALOG
+from backend.core.edo4_engine import execute_harvest_event, execute_partial_cut
+from backend.core.edo5_engine import (
+    compute_soil_color,
+    compute_soil_vitality_index,
+    compute_terrain_height_variation,
+)
+from backend.models.crop_parameters import CROP_CATALOG, GLOBAL_CONSTANTS
 from backend.services.coupled_model import advance_day, incorporate_residue
 
 
@@ -77,14 +81,51 @@ def replay_plan(result, phases, selected_date):
             [hourly["RH2M"][ts] for ts in timestamps], water, thermal_crop)
         eta_n = compute_liebig_factor(*nutrients, crop.K_N, crop.K_P, crop.K_K)[0]
         eta_w = relative_stomatal_conductance(water, limits)
-        indices = [thermal_comfort_index(t, crop.T_opt, crop.delta_T_tol) * eta_w * eta_n
-                   for t in thermal["t_canopy_hourly"]]
+        raw_indices = [thermal_comfort_index(t, crop.T_opt, crop.delta_T_tol) * eta_w * eta_n
+                       for t in thermal["t_canopy_hourly"]]
+        mean_psi = sum(raw_indices) / max(1, len(raw_indices))
+        shield_eval = compute_shield_state_and_color(
+            lissajous_area=thermal["lissajous_area"] * eta_w,
+            psi_environmental=mean_psi,
+            is_crop=growing,
+        )
+        omega_l = float(GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.55))
+        eta_l = shield_eval["eta_lissajous"]
+        indices = [round(omega_l * eta_l + (1.0 - omega_l) * p, 4) for p in raw_indices]
+
+        height_var = compute_terrain_height_variation(
+            precip_mm=rain,
+            accumulated_erosion_mm=400.0 - depth,
+            slope_deg=cell.get("slope_deg", 0.0),
+            biomass_t_ha=biomass,
+            is_transition=not growing,
+            altitude_m=cell.get("altitude_m", altitude),
+        )
+        soil_color = compute_soil_color(
+            retention_ratio=depth / 400.0,
+            eta_nutrientes=eta_n,
+            water_saturation=eta_w,
+        )
+        soil_vitality = compute_soil_vitality_index(
+            retention_ratio=depth / 400.0,
+            eta_nutrientes=eta_n,
+            water_saturation=eta_w,
+        )
 
         cell.update(
             soil_water_mm=water, nutrientes_n_kg_ha=nutrients[0], nutrientes_p_kg_ha=nutrients[1],
             nutrientes_k_kg_ha=nutrients[2], biomass_t_ha=biomass, h_current_mm=depth,
-            accumulated_erosion_mm=400-depth, soil_color_rgb=compute_soil_color(depth/400),
-            shield_enabled=growing, hourly_environmental_index=indices,
+            accumulated_erosion_mm=400-depth,
+            rain_height_variation_mm=height_var["rain_height_variation_mm"],
+            visual_height_delta_m=height_var["visual_height_delta_m"],
+            soil_vitality_index=soil_vitality,
+            soil_color_rgb=soil_color,
+            shield_enabled=growing,
+            eta_lissajous=eta_l if growing else 0.0,
+            shield_score=shield_eval["shield_score"] if growing else 0.0,
+            shield_state=shield_eval["shield_state"],
+            shield_color_rgb=shield_eval["shield_color_rgb"],
+            hourly_environmental_index=indices,
             hourly_air_temps=air, hourly_canopy_temps=thermal["t_canopy_hourly"],
             lissajous_area=thermal["lissajous_area"], mean_canopy_temp=thermal["mean_canopy_temp"],
             eta_nutrientes=eta_n,
