@@ -712,6 +712,25 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"error": str(exc)}, status=400)
             return
 
+        if path in ("/api/v1/calibrar-satelital", "/calibrate/satellite"):
+            from backend.core.satellite_calibration import calibrate_parcel_realtime
+            try:
+                res = calibrate_parcel_realtime(
+                    crop_id=payload.get("crop_id", "maiz"),
+                    window_data=payload.get("window_data"),
+                    latitude=payload.get("latitude"),
+                    longitude=payload.get("longitude"),
+                    window_days=int(payload.get("window_days", 45)),
+                    slope_deg=float(payload.get("slope_deg", 8.0)),
+                    theta_fc=float(payload.get("theta_fc", 0.27)),
+                    theta_wp=float(payload.get("theta_wp", 0.12)),
+                )
+                res_json = {k: v for k, v in res.items() if k != "calibrated_crop"}
+                self.send_json_response(res_json, status=200)
+            except Exception as exc:
+                self.send_json_response({"error": str(exc)}, status=400)
+            return
+
         if path in ("/api/v1/simular/edo5/paso", "/simulate/edo5/step"):
             try:
                 step = solve_edo5_step(
@@ -1106,6 +1125,25 @@ if HAS_FASTAPI:
                 theta_fc=float(payload.get("theta_fc", 0.30)),
                 theta_wp=float(payload.get("theta_wp", 0.14))
             )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/calibrate/satellite")
+    @app.post("/api/v1/calibrar-satelital")
+    def calibrate_satellite_api(payload: Dict[str, Any]):
+        from backend.core.satellite_calibration import calibrate_parcel_realtime
+        try:
+            res = calibrate_parcel_realtime(
+                crop_id=payload.get("crop_id", "maiz"),
+                window_data=payload.get("window_data"),
+                latitude=payload.get("latitude"),
+                longitude=payload.get("longitude"),
+                window_days=int(payload.get("window_days", 45)),
+                slope_deg=float(payload.get("slope_deg", 8.0)),
+                theta_fc=float(payload.get("theta_fc", 0.27)),
+                theta_wp=float(payload.get("theta_wp", 0.12)),
+            )
+            return {k: v for k, v in res.items() if k != "calibrated_crop"}
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
