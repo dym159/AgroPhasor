@@ -1,5 +1,6 @@
 """Valores sintéticos para probar lógica; no son resultados del modelo."""
 from datetime import date, timedelta
+from math import isfinite
 from dataclasses import replace
 from itertools import product
 from unittest.mock import Mock
@@ -123,3 +124,128 @@ def test_endpoint_validation_and_weights_cache():
         assert status == 200 and factory.call_count == 1
         assert second["pareto"] == first["pareto"]
     evaluate.cache_clear()
+
+
+def test_incomplete_economics_stays_disabled_after_pareto_filtering():
+    complete = Candidate("papa>frijol", (.4, .2, -300, 100))
+    incomplete = Candidate("papa>maiz", (.5, .3, None, 120))
+    front = pareto_front(normalize([complete, incomplete]))
+    assert front == [complete]
+    from unittest.mock import patch
+    with patch("backend.rotation.api.evaluate", return_value=front):
+        response, status = rotation_graph_response({"route": "C2_mayor_ganancia"})
+    assert status == 200
+    assert response["pareto"][0]["f_hat"][2] is None
+    assert response["recommended"] is None
+    assert response["recomendada_por_ruta"]["C2_mayor_ganancia"] is None
+
+
+def test_calendar_and_annualized_cost_with_real_solver():
+    daily = {}
+    day = date(2024, 1, 1)
+    while day.year == 2024:
+        daily[day.strftime("%m-%d")] = [3, 16, 65, 18]
+        day += timedelta(days=1)
+    payload = dict(
+        periods=[{"start": "2026-11-01"}, {"start": "2027-03-05"}],
+        crop_ids=["papa", "frijol"], fixed={"0": "papa", "1": "frijol"},
+        initial_state=dict(W=104, N=100, P=40, K=120, H=400, residue=0, OM=3),
+        transition_days=14, residue_fraction=.5, slope_deg=0, irrigation_mm_day=10,
+        irrigation_cost_usd_mm_ha=0, prices_usd_t={"papa": 400, "frijol": 500},
+        costs_usd_ha={"papa": 100, "frijol": 200}, scenarios=[{"id": "control", "daily": daily}],
+    )
+    result, status = rotation_graph_response(payload)
+    assert status == 200 and result["recommended"] == "papa>frijol"
+    route = result["pareto"][0]
+    assert route["stages"][0]["harvest"] == "2027-02-19"
+    assert route["stages"][1]["harvest"] == "2027-06-03"
+    assert route["stages"][1]["end"] == "2027-06-17"
+    assert route["f"][3] == 114
+    assert all(isfinite(value) for value in route["f"])
+    assert all(0 <= value <= 1 for value in route["f"][:2])
+
+    mismatched_dates = [{"start": "2026-11-01"}, {"start": "2027-04-01"}]
+    incompatible, status = rotation_graph_response({**payload, "periods": mismatched_dates})
+    assert status == 200 and not incompatible["pareto"]
+    assert any("2027-04-01" in item["reason"] and "2027-03-05" in item["reason"]
+               for item in incompatible["reasons"])
+
+    automatic = {key: value for key, value in payload.items() if key != "periods"}
+    suggested, status = rotation_graph_response({**automatic, "start_date": "2026-11-01", "m": 2})
+    assert status == 200
+    assert suggested["pareto"][0]["stages"] == route["stages"]
+
+    cost_result, status = rotation_graph_response({**payload, "irrigation_cost_usd_mm_ha": .1})
+    assert status == 200
+    new_f = cost_result["pareto"][0]["f"]
+    # El riego aplica a los 200 días de cultivo. El año se escala sobre los 228 días del plan.
+    assert new_f[2] - route["f"][2] == pytest.approx(365 * .1 * 10 * 200 / 228)
+    assert new_f[:2] == route["f"][:2]
+
+
+def test_reference_profile_recommends_without_manual_inputs():
+    daily = {(date(2024, 1, 1) + timedelta(days=i)).strftime("%m-%d"): [3, 16, 65, 18]
+             for i in range(366)}
+    result, status = rotation_graph_response({
+        "profile": "reference", "m": 2, "start_date": "2026-11-01",
+        "crop_ids": ["papa", "frijol"], "scenarios": [{"id": "control", "daily": daily}],
+        "weights": [0, 0, 1, 0],
+    })
+    assert status == 200 and len(result["pareto"][0]["stages"]) == 2
+    assert result["weights"] == [0, 0, 1, 0]
+    assert result["pareto"][0]["f"][2] is not None
+    assert result["origins"]["initial_state"] == "respaldo: perfil de referencia"
+
+
+def test_documented_cultivars_are_available_to_the_rotation_dashboard():
+    from backend.main import crop_catalog
+
+    catalog = crop_catalog()
+    assert len(catalog) >= 27
+    assert catalog["haba"]["duration_days"] == 158
+    assert catalog["quinua"]["variety"] == "Atipaq"
+    daily = {(date(2024, 1, 1) + timedelta(days=i)).strftime("%m-%d"): [3, 16, 65, 18]
+             for i in range(366)}
+    result, status = rotation_graph_response({
+        "profile": "reference", "m": 2, "start_date": "2026-11-01",
+        "crop_ids": ["haba", "quinua"], "scenarios": [{"id": "control", "daily": daily}],
+    })
+    assert status == 200
+    assert set(result["recommended"].split(">")) == {"haba", "quinua"}
+
+
+def test_dashboard_applies_detected_calendar_and_supports_six_stages():
+    daily = {(date(2024, 1, 1) + timedelta(days=i)).strftime("%m-%d"): [3, 16, 65, 18]
+             for i in range(366)}
+    payload = {
+        "profile": "reference", "m": 3, "mode": "adaptive", "start_date": "2026-11-01",
+        "geometry": {"type": "Polygon", "coordinates": [[[-70.15, -15.49], [-70.14, -15.49],
+                     [-70.14, -15.48], [-70.15, -15.49]]]},
+        "crop_ids": ["haba", "papa", "maiz"], "fixed": {"0": "haba"},
+        "scenarios": [{"id": "control", "daily": daily}],
+    }
+    result, status = rotation_graph_response(payload)
+    assert status == 200 and result["region"] == "Puno" and not result["pareto"]
+    assert "fuera de su ventana regional" in result["reasons"][0]["reason"]
+
+    result, status = rotation_graph_response({**payload, "start_date": "2026-10-01", "m": 6})
+    assert status == 200 and result["pareto"]
+    assert all(len(candidate["stages"]) == 6 for candidate in result["pareto"])
+    assert all(candidate["stages"][0]["crop_id"] == "haba" for candidate in result["pareto"])
+
+
+def test_dashboard_requires_region_and_filters_crops_documented_elsewhere():
+    payload = {"profile": "reference", "mode": "adaptive", "m": 3,
+               "start_date": "2026-11-01", "longitude": 0, "latitude": 0,
+               "crop_ids": ["haba", "zanahoria", "caupi"], "fixed": {"0": "haba"}}
+    result, status = rotation_graph_response(payload)
+    assert status == 200 and result["status"] == "region_required"
+    assert "Puno" in result["available_regions"] and not result["pareto"]
+
+    result, status = rotation_graph_response({**payload, "region": "Puno"})
+    assert status == 200 and result["region"] == "Puno" and not result["pareto"]
+    assert "fuera de su ventana regional" in result["reasons"][0]["reason"]
+
+    result, status = rotation_graph_response({**payload, "region": "Junín", "fixed": {"0": "caupi"}})
+    assert status == 200 and result["region"] == "Junín" and not result["pareto"]
+    assert "Caupí Vaina Verde no tiene un calendario documentado para Junín" in result["reasons"][0]["reason"]

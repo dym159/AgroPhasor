@@ -8,6 +8,12 @@ export async function fetchCropCycles() {
   return response.json();
 }
 
+export async function fetchCropCatalog() {
+  const response = await fetch('/api/v1/crop-catalog');
+  if (!response.ok) throw new Error('No se pudo cargar el catálogo de cultivos.');
+  return response.json();
+}
+
 export function parcelToGeoJsonGeometry(parcel) {
   if (!parcel?.polygon || parcel.polygon.length < 3) return null;
 

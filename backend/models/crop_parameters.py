@@ -6,7 +6,8 @@ Carga automáticamente la configuración jerárquica desde `gemini-code.json` (y
 
 import json
 import os
-from dataclasses import dataclass
+import unicodedata
+from dataclasses import dataclass, field
 from typing import Dict, Any, Optional, Tuple
 
 CATALOG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "crop_catalog.json")
@@ -20,6 +21,46 @@ DISPLAY_NAMES = {
     "fresa": "Fresa",
     "papa": "Papa",
 }
+
+
+def normalize_region(value: str) -> str:
+    letters = unicodedata.normalize("NFKD", value.casefold())
+    return " ".join("".join(c for c in letters if not unicodedata.combining(c)).split())
+
+
+@dataclass(frozen=True)
+class CropCalendar:
+    duration_days: int
+    planting_months: tuple[int, ...]
+    source: str
+
+    def __post_init__(self):
+        if type(self.duration_days) is not int or self.duration_days < 1:
+            raise ValueError("El calendario requiere una duración entera positiva.")
+        if any(type(month) is not int or not 1 <= month <= 12 for month in self.planting_months):
+            raise ValueError("Los meses de siembra deben estar entre 1 y 12.")
+
+
+@dataclass(frozen=True)
+class CropEconomics:
+    price_usd_t: float
+    cost_usd_ha: float
+    source: str
+
+
+@dataclass(frozen=True)
+class PartialHarvest:
+    first_day: int
+    interval_days: int
+    fraction: float
+
+    def __post_init__(self):
+        if type(self.first_day) is not int or self.first_day < 1:
+            raise ValueError("El primer corte requiere un día entero positivo.")
+        if type(self.interval_days) is not int or self.interval_days < 1:
+            raise ValueError("El intervalo de corte requiere días enteros positivos.")
+        if not 0 < self.fraction <= 1:
+            raise ValueError("La fracción de corte debe ser mayor que cero y menor o igual que uno.")
 
 
 @dataclass(frozen=True)
@@ -65,6 +106,60 @@ class CropParameters:
     # Parámetros económicos (Frente de Pareto / A*)
     price_usd_t: float = 300.0
     base_cost_usd_ha: float = 600.0
+    has_base_economics: bool = False
+    group: str = "Otros"
+    variety: str = ""
+    cycle_source: str = ""
+    calendars: Dict[str, CropCalendar] = field(default_factory=dict)
+    economics: Dict[str, Dict[str, CropEconomics]] = field(default_factory=dict)
+    partial_harvest: Optional[PartialHarvest] = None
+
+    def partial_harvest_days(self) -> range:
+        schedule = self.partial_harvest
+        if schedule is None:
+            return range(0)
+        return range(schedule.first_day, self.duration_days, schedule.interval_days)
+
+
+def _adapt_imported_crop(key: str, crop: dict) -> dict:
+    cycle = crop["ciclo_y_cosecha"]
+    thermal = crop["termodinamica_edo1"]
+    water = crop["hidrologia_edo2_edo4"]
+    nutrients = crop["nutrientes_edo3_edo4"]
+    biomass = crop["biomasa_edo4"]
+    economics = crop["economia_pareto_f3"]
+    return {
+        "nombre": key.split("_")[0],
+        "familia_botanica": crop["familia_botanica"],
+        "duracion_dias": cycle["duracion_vida_productiva_dias"],
+        "HI": cycle["HI_indice_cosecha_final"],
+        "cosecha_parcial": {
+            "first_day": cycle["t_inicio_cosecha_dias"],
+            "interval_days": cycle["intervalo_corte_dias"],
+            "fraction": cycle["f_corte_parcial"],
+        } if cycle["es_cosecha_multiple"] else None,
+        "Cp_c": thermal["Cp_c_J_m2C"],
+        "alpha_c": thermal["alpha_c"],
+        "h_c": thermal["h_c_W_m2C"],
+        "T_opt": thermal["T_opt_C"],
+        "dT_tol": thermal["dT_tol_C"],
+        "T_helada": thermal["T_helada_C"],
+        "T_letal": thermal["T_letal_C"],
+        "gamma_max": water["gamma_max_mm_dia_kPa"] / 86400,
+        "Zr_mm": water["Zr_mm"],
+        "p_agotamiento": water["p_agotamiento"],
+        "F_fix": nutrients["F_fix_kg_t_dia"],
+        "F_sol": nutrients["F_sol_kg_t_dia"],
+        "K_N": nutrients["K_N_kg_ha"],
+        "K_P": nutrients["K_P_kg_ha"],
+        "K_K": nutrients["K_K_kg_ha"],
+        "kp_c": biomass["kp_c_t_ha_MJ_m2"],
+        "B_max_t_ha": biomass["B_max_t_ha"],
+        "B0_t_ha": biomass["B0_t_ha"],
+        "km_c_dia": biomass["km0_c_dia"],
+        "precio_usd_t": economics["precio_mercado_usd_t"],
+        "costo_base_usd_ha": economics["costo_insumos_usd_ha"],
+    }
 
 
 def normalize_catalog_dict(raw_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -223,6 +318,9 @@ def normalize_catalog_dict(raw_data: Dict[str, Any]) -> Dict[str, Any]:
                 "precio_usd_t": econ.get("precio_mercado_usd_t", c.get("precio_usd_t")),
                 "costo_base_usd_ha": econ.get("costo_insumos_usd_ha", c.get("costo_base_usd_ha")),
             }
+            for meta_key in ("grupo", "variedad", "fuente_ciclo", "calendarios", "economia", "cosecha_parcial"):
+                if meta_key in c:
+                    flat_crop[meta_key] = c[meta_key]
             cultivos_norm[raw_key] = flat_crop
         normalized["cultivos"] = cultivos_norm
 
@@ -250,10 +348,20 @@ def _load_catalog() -> Tuple[Dict[str, Any], Dict[str, CropParameters], Dict[str
                     if not data:
                         data = file_data
                     else:
+                        # Prioridad EDO: mantener constantes y parámetros calibrados de gemini-code.json,
+                        # complementando metadatos regionales y cultivos de referencia.
                         for k, v in file_data.get("constantes_globales", {}).items():
                             data.setdefault("constantes_globales", {}).setdefault(k, v)
+                        target_crops = data.setdefault("cultivos", {})
                         for k, v in file_data.get("cultivos", {}).items():
-                            data.setdefault("cultivos", {}).setdefault(k, v)
+                            if k not in target_crops:
+                                target_crops[k] = v
+                            elif isinstance(v, dict) and isinstance(target_crops[k], dict):
+                                for meta_key in ("nombre", "grupo", "variedad", "fuente_ciclo", "calendarios", "economia", "cosecha_parcial"):
+                                    if meta_key in v:
+                                        target_crops[k].setdefault(meta_key, v[meta_key])
+                        for k, v in file_data.get("cultivos_referencia", {}).items():
+                            data.setdefault("cultivos_referencia", {}).setdefault(k, v)
                         if "suelo_desnudo_transicion" not in data and "suelo_desnudo_transicion" in file_data:
                             data["suelo_desnudo_transicion"] = file_data["suelo_desnudo_transicion"]
             except Exception as e:
@@ -270,8 +378,8 @@ def _load_catalog() -> Tuple[Dict[str, Any], Dict[str, CropParameters], Dict[str
             lambda_ev = float(global_consts.get("lambda_ev_J_kg", 2450000.0))
             dt_seg = float(global_consts.get("dt_simulacion_seg", 86400.0))
 
-            # Cargar cultivos
-            cultivos = data.get("cultivos", {})
+            # Cargar cultivos (calibrados primero, luego referencia regional)
+            cultivos = {**data.get("cultivos", {}), **data.get("cultivos_referencia", {})}
             for raw_key, c in cultivos.items():
                 g_max = float(c.get("gamma_max", 0.00015))
                 if g_max >= 0.1:
@@ -301,6 +409,25 @@ def _load_catalog() -> Tuple[Dict[str, Any], Dict[str, CropParameters], Dict[str
                     name=crop_name,
                     botanical_family=c.get("familia_botanica", "Unknown"),
                     duration_days=dur_days,
+                    group=c.get("grupo", "Otros"),
+                    variety=c.get("variedad", ""),
+                    cycle_source=c.get("fuente_ciclo", ""),
+                    partial_harvest=PartialHarvest(**c["cosecha_parcial"]) if c.get("cosecha_parcial") else None,
+                    calendars={
+                        normalize_region(region): CropCalendar(
+                            profile["duracion_dias"], tuple(profile["meses_siembra"]), profile["fuente"]
+                        )
+                        for region, profile in c.get("calendarios", {}).items()
+                    },
+                    economics={
+                        normalize_region(region): {
+                            campaign: CropEconomics(
+                                profile["precio_usd_t"], profile["costo_usd_ha"], profile["fuente"]
+                            )
+                            for campaign, profile in campaigns.items()
+                        }
+                        for region, campaigns in c.get("economia", {}).items()
+                    },
                     Cp=float(c.get("Cp_c", 35000.0)),
                     hc=float(c.get("h_c", 28.0)),
                     alpha=float(c.get("alpha_c", 0.80)),
@@ -336,12 +463,12 @@ def _load_catalog() -> Tuple[Dict[str, Any], Dict[str, CropParameters], Dict[str
                     K_K=float(c.get("K_K", 40.0)),
                     price_usd_t=float(c.get("precio_usd_t", 300.0)),
                     base_cost_usd_ha=float(c.get("costo_base_usd_ha", 600.0)),
+                    has_base_economics="precio_usd_t" in c and "costo_base_usd_ha" in c,
                 )
 
                 # Guardamos por nombre canónico y alias simplificado
                 catalog[raw_key.lower()] = param
-                catalog[short_prefix] = param
-
+                catalog.setdefault(short_prefix, param)
             # Cargar suelo desnudo / transición
             suelo = data.get("suelo_desnudo_transicion", {})
             param_suelo = CropParameters(

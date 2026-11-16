@@ -197,26 +197,25 @@ def solve_edo3_step(
     sn_fixation = f_fix * b_act
     sn_total = fertilizer_npk_kg_ha[0] + sn_fixation + sn_mineralization
 
-    # Fósforo: SP = FP_fert + Fsol,c * B + mineralización basal
+    # Fósforo: SP = FP_fert + Fsol,c * B
     sp_solubilization = f_sol * b_act
-    sp_native = 0.0
-    sp_total = fertilizer_npk_kg_ha[1] + sp_solubilization + sp_native
+    sp_total = fertilizer_npk_kg_ha[1] + sp_solubilization
 
-    # Potasio: SK = FK_fert + SK_res + liberación basal de arcillas
+    # Potasio: SK = FK_fert + SK_res
     # SK_res = I(q = Transición) * beta_K * kdec * B
     sk_stover = (1.0 - ic) * beta_k_val * k_dec_val * b_act
-    sk_native = 0.0
-    sk_total = fertilizer_npk_kg_ha[2] + sk_stover + sk_native
+    sk_total = fertilizer_npk_kg_ha[2] + sk_stover
 
     # ----------------- 2. VECTOR DE TASAS DE PÉRDIDA Lambda(t) -----------------
-    # Nitrógeno: Lambda_N = (kl,N / CIC) * W + Ic * phi_chem * ka_N * fT + xi_N * eros
-    lambda_n = w_mm * (k_ln_val / cic + ic * phi_chem * ka_n * f_t) + xi_n_val * eros
+    leaching_rate_n = w_mm * k_ln_val / cic
+    leaching_rate_k = w_mm * k_lk_val / cic
+    erosion_rate_p = xi_p_val * eros
+    lambda_n = leaching_rate_n + w_mm * ic * phi_chem * ka_n * f_t + xi_n_val * eros
 
     # Fósforo (sin lixiviación vertical): Lambda_P = Ic * phi_chem * ka_P * fT * W + xi_P * eros
-    lambda_p = ic * phi_chem * ka_p * f_t * w_mm + xi_p_val * eros
+    lambda_p = ic * phi_chem * ka_p * f_t * w_mm + erosion_rate_p
 
-    # Potasio: Lambda_K = (kl,K / CIC) * W + Ic * phi_chem * ka_K * fT + xi_K * eros
-    lambda_k = w_mm * (k_lk_val / cic + ic * phi_chem * ka_k * f_t) + xi_k_val * eros
+    lambda_k = leaching_rate_k + w_mm * ic * phi_chem * ka_k * f_t + xi_k_val * eros
 
     # ----------------- 3. INTEGRACIÓN ANALÍTICA EXACTA -----------------
     # N(t + dt) = exp(-Lambda * dt) * N(t) + dt * phi1(Lambda * dt) * S

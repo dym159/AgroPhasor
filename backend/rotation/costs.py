@@ -39,6 +39,7 @@ class PeriodSimulator:
         state = (water, npk, depth, crop.B0_t_ha, history)
         stress, dry = 0., 0
         duration = crop.duration_days
+        partial_days = crop.partial_harvest_days()
         harvest = None
         partial_yield = 0.0
         is_multi = getattr(crop, "is_multiple_harvest", False)
@@ -50,12 +51,19 @@ class PeriodSimulator:
                 cut_y, rem_b = execute_partial_cut(state[3], crop)
                 partial_yield += cut_y
                 state = (*state[:3], rem_b, state[4])
+            elif offset in partial_days:
+                cut_mass = state[3] * crop.partial_harvest.fraction
+                partial_yield += cut_mass
+                state = (*state[:3], state[3] - cut_mass, state[4])
             if offset == duration:
                 harvest = execute_harvest_event(state[3], crop, self.residue, partial_yield_accumulated_t_ha=partial_yield)
                 state = (*state[:3], harvest.residue_left_t_ha, state[4])
             day = start + timedelta(days=offset)
             weather_key = (2,28) if (day.month,day.day) == (2,29) else (day.month,day.day)
-            weather = self.scenarios[scenario][weather_key]
+            weather = self.scenarios[scenario].get(weather_key)
+            if weather is None:
+                month, day_number = weather_key
+                raise ValueError(f"Al escenario climático «{scenario}» le falta el día {month:02d}-{day_number:02d}, necesario para simular la fecha {day}.")
             state, diagnostics = advance_day(state, crop, weather, self.slope,
                 self.irrigation if growing else 0, growing, om)
             stress += 1-diagnostics["psi"]
@@ -70,7 +78,8 @@ class PeriodSimulator:
             state = (*state[:3], harvest.residue_left_t_ha, state[4])
         price, cost = self.prices.get(key), self.costs.get(key)
         economic = None if price is None or cost is None else (
-            cost + self.irrigation_cost*self.irrigation*duration - harvest.commercial_yield_t_ha*price)
+            cost + self.irrigation_cost*self.irrigation*duration
+            - (partial_yield + harvest.commercial_yield_t_ha)*price)
         eta = compute_liebig_factor(*state[1], crop.K_N, crop.K_P, crop.K_K)[0]
         soil = compute_soil_pareto_metric_f2(depth, state[2], eta)
         return PeriodResult((*state, om), (stress, soil, economic, duration+self.transition))

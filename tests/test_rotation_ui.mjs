@@ -105,59 +105,74 @@ class Element {
   content() {return this.textContent+this.children.map(c => c instanceof Element ? c.content() : c).join(' ');}
 }
 
-test('Consultar sin completar calendario: cero, uno o dos periodos incompletos',async () => {
-  const originalDocument=globalThis.document, originalFetch=globalThis.fetch;
-  globalThis.document={createElement:tag => new Element(tag),createTextNode:value => value};
-  try {
-    for (const phases of [[],[{cropId:'papa',start:'2026-01-01',harvest:null}],
-      [{cropId:'papa',start:'2026-01-01',harvest:null},{cropId:'',start:'2026-03-01',harvest:null}]]) {
-      let sent;
-      globalThis.fetch=async (url,options) => {sent=JSON.parse(options.body); return {ok:true,json:async () => response()};};
-      const root=new Element('section');
-      const panel=createRotationsPanel(root,() => {});
-      panel.update({selectedParcel:{id:'p',polygon:[[0,0],[0,1],[1,1]]},phases,
-        plantingStart:'2026-01-01',cropCycles:{papa:90,frijol:90}});
-      root.all().filter(n => n.type==='number').forEach(n => {n.value='1';});
-      root.all().find(n => n.tag==='form').events.submit({preventDefault(){}});
-      await new Promise(resolve => setImmediate(resolve));
-      assert.equal(sent.m,2); assert.equal(sent.start_date,'2026-01-01');
-      assert.equal(sent.periods,undefined); assert.deepEqual(sent.fixed,{});
-      assert(root.content().includes('Rotación sugerida'));
-    }
-  } finally {globalThis.document=originalDocument; globalThis.fetch=originalFetch;}
-});
-
-test('Panel presenta respaldo, aplica por botón, restaura y muestra fallos',async () => {
+test('El panel muestra la combinación y usa las perillas y cultivos del tablero',async () => {
   const originalDocument = globalThis.document, originalFetch = globalThis.fetch;
   globalThis.document = {createElement:tag => new Element(tag),createTextNode:value => value};
   try {
     const root = new Element('section');
-    let calls=0;
-    let result=response(); result.motivo='Motivo del servidor';
-    globalThis.fetch=async () => {calls++; return {ok:true,json:async () => result};};
-    const state={selectedParcel:{id:'p',polygon:[[0,0],[0,1],[1,1]]},
-      phases:[{cropId:'papa',start:'2026-01-01',harvest:'2026-04-01'},
-        {cropId:'frijol',start:'2026-04-01',harvest:'2026-07-01'}],cropCycles:{papa:90,frijol:90}};
-    const originalPlan=structuredClone(state.phases);
-    const panel=createRotationsPanel(root,phases => {state.phases=phases; panel.update(state);});
+    const requests = [];
+    let result = {
+      pareto: [
+        { id:'water', f_hat:[0,1,1,1], stages:[{crop_id:'frijol'},{crop_id:'maiz'}] },
+        { id:'profit', f_hat:[1,0,0,0], stages:[{crop_id:'papa'},{crop_id:'fresa'}] },
+      ],
+    };
+    globalThis.fetch = async (_url, options) => {
+      requests.push(JSON.parse(options.body));
+      return {ok:true, json:async () => result};
+    };
+    const state = {
+      selectedParcel:{id:'p',polygon:[[0,0],[0,1],[1,1]]},
+      plantingStart:'2026-01-01', phases:[], selectedCropIds:[],
+      cropCycles:{papa:130,frijol:90,maiz:120,fresa:270},
+      cropCatalog:{papa:{name:'Papa'},frijol:{name:'Frijol'},maiz:{name:'Maíz'},fresa:{name:'Fresa'}},
+      knobs:{w1:100,w2:0,w3:0,w4:0},
+    };
+    const panel = createRotationsPanel(root);
+    const settle = () => new Promise(resolve => setImmediate(resolve));
     panel.update(state);
-    const form=root.all().find(n => n.tag==='form');
-    root.all().filter(n => n.type==='number').forEach(n => {n.value='1';});
-    const submit=async () => {form.events.submit({preventDefault(){}}); await new Promise(resolve => setImmediate(resolve));};
-    await submit();
-    assert.equal(calls,1); assert(root.content().includes('Datos de respaldo'));
-    assert(root.content().includes('Comparación numérica no disponible'));
-    assert(root.content().includes('Estimación'));
-    const button=title => root.all().find(n => n.tag==='button' && n.textContent===title);
-    button('Máxima Resiliencia').events.click(); assert.equal(calls,1);
-    button('Aplicar esta rotación').events.click(); assert.equal(state.phases.length,1);
-    button('Deshacer').events.click(); assert.deepEqual(state.phases,originalPlan);
-    result={pareto:[],reasons:[{reason:'Umbral térmico letal'}],avisos:[]};
-    panel.update({...state,selectedParcel:{...state.selectedParcel,id:'other'}});
-    await submit(); assert(root.content().includes('Sin rotaciones viables'));
-    assert(root.content().includes('Umbral térmico letal'));
-    globalThis.fetch=async () => ({ok:false,json:async () => ({error:'Revisa la fecha'})});
-    panel.update({...state,selectedParcel:{...state.selectedParcel,id:'third'}});
-    await submit(); assert(root.content().includes('Revisa la fecha'));
+    await settle();
+    assert.equal(root.hidden,true);
+    assert.equal(requests.length,0);
+
+    state.rotationRequested = true;
+    panel.update(state);
+    await settle();
+    assert.equal(root.hidden,false);
+    assert(root.content().includes('Frijol → Maíz'));
+    assert(!root.all().some(n => n.tag === 'form' || n.tag === 'input'));
+    assert.equal(requests[0].profile,'reference');
+    assert.equal(requests[0].start_date,'2026-01-01');
+    assert.equal(requests[0].m,3);
+    assert.equal(requests[0].initial_state,undefined);
+
+    panel.update({...state,knobs:{w1:0,w2:0,w3:100,w4:0}});
+    assert(root.content().includes('Papa → Fresa'));
+    assert.equal(requests.length,1);
+
+    panel.update({...state,selectedCropIds:['fresa']});
+    await settle();
+    assert.deepEqual(requests[1].fixed,{0:'fresa'});
+    result = {pareto:[]};
+    panel.update({...state,selectedCropIds:['fresa','papa']});
+    await settle();
+    assert.deepEqual(requests[2].crop_ids,['fresa','papa']);
+    assert(root.content().includes('Sin combinación viable'));
+    const count = root.all().find(n => n.tag === 'select');
+    assert.deepEqual(count.children.map(n => n.value),['3','4','5','6']);
+    count.value = '6';
+    count.events.change();
+    await settle();
+    assert.equal(requests[3].m,6);
+
+    result = {pareto:[],status:'region_required',available_regions:['Junín','Puno']};
+    panel.update({...state,selectedParcel:{...state.selectedParcel,id:'unknown'}});
+    await settle();
+    assert(root.content().includes('Identifica el departamento'));
+    const department = root.all().find(n => n.attrs['aria-label'] === 'Departamento del terreno');
+    department.value = 'Puno';
+    department.events.change();
+    await settle();
+    assert.equal(requests[5].region,'Puno');
   } finally {globalThis.document=originalDocument; globalThis.fetch=originalFetch;}
 });

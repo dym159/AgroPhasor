@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from datetime import date
 
 
+MONTH_NAMES = ("enero", "febrero", "marzo", "abril", "mayo", "junio",
+               "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+
+
 @dataclass(frozen=True)
 class Node:
     crop: str | None
@@ -39,3 +43,12 @@ class RotationGraph:
             crop = self.catalog[key]
             if crop.botanical_family != node.family and (key not in self.windows or node.start.month in self.windows[key]):
                 yield key, crop
+
+    def fixed_window_conflict(self, period, start):
+        key = self.fixed.get(period)
+        months = self.windows.get(key)
+        if months and start.month not in months:
+            allowed = ", ".join(MONTH_NAMES[month - 1] for month in months)
+            return (f"{self.catalog[key].name} está fuera de su ventana regional de siembra el {start}. "
+                    f"Meses de siembra registrados: {allowed}.")
+        return None

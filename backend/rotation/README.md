@@ -24,6 +24,50 @@ se requieren explícitos para evitar usar valores económicos de respaldo como
 datos observados. Si faltan, f3 es None globalmente, C2 se deshabilita y los
 pesos activos se renormalizan. Pesos `weights`: cuatro números que suman uno.
 
+El JSON `backend/data/crop_catalog.json` admite `grupo`, `calendarios` y
+`economia` en cada ficha de cultivo. `calendarios` usa la región como clave.
+Cada calendario contiene `duracion_dias`, `meses_siembra` y `fuente`.
+`economia` usa región y campaña como claves anidadas. Cada registro contiene
+`precio_usd_t`, `costo_usd_ha` y `fuente`. Las claves de región se comparan
+ignorando tildes, mayúsculas y espacios redundantes.
+
+Al enviar `region`, el recomendador usa la duración y la ventana del perfil
+regional cuando existe. Con `region` y `campaign` usa también el perfil
+económico disponible para esa campaña. Las ventanas, precios y costos
+explícitos de la solicitud tienen prioridad sobre los valores de la ficha.
+El selector obtiene los cultivos activos desde `GET /api/v1/crop-catalog`.
+
+La sección `cultivos_referencia` amplía el recomendador con fichas de ciclo
+documentadas. El motor usa los valores biofísicos de respaldo para los
+coeficientes que esas fichas no incluyen. Los ciclos publicados como rangos
+usan una duración representativa. Las ventanas se aplican cuando la API recibe
+una región que coincide con la ficha.
+
+El perfil de referencia identifica el departamento a partir del polígono
+de la parcela. Los límites de `backend/data/peru_departments.geojson` proceden
+de [geoBoundaries gbOpen, Perú ADM1](https://www.geoboundaries.org/api/current/gbOpen/PER/ADM1/)
+(versión `90a1d52`, fuente original de dominio público). Se conservaron
+los nombres y las geometrías, reduciendo la precisión a cinco decimales.
+
+El tablero usa el modo `adaptive`. Explora de forma exhaustiva las
+búsquedas pequeñas. En búsquedas grandes conserva hasta ocho prefijos
+por etapa, elegidos con distintas prioridades. Puede omitir alternativas
+que una búsqueda exhaustiva encontraría.
+
+El tablero envía `profile: "reference"` para calcular sin formulario. El
+perfil aporta suelo y manejo de referencia y habilita los precios y costos
+base presentes en las fichas. Los datos explícitos y la economía regional
+de la campaña seleccionada conservan prioridad cuando se proporcionan.
+
+El backend adapta las fichas anidadas de `backend/data/gemini-code.json`
+para cultivos ausentes del catálogo activo. Las fichas existentes tienen
+prioridad. La rotación modela cada corte parcial antes de la cosecha final
+retirando de la biomasa viva la fracción indicada y contabilizándola como
+rendimiento comercial estimado. Las etapas con cortes devuelven
+`partial_harvest_dates`. Los precios y costos del adjunto son referencias de
+la ficha base. Para el margen de rotación se usan datos regionales de campaña
+o valores explícitos de la solicitud.
+
 Opcionales: `geometry` GeoJSON Polygon/MultiPolygon (se usa su centroide climático),
 `windows` por cultivo con meses 1..12, `drought_days` (criterio de inviabilidad),
 `survival_threshold` (0,1], `aggregation`: mean/worst.

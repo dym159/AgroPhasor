@@ -1,15 +1,16 @@
 """Contrato de rotación; caché física independiente de rutas y perillas."""
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import date
 from functools import lru_cache
 import json
 from math import isfinite
-from backend.models.crop_parameters import CROP_CATALOG
-from backend.services.rotation_service import load_climate, ClimateUnavailable
+from backend.models.crop_parameters import CROP_CATALOG, normalize_region
+from backend.services.rotation_service import load_climate, ClimateUnavailable, INITIAL_SOIL, TRANSITION_DAYS
 from .costs import PeriodSimulator
 from .graph import RotationGraph
 from .search import search, NoViableRotations
 from .pareto import normalize, pareto_front
+from .regions import department_at, department_names
 from .routes import PRESETS, effective_weights, select_route
 
 
@@ -23,7 +24,7 @@ def numeric(value, label, low=0, high=float("inf")):
 def evaluate(serialized: str):
     p = json.loads(serialized)
     start = date.fromisoformat(p["start_date"])
-    catalog = {key: c for key,c in CROP_CATALOG.items() if key == c.key and c.botanical_family != "None"}
+    catalog = {key: c for key,c in CROP_CATALOG.items() if key == c.key.lower() and c.botanical_family != "None"}
     # Los alias existentes se admiten cuando se solicita un subconjunto explícito.
     if "crop_ids" in p:
         if not p["crop_ids"] or any(k not in CROP_CATALOG or CROP_CATALOG[k].botanical_family == "None" for k in p["crop_ids"]):
@@ -37,7 +38,40 @@ def evaluate(serialized: str):
         raise ValueError("Fechas de periodos inválidas: deben ser crecientes, empezar en start_date y coincidir con m.")
     if "periods" in p and not period_dates:
         raise ValueError("periods no puede estar vacío.")
-    graph = RotationGraph(catalog, p["m"], {int(k):v for k,v in p.get("fixed", {}).items()}, p.get("windows"), period_dates)
+    region = normalize_region(p.get("region", ""))
+    campaign = p.get("campaign", "").strip()
+    fixed = {int(k): v for k, v in p.get("fixed", {}).items()}
+    unavailable = {}
+    if p.get("profile") == "reference" and region:
+        # Reference varieties with documented regional coverage stay within it.
+        unavailable = {key: crop for key, crop in catalog.items()
+                       if crop.cycle_source and crop.calendars and region not in crop.calendars}
+        if blocked := next((unavailable[key] for key in fixed.values() if key in unavailable), None):
+            return NoViableRotations([{"sequence": [],
+                                      "reason": f"{blocked.name} {blocked.variety} no tiene un calendario documentado para {p['region']}."}])
+        catalog = {key: crop for key, crop in catalog.items() if key not in unavailable}
+        if not catalog:
+            return NoViableRotations([{"sequence": [],
+                                      "reason": f"Los cultivos marcados no tienen un calendario documentado para {p['region']}."}])
+    windows, prices, costs = {}, {}, {}
+    for key, crop in catalog.items():
+        calendar = crop.calendars.get(region)
+        if calendar:
+            catalog[key] = replace(crop, duration_days=calendar.duration_days)
+            if calendar.planting_months:
+                windows[key] = calendar.planting_months
+        economics = crop.economics.get(region, {}).get(campaign)
+        if economics:
+            prices[key] = numeric(economics.price_usd_t, "precio USD/t")
+            costs[key] = numeric(economics.cost_usd_ha, "costo USD/ha")
+        elif p.get("profile") == "reference" and crop.has_base_economics:
+            prices[key] = numeric(crop.price_usd_t, "precio de referencia USD/t")
+            costs[key] = numeric(crop.base_cost_usd_ha, "costo de referencia USD/ha")
+    windows.update({key: months for key, months in (p.get("windows") or {}).items()
+                    if key not in unavailable})
+    graph = RotationGraph(catalog, p["m"], fixed, windows, period_dates)
+    if p.get("profile") == "reference" and (conflict := graph.fixed_window_conflict(0, start)):
+        return NoViableRotations([{"sequence": [], "reason": conflict}])
     initial = p["initial_state"]
     state = (numeric(initial["W"], "W"), tuple(numeric(initial[k], k) for k in ("N","P","K")),
              numeric(initial["H"], "H", .000001), numeric(initial["residue"], "rastrojo"),
@@ -62,8 +96,8 @@ def evaluate(serialized: str):
         scenarios[sid] = climate
     if not scenarios:
         scenarios["NASA_POWER"] = load_climate(numeric(p["latitude"], "latitud", -90,90), numeric(p["longitude"], "longitud", -180,180))
-    prices = {k:numeric(v, "precio USD/t") for k,v in p.get("prices_usd_t", {}).items() if v is not None}
-    costs = {k:numeric(v, "costo USD/ha") for k,v in p.get("costs_usd_ha", {}).items() if v is not None}
+    prices.update({k:numeric(v, "precio USD/t") for k,v in p.get("prices_usd_t", {}).items() if v is not None})
+    costs.update({k:numeric(v, "costo USD/ha") for k,v in p.get("costs_usd_ha", {}).items() if v is not None})
     drought = p.get("drought_days")
     if drought is not None and (type(drought) is not int or drought < 1):
         raise ValueError("drought_days debe ser un entero positivo.")
@@ -79,10 +113,24 @@ def recommend(payload):
     if not isinstance(payload, dict):
         raise ValueError("Se esperaba un objeto JSON.")
     p = dict(payload)
+    reference = p.get("profile") == "reference"
+    if "profile" in p and not reference:
+        raise ValueError("Perfil de rotación desconocido.")
+    if reference:
+        water_fraction, (nitrogen, phosphorus, potassium), depth, residue = INITIAL_SOIL
+        defaults = {
+            "initial_state": {"W": water_fraction * depth, "N": nitrogen, "P": phosphorus,
+                              "K": potassium, "H": depth, "residue": residue, "OM": 3.0},
+            "transition_days": TRANSITION_DAYS, "residue_fraction": .5,
+            "slope_deg": 0, "irrigation_mm_day": 0, "irrigation_cost_usd_mm_ha": 0,
+        }
+        for key, value in defaults.items():
+            p.setdefault(key, value)
     if p.get("periods"):
         p.setdefault("m", len(p["periods"]))
         p.setdefault("start_date", p["periods"][0]["start"])
     geometry = p.pop("geometry", None)
+    region_point = None
     if geometry is not None:
         from shapely.geometry import shape
         polygon = shape(geometry)
@@ -90,21 +138,39 @@ def recommend(payload):
             raise ValueError("Geometría inválida.")
         p.setdefault("latitude", polygon.centroid.y)
         p.setdefault("longitude", polygon.centroid.x)
+        region_point = polygon.centroid if polygon.covers(polygon.centroid) else polygon.representative_point()
+    if reference and "latitude" in p and "longitude" in p:
+        latitude = numeric(p["latitude"], "latitud", -90, 90)
+        longitude = numeric(p["longitude"], "longitud", -180, 180)
+        point = (region_point.x, region_point.y) if region_point is not None else (longitude, latitude)
+        region = department_at(*point)
+        if not region and p.get("region"):
+            names = {normalize_region(name): name for name in department_names()}
+            region = names.get(normalize_region(p["region"]))
+            if not region:
+                raise ValueError("Selecciona un departamento válido de Perú.")
+        if not region:
+            return {"status": "region_required", "pareto": [], "region": None,
+                    "available_regions": department_names()}
+        p["region"] = region
     route, weights = p.pop("route", "B_balance"), p.pop("weights", None)
     if route not in PRESETS:
         raise ValueError("Ruta desconocida.")
     result = evaluate(json.dumps(p, sort_keys=True, allow_nan=False))
     warnings = ["Estimación del motor; parámetros heredados del catálogo sin validación local.",
                 "Métricas agregadas únicamente entre escenarios supervivientes."]
-    if not p.get("windows"):
+    if not p.get("windows") and not p.get("region"):
         warnings.append("Sin ventanas de siembra: restricción mensual no evaluada.")
+    if p.get("region"):
+        warnings.append("Se aplican los calendarios disponibles para la región. Los demás cultivos conservan su ciclo base y las ventanas explícitas.")
     if p.get("drought_days") is None:
         warnings.append("Sin umbral de marchitez prolongada: criterio no evaluado.")
     if isinstance(result, NoViableRotations):
         return {"label":"estimación", "status":result.status, "reasons":result.reasons,
-                "pareto":[], "recomendada_por_ruta":{}, "avisos":warnings}
+                "pareto":[], "recomendada_por_ruta":{}, "avisos":warnings, "region":p.get("region")}
     f_hat = {c.id:c.f_hat for c in result}
-    economic = all(c.f[2] is not None for c in result)
+    # Comparability was determined across all feasible routes, before Pareto filtering.
+    economic = all(c.f_hat[2] is not None for c in result)
     if not economic:
         warnings.append("Faltan precios o costos explícitos: f3 y C2 deshabilitados; pesos restantes renormalizados.")
     routes = {}
@@ -120,10 +186,13 @@ def recommend(payload):
     w = effective_weights(weights if weights is not None else PRESETS[route], f_hat)
     selected = None if not economic and route == "C2_mayor_ganancia" and weights is None else select_route(result, f_hat, w)
     return {"label":"estimación", "status":"ok", "pareto":[asdict(c) for c in result],
+            "region":p.get("region"),
             "recomendada_por_ruta":routes, "recommended":selected.id if selected else None,
             "weights":w, "avisos":warnings, "motivo":"Mínima suma ponderada sobre el frente de Pareto; desempate por id.",
+            "scenario_count":len(p.get("scenarios") or ["NASA_POWER"]),
             "survival_label":"frecuencia de supervivencia dentro de los escenarios probados",
-            "origins":{"initial_state":"observado: aportado por solicitante", "catalog":"respaldo: catálogo existente",
+            "origins":{"initial_state":"respaldo: perfil de referencia" if reference and "initial_state" not in payload
+                       else "observado: aportado por solicitante", "catalog":"respaldo: catálogo existente",
                        "climate":"aportado por solicitante" if p.get("scenarios") else "observado: NASA POWER, año de referencia existente",
                        "results":"estimado"}}
 

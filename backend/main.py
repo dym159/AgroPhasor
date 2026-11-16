@@ -458,6 +458,18 @@ def crop_cycles():
             if crop.key != "suelo_desnudo_transicion"}
 
 
+def crop_catalog():
+    result = {}
+    for key, crop in CROP_CATALOG.items():
+        if key != crop.key.lower() or crop.botanical_family == "None":
+            continue
+        alias = key.split("_")[0]
+        crop_id = alias if CROP_CATALOG.get(alias) is crop else key
+        result[crop_id] = {"name": crop.name, "group": crop.group, "duration_days": crop.duration_days,
+                           "variety": crop.variety, "cycle_source": crop.cycle_source}
+    return result
+
+
 def rotation_response(payload):
     try:
         return recommend_rotation(payload), 200
@@ -521,6 +533,10 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
 
         if path == "/api/v1/crop-cycles":
             self.send_json_response(crop_cycles())
+            return
+
+        if path == "/api/v1/crop-catalog":
+            self.send_json_response(crop_catalog())
             return
 
         super().do_GET()
@@ -857,6 +873,10 @@ if HAS_FASTAPI:
     @app.get("/api/v1/crop-cycles")
     def crop_cycles_api():
         return crop_cycles()
+
+    @app.get("/api/v1/crop-catalog")
+    def crop_catalog_api():
+        return crop_catalog()
 
     @app.get("/crops")
     def list_crops():

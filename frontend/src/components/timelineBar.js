@@ -1,4 +1,4 @@
-import { CROP_DRAG_TYPE, TIMELINE_MONTHS, VISUAL_CROPS } from '../data/mockVisualData.js';
+import { CROP_DRAG_TYPE, TIMELINE_MONTHS } from '../data/mockVisualData.js';
 import { clearChildren, createElement } from '../utils/dom.js';
 import { formatPhaseDate, monthStart } from '../utils/phaseDates.js';
 
@@ -114,8 +114,8 @@ export function createTimelineBar(container, initialState, callbacks) {
         className: 'timeline-phase-crop', attrs: { 'aria-label': `Cultivo desde ${start}` },
       }, [
         createElement('option', { text: 'Sin cultivo', attrs: { value: '' } }),
-        ...VISUAL_CROPS.map((crop) => createElement('option', {
-          text: crop.name, attrs: { value: crop.id },
+        ...Object.entries(state.cropCatalog ?? {}).map(([id, crop]) => createElement('option', {
+          text: crop.name, attrs: { value: id },
         })),
       ]);
       cropSelect.value = phase.cropId;
@@ -151,10 +151,11 @@ export function createTimelineBar(container, initialState, callbacks) {
 
   function update(next) {
     const phasesChanged = next.phases !== state.phases;
+    const catalogChanged = next.cropCatalog !== state.cropCatalog;
     const added = next.phases.length > state.phases.length;
     state = next;
-    if (!phasesChanged) return;
-    syncDate();
+    if (!phasesChanged && !catalogChanged) return;
+    if (phasesChanged) syncDate();
     renderPhases();
     if (added) phaseList.scrollLeft = phaseList.scrollWidth;
   }
