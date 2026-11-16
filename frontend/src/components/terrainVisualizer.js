@@ -176,6 +176,31 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     if (!shieldCells.length) return;
 
     for (const { cell, center, polygons, z } of shieldCells) {
+      const envIndex = Math.max(
+        0,
+        Math.min(1, cell.hourly_shield_score?.[hour] ?? cell.hourly_environmental_index?.[hour] ?? cell.shield_score ?? 0)
+      );
+      const color = shieldColor(envIndex);
+      const cellShieldZ = z + 0.055;
+
+      // 1. Escudo protector cubriendo toda la geometría de cada celda
+      for (const rings of polygons) {
+        const shieldPoly = new Path2D();
+        for (const ring of rings) {
+          const topShield = ring.map((vertex) => project(vertex, cellShieldZ));
+          traceRing(shieldPoly, topShield);
+        }
+        context.fillStyle = color;
+        context.globalAlpha = 0.20 + 0.20 * envIndex;
+        context.fill(shieldPoly, 'evenodd');
+        context.globalAlpha = 0.85;
+        context.strokeStyle = color;
+        context.lineWidth = 1.4;
+        context.stroke(shieldPoly);
+      }
+      context.globalAlpha = 1;
+
+      // 2. Curva de Lissajous centrada dentro del escudo de la celda
       const air = cell.hourly_air_temps;
       const canopy = cell.hourly_canopy_temps;
       if (!air?.length || canopy?.length !== air.length) continue;
@@ -190,14 +215,8 @@ export function mountTerrainVisualizer(container, state, callbacks) {
       const spanX = Math.max(...vertices.map(([x]) => x)) - Math.min(...vertices.map(([x]) => x));
       const spanY = Math.max(...vertices.map(([, y]) => y)) - Math.min(...vertices.map(([, y]) => y));
       const radius = Math.min(spanX, spanY) * 0.34;
-      const envIndex = Math.max(
-        0,
-        Math.min(1, cell.hourly_shield_score?.[hour] ?? cell.hourly_environmental_index?.[hour] ?? cell.shield_score ?? 0)
-      );
-      // El semieje menor refleja el área de amortiguación de Lissajous:
-      // óptimo -> elipse amplia (azul); crítico -> línea colapsada (rojo), siempre dentro de su celda.
-      const minorRatio = 0.08 + 0.68 * envIndex;
-      const cellShieldZ = z + 0.045;
+      // El semieje menor refleja el área de amortiguación de Lissajous manteniendo legibilidad visual
+      const minorRatio = 0.28 + 0.62 * envIndex;
       const trajectory = air.map((value, index) => {
         const phase = (2 * Math.PI * index) / air.length;
         const uNorm = Math.max(-1, Math.min(1, (value - meanAir) / ampAir));
@@ -205,14 +224,13 @@ export function mountTerrainVisualizer(container, state, callbacks) {
         const vNorm = Math.max(-1, Math.min(1, 0.35 * diffNorm + 0.65 * Math.cos(phase))) * minorRatio;
         const dx = (uNorm * cosYaw + vNorm * sinYaw) * radius;
         const dy = (-uNorm * sinYaw + vNorm * cosYaw) * radius;
-        return project([center[0] + dx, center[1] + dy], cellShieldZ);
+        return project([center[0] + dx, center[1] + dy], cellShieldZ + 0.008);
       });
       const path = new Path2D();
       traceRing(path, trajectory);
       path.closePath();
-      const color = shieldColor(envIndex);
       context.fillStyle = color;
-      context.globalAlpha = 0.42;
+      context.globalAlpha = 0.32;
       context.fill(path);
       context.globalAlpha = 1;
       context.strokeStyle = color;
@@ -220,7 +238,7 @@ export function mountTerrainVisualizer(container, state, callbacks) {
       context.stroke(path);
       const point = trajectory[Math.min(hour, trajectory.length - 1)];
       context.beginPath();
-      context.arc(point.x, point.y, 2.2, 0, Math.PI * 2);
+      context.arc(point.x, point.y, 2.4, 0, Math.PI * 2);
       context.fill();
     }
   }
