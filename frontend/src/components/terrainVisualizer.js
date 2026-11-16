@@ -175,38 +175,52 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     const shieldCells = sorted.filter(({ cell }) => cell?.shield_enabled);
     if (!shieldCells.length) return;
 
-    // Toda la cuadrícula comparte una cota, incluso sobre las celdas erosionadas.
-    const shieldZ = Math.max(...sorted.map(({ z }) => z)) + 0.22;
-    for (const { cell, center, polygons } of shieldCells) {
+    for (const { cell, center, polygons, z } of shieldCells) {
       const air = cell.hourly_air_temps;
       const canopy = cell.hourly_canopy_temps;
       if (!air?.length || canopy?.length !== air.length) continue;
       const meanAir = air.reduce((sum, value) => sum + value, 0) / air.length;
       const meanCanopy = canopy.reduce((sum, value) => sum + value, 0) / canopy.length;
+      const ampAir = Math.max(2.5, ...air.map((value) => Math.abs(value - meanAir)));
+      const ampDiff = Math.max(
+        1.5,
+        ...air.map((value, idx) => Math.abs((canopy[idx] - meanCanopy) - (value - meanAir)))
+      );
       const vertices = polygons.flat(2);
-      const radius = Math.min(
-        Math.max(...vertices.map(([x]) => x)) - Math.min(...vertices.map(([x]) => x)),
-        Math.max(...vertices.map(([, y]) => y)) - Math.min(...vertices.map(([, y]) => y))
-      ) * .43;
-      // A shared temperature scale preserves differences in Lissajous area.
-      const trajectory = air.map((value, index) => project([
-        center[0] + (value - meanAir) / 20 * radius,
-        center[1] + (canopy[index] - meanCanopy) / 20 * radius,
-      ], shieldZ));
+      const spanX = Math.max(...vertices.map(([x]) => x)) - Math.min(...vertices.map(([x]) => x));
+      const spanY = Math.max(...vertices.map(([, y]) => y)) - Math.min(...vertices.map(([, y]) => y));
+      const radius = Math.min(spanX, spanY) * 0.34;
+      const envIndex = Math.max(
+        0,
+        Math.min(1, cell.hourly_shield_score?.[hour] ?? cell.hourly_environmental_index?.[hour] ?? cell.shield_score ?? 0)
+      );
+      // El semieje menor refleja el área de amortiguación de Lissajous:
+      // óptimo -> elipse amplia (azul); crítico -> línea colapsada (rojo), siempre dentro de su celda.
+      const minorRatio = 0.08 + 0.68 * envIndex;
+      const cellShieldZ = z + 0.045;
+      const trajectory = air.map((value, index) => {
+        const phase = (2 * Math.PI * index) / air.length;
+        const uNorm = Math.max(-1, Math.min(1, (value - meanAir) / ampAir));
+        const diffNorm = Math.max(-1, Math.min(1, ((canopy[index] - meanCanopy) - (value - meanAir)) / ampDiff));
+        const vNorm = Math.max(-1, Math.min(1, 0.35 * diffNorm + 0.65 * Math.cos(phase))) * minorRatio;
+        const dx = (uNorm * cosYaw + vNorm * sinYaw) * radius;
+        const dy = (-uNorm * sinYaw + vNorm * cosYaw) * radius;
+        return project([center[0] + dx, center[1] + dy], cellShieldZ);
+      });
       const path = new Path2D();
       traceRing(path, trajectory);
       path.closePath();
-      const color = shieldColor(cell.hourly_environmental_index[hour] ?? 0);
+      const color = shieldColor(envIndex);
       context.fillStyle = color;
-      context.globalAlpha = .4;
+      context.globalAlpha = 0.42;
       context.fill(path);
       context.globalAlpha = 1;
       context.strokeStyle = color;
-      context.lineWidth = 1.5;
+      context.lineWidth = 1.6;
       context.stroke(path);
       const point = trajectory[Math.min(hour, trajectory.length - 1)];
       context.beginPath();
-      context.arc(point.x, point.y, 2, 0, Math.PI * 2);
+      context.arc(point.x, point.y, 2.2, 0, Math.PI * 2);
       context.fill();
     }
   }

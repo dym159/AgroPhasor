@@ -32,6 +32,29 @@ export function soilColorRgb({
   return gray.map((g, i) => Math.round(g + (brown[i] - g) * vitality));
 }
 
+function polygonCentroid(ring) {
+  if (!ring || ring.length < 3) return ring?.[0] ?? [0, 0];
+  let area = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[i + 1];
+    const cross = x0 * y1 - x1 * y0;
+    area += cross;
+    cx += (x0 + x1) * cross;
+    cy += (y0 + y1) * cross;
+  }
+  if (Math.abs(area) < 1e-9) {
+    const pts = ring.slice(0, -1);
+    return [
+      pts.reduce((s, [x]) => s + x, 0) / Math.max(1, pts.length),
+      pts.reduce((s, [, y]) => s + y, 0) / Math.max(1, pts.length),
+    ];
+  }
+  return [cx / (3 * area), cy / (3 * area)];
+}
+
 export function buildParcelSimulationMesh(parcel, cells) {
   const lats = parcel.polygon.map(([lat]) => lat);
   const lons = parcel.polygon.map(([, lon]) => lon);
@@ -52,9 +75,14 @@ export function buildParcelSimulationMesh(parcel, cells) {
   const elevationScale = 0.28 / Math.max(15, relief);
   const meshCells = cells.map((cell) => {
     const { type, coordinates } = cell.geometry;
-    const polygons = type === 'MultiPolygon'
+    const rawPolygons = type === 'MultiPolygon'
       ? coordinates
       : type === 'Polygon' ? [coordinates] : [[parcel.polygon.map(([lat, lon]) => [lon, lat])]];
+    const projectedPolygons = rawPolygons.map((rings) => rings.map((ring) => ring.map(position)));
+    const outerRing = projectedPolygons[0]?.[0];
+    const center = outerRing?.length >= 3
+      ? polygonCentroid(outerRing)
+      : position([cell.longitude, cell.latitude]);
     const rgb = cell.soil_color_rgb ?? soilColorRgb({
       retentionRatio: cell.soil_retention_ratio ?? 1,
       etaNutrientes: cell.eta_nutrientes ?? null,
@@ -63,8 +91,8 @@ export function buildParcelSimulationMesh(parcel, cells) {
     const rainDropMm = Number(cell.rain_height_variation_mm) || 0;
     return {
       cell,
-      center: position([cell.longitude, cell.latitude]),
-      polygons: polygons.map((rings) => rings.map((ring) => ring.map(position))),
+      center,
+      polygons: projectedPolygons,
       z: (cell.altitude_m - minElevation) * elevationScale
         - (cell.accumulated_erosion_mm ?? 0) * SINK_PER_MM
         - rainDropMm * RAIN_SINK_PER_MM,

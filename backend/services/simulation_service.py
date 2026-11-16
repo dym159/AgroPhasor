@@ -109,7 +109,7 @@ class SimulationService:
                     soil_water_mm=soil_water_mm,
                     crop=crop,
                     dt_seconds=3600.0,
-                    sub_steps=2
+                    sub_steps=12
                 )
                 
                 t_curr = step_res.t_canopy_c

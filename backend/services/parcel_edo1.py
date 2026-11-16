@@ -587,6 +587,9 @@ def simulate_parcel(payload):
             hourly_thermal_comfort=[round(value, 4) for value in thermal_comfort] if is_crop else None,
             water_condition_index=round(eta_water, 4) if is_crop else None,
             hourly_environmental_index=[
+                round(psi_h, 4) for psi_h in hourly_psi_raw
+            ] if is_crop else None,
+            hourly_shield_score=[
                 round(omega_l * eta_l + (1.0 - omega_l) * psi_h, 4) for psi_h in hourly_psi_raw
             ] if is_crop else None,
             soil_water_mm=edo2_step.soil_water_mm,

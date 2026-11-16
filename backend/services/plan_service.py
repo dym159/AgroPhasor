@@ -91,7 +91,8 @@ def replay_plan(result, phases, selected_date):
         )
         omega_l = float(GLOBAL_CONSTANTS.get("peso_lissajous_escudo_omega_L", 0.55))
         eta_l = shield_eval["eta_lissajous"]
-        indices = [round(omega_l * eta_l + (1.0 - omega_l) * p, 4) for p in raw_indices]
+        indices = [round(p, 4) for p in raw_indices]
+        shield_scores = [round(omega_l * eta_l + (1.0 - omega_l) * p, 4) for p in raw_indices]
 
         height_var = compute_terrain_height_variation(
             precip_mm=rain,
@@ -126,6 +127,7 @@ def replay_plan(result, phases, selected_date):
             shield_state=shield_eval["shield_state"],
             shield_color_rgb=shield_eval["shield_color_rgb"],
             hourly_environmental_index=indices,
+            hourly_shield_score=shield_scores if growing else None,
             hourly_air_temps=air, hourly_canopy_temps=thermal["t_canopy_hourly"],
             lissajous_area=thermal["lissajous_area"], mean_canopy_temp=thermal["mean_canopy_temp"],
             eta_nutrientes=eta_n,

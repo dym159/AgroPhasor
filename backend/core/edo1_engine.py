@@ -72,14 +72,13 @@ def solve_edo1_step(
     h_eff = crop.hc
     tau_eff = crop.Cp / max(1e-4, h_eff)
     
-    # Temperatura de equilibrio teórico (Ec. 17)
+    # Temperatura de equilibrio teórico (Ec. 17) e integración exponencial en sub-pasos (Ec. 18)
     radiative_gain = crop.alpha * f_rad_wm2
-    latent_loss = crop.lambda_gamma_max * fw * max(0.0, saturation_vapor_pressure(t_current_c) - ea_air)
-    t_eq = t_ext_c + (radiative_gain - latent_loss) / max(1e-4, h_eff)
-    
-    # Integración exponencial exacta en los sub-pasos (Ec. 18)
     decay_factor = math.exp(-dt_sub / max(1e-4, tau_eff))
+    t_eq = t_ext_c
     for _ in range(sub_steps):
+        latent_loss = crop.lambda_gamma_max * fw * max(0.0, saturation_vapor_pressure(T) - ea_air)
+        t_eq = t_ext_c + (radiative_gain - latent_loss) / max(1e-4, h_eff)
         T = t_eq + (T - t_eq) * decay_factor
         
     delta_t = T - t_ext_c
@@ -229,7 +228,7 @@ def simulate_canopy_diurnal_cycle(
             soil_water_mm=soil_water_mm,
             crop=crop,
             dt_seconds=3600.0,
-            sub_steps=2
+            sub_steps=12
         )
         t_curr = step_res.t_canopy_c
         canopy_temps.append(round(step_res.t_canopy_c, 2))
