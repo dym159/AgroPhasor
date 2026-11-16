@@ -303,9 +303,9 @@ class TestAgronomicValidation(unittest.TestCase):
         Verifica que el área de la curva de Lissajous A_L gobierne la intensidad y el color
         del escudo: Área baja -> ROJO (249,64,70), Área alta -> AZUL (42,155,255).
         """
-        low_shield = compute_shield_state_and_color(lissajous_area=1.5, psi_environmental=0.15, is_crop=True)
-        mid_shield = compute_shield_state_and_color(lissajous_area=18.0, psi_environmental=0.50, is_crop=True)
-        high_shield = compute_shield_state_and_color(lissajous_area=85.0, psi_environmental=0.95, is_crop=True)
+        low_shield = compute_shield_state_and_color(lissajous_area=0.4, psi_environmental=0.15, is_crop=True)
+        mid_shield = compute_shield_state_and_color(lissajous_area=4.0, psi_environmental=0.50, is_crop=True)
+        high_shield = compute_shield_state_and_color(lissajous_area=14.0, psi_environmental=0.95, is_crop=True)
         off_shield = compute_shield_state_and_color(lissajous_area=50.0, psi_environmental=0.90, is_crop=False)
 
         self.assertLess(low_shield["eta_lissajous"], mid_shield["eta_lissajous"])

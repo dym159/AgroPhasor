@@ -125,7 +125,7 @@ def compute_lissajous_shield_index(
     area = max(0.0, float(lissajous_area))
     if a_l_max is not None and a_l_max > 0:
         return round(max(0.0, min(1.0, area / float(a_l_max))), 4)
-    ref = float(a_l_ref if a_l_ref is not None else GLOBAL_CONSTANTS.get("A_L_ref_C2", 18.0))
+    ref = float(a_l_ref if a_l_ref is not None else GLOBAL_CONSTANTS.get("A_L_ref_C2", 4.0))
     ref = max(1e-4, ref)
     return round(max(0.0, min(1.0, area / (area + ref))), 4)
 
