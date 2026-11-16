@@ -43,6 +43,7 @@ from backend.core.edo4_engine import (
     EDO4StepOutput,
     EDO4HarvestResult
 )
+from backend.core.satellite_calibration import calibrate_edo4_biomass
 
 
 @dataclass
@@ -168,6 +169,37 @@ class EDO4DataAdapter:
         crop_dict["B_max_t_ha"] = calibrated_b_max
         crop_dict["HI"] = calibrated_hi
         return CropParameters(**crop_dict)
+
+    @staticmethod
+    def calibrate_kp_from_ndvi_series(
+        forcing_series: List[EnvironmentalForcingEDO4],
+        crop: CropParameters,
+        b0_t_ha: Optional[float] = None
+    ) -> Tuple[CropParameters, Dict[str, Any]]:
+        """
+        Calibrates `kp_c_t_ha_MJ_m2` on `crop` in real time by scaling the
+        normalized curve B(t)/B_max against the `satellite_observed_ndvi` series.
+        """
+        res = calibrate_edo4_biomass(
+            crop=crop,
+            f_rad_series_mj_m2=[f.f_rad_daily_mj_m2 for f in forcing_series],
+            t_canopy_series_c=[f.temp_canopy_c for f in forcing_series],
+            soil_water_series_mm=[f.soil_water_mm for f in forcing_series],
+            nitrogen_series_kg_ha=[f.nitrogen_kg_ha for f in forcing_series],
+            phosphorus_series_kg_ha=[f.phosphorus_kg_ha for f in forcing_series],
+            potassium_series_kg_ha=[f.potassium_kg_ha for f in forcing_series],
+            observed_ndvi_series=[f.satellite_observed_ndvi for f in forcing_series],
+            b0_t_ha=b0_t_ha,
+        )
+        return res.calibrated_crop, {
+            "kp_c_prior": res.kp_c_prior,
+            "kp_c_calibrated": res.kp_c_t_ha_MJ_m2,
+            "scale_factor": res.scale_factor,
+            "rmse_ndvi_before": res.rmse_ndvi_before,
+            "rmse_ndvi_after": res.rmse_ndvi_after,
+            "observations_used": res.observations_used,
+            "converged": res.converged,
+        }
 
     @staticmethod
     def simulate_crop_and_contrast_satellite(

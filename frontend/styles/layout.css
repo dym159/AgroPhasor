@@ -971,6 +971,7 @@ body {
   border-radius: 5px;
 }
 
+<<<<<<< HEAD
 .timeline-phase-forecast {
   display: block;
   margin-top: 4px;
@@ -1047,4 +1048,16 @@ body {
 .timeline-forecast-table th {
   color: var(--text-secondary);
   font-weight: 500;
+}
+
+/* Suggested crop rotation workflow summary */
+.rotation-workflow { overflow-y: auto; min-width: 0; padding: 12px; }
+.rotation-workflow p { display: grid; gap: 4px; margin: 8px 0; }
+.rotation-workflow small { color: var(--text-secondary); }
+.rotation-workflow label { display: flex; align-items: center; gap: 8px; }
+.rotation-workflow select { color: var(--text-primary); background: var(--bg-surface); min-height: 32px; }
+.rotation-workflow button { min-height: 44px; }
+.rotation-workflow[hidden], .rotation-workflow [hidden] { display: none; }
+@media (max-width: 600px) {
+  .rotation-workflow { width: 100%; box-sizing: border-box; }
 }

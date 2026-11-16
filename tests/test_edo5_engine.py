@@ -1,7 +1,7 @@
 """
 Unit Test Suite for ODE 5: Topsoil Water Erosion (AgroPhasor).
 Verifies:
-1. Strict validation of the JSON parameter catalog for ODE 5 (gemini-code-1794737993920.json).
+1. Strict validation of the JSON parameter catalog for ODE 5 (gemini-code.json).
 2. Criterion 1: Flat terrain (slope theta = 0°) yields strictly zero erosion (dH/dt = 0).
 3. Criterion 2: SRTM topographic modulation increasing monotonically with sin(theta).
 4. Criterion 3: Exponential mechanical shield from leaf biomass and residue exp(-lambda_B * B).
@@ -27,13 +27,13 @@ from backend.core.edo5_engine import (
 from backend.services.parcel_edo5 import ParcelEDO5Service
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JSON_PATH = os.path.join(BASE_DIR, "gemini-code-1794737993920.json")
+JSON_PATH = os.path.join(BASE_DIR, "gemini-code.json")
 
 
 class TestEDO5Engine(unittest.TestCase):
 
     def test_json_catalog_validation_success(self):
-        """Verify that gemini-code-1794737993920.json is 100% valid for ODE 5."""
+        """Verify that gemini-code.json is 100% valid for ODE 5."""
         self.assertTrue(os.path.exists(JSON_PATH), f"File does not exist: {JSON_PATH}")
         
         result = validate_edo5_catalog(JSON_PATH)
@@ -273,13 +273,15 @@ class TestEDO5Engine(unittest.TestCase):
         
         self.assertLess(step.h_current_mm, 300.0)
         # Wcc must shrink synchronously
-        expected_w_cc = round(theta_fc * step.h_current_mm, 2)
+        # Preserve physical precision; rounding belongs to presentation.
+        expected_w_cc = theta_fc * step.h_current_mm
         self.assertAlmostEqual(step.w_cc_mm, expected_w_cc)
         
         # Phosphorus drag loss must be positive
         p_loss = step.nutrient_drag_kg_ha["P"]
         self.assertGreater(p_loss, 0.0)
-        expected_p_loss = round(0.008 * step.erosion_loss_step_mm * nutrients["P"], 4)
+        # Exact integral of P' = -xi * H_loss * P, not a forward Euler flux using initial P.
+        expected_p_loss = -math.expm1(-0.008 * step.erosion_loss_step_mm) * nutrients["P"]
         self.assertAlmostEqual(p_loss, expected_p_loss)
 
     def test_criterion_7_pareto_metric_f2_and_visual_subsidence(self):

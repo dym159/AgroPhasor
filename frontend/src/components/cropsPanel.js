@@ -1,4 +1,4 @@
-import { CROP_DRAG_TYPE, CROP_GROUPS, VISUAL_CROPS } from '../data/mockVisualData.js';
+import { CROP_DRAG_TYPE, VISUAL_CROPS } from '../data/mockVisualData.js';
 import { clearChildren, createElement } from '../utils/dom.js';
 
 export function createCropsPanel(container, initialState, callbacks) {
@@ -32,16 +32,16 @@ export function createCropsPanel(container, initialState, callbacks) {
   container.append(header, searchInput, groupRow, bulkActions, list);
 
   function update(state) {
-    const filteredCrops = filterCrops(
-      VISUAL_CROPS,
-      state.activeCropGroup,
-      state.cropSearchQuery
-    );
+    const crops = Object.entries(state.cropCatalog ?? {}).map(([id, crop]) => ({
+      ...crop, id, tint: VISUAL_CROPS.find(item => item.id === id)?.tint ?? '#86a66d',
+    }));
+    const groups = ['All', ...new Set(crops.map(crop => crop.group))];
+    const filteredCrops = filterCrops(crops, state.activeCropGroup, state.cropSearchQuery);
 
-    countTag.textContent = `${state.selectedCropIds.length} active`;
+    countTag.textContent = `${crops.length} available · ${state.selectedCropIds.length} active`;
 
     clearChildren(groupRow);
-    for (const groupName of CROP_GROUPS) {
+    for (const groupName of groups) {
       const isActive = state.activeCropGroup === groupName;
       groupRow.append(
         createElement('button', {
@@ -81,7 +81,10 @@ export function createCropsPanel(container, initialState, callbacks) {
         {
           type: 'button',
           className: `crop-row ${isSelected ? 'is-selected' : ''}`,
-          attrs: { draggable: 'true' },
+          attrs: {
+            draggable: 'true',
+            title: [crop.variety, `${crop.duration_days} reference days`].filter(Boolean).join(' · '),
+          },
           onClick: () => callbacks.onToggleCrop(crop.id),
         },
         [

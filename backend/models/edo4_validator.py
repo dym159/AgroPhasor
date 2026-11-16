@@ -8,6 +8,8 @@ import json
 import os
 from typing import Dict, Any, List, Optional, Union, Tuple
 
+from backend.models.crop_parameters import normalize_catalog_dict
+
 
 class EDO4ValidationError(ValueError):
     """Exception raised for critical agrophysical validation errors in ODE 4."""
@@ -44,6 +46,8 @@ def validate_edo4_catalog(
         data = source
     else:
         raise TypeError("source must be a file path (str) or a dictionary.")
+
+    data = normalize_catalog_dict(data)
 
     errors: List[str] = []
     warnings: List[str] = []
@@ -150,6 +154,10 @@ def validate_edo4_catalog(
                     "B0_t_ha": b0,
                     "km_c_dia": km,
                     "HI": hi,
+                    "es_cosecha_multiple": bool(c.get("es_cosecha_multiple", False)),
+                    "t_inicio_cosecha_dias": int(c.get("t_inicio_cosecha_dias", c.get("duracion_dias", 120))),
+                    "intervalo_corte_dias": int(c.get("intervalo_corte_dias", 0)),
+                    "f_corte_parcial": float(c.get("f_corte_parcial", 0.0)),
                     "r_res_default": round(1.0 - hi, 3),
                     "Liebig_KN": float(c.get("K_N")),
                     "Liebig_KP": float(c.get("K_P")),

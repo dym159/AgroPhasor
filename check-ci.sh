@@ -94,6 +94,12 @@ echo "[3/3] Verifying project code and running tests..."
 
 # If a Python backend exists
 find_python() {
+    for candidate in "$REPO_ROOT/.venv/Scripts/python.exe" "$REPO_ROOT/.venv/bin/python"; do
+        if [ -f "$candidate" ] && "$candidate" --version >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
     for candidate in py python3 python; do
         if command -v "$candidate" >/dev/null 2>&1 && "$candidate" --version >/dev/null 2>&1; then
             printf '%s\n' "$candidate"
@@ -107,9 +113,10 @@ if [ -d "$REPO_ROOT/backend" ] || [ -f "$REPO_ROOT/requirements.txt" ] || [ -f "
     echo "   Checking Python components..."
     PYTHON_CMD="$(find_python || true)"
     if [ -n "$PYTHON_CMD" ] && "$PYTHON_CMD" -m pytest --version >/dev/null 2>&1; then
-        "$PYTHON_CMD" -m pytest
+        "$PYTHON_CMD" -m pytest tests
     elif [ -n "$PYTHON_CMD" ]; then
-        "$PYTHON_CMD" -m unittest discover tests
+        echo "ERROR: Missing pytest. Install requirements-dev.txt in .venv." >&2
+        exit 1
     else
         echo "   (pytest/python not found in local environment; skipping Python suite)"
     fi

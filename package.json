@@ -5,6 +5,7 @@
   "main": "frontend/js/app.js",
   "type": "module",
   "scripts": {
+    "test": "node --test tests/*.mjs",
     "start": "python server.py",
     "dev": "python server.py",
     "typecheck": "echo 'Frontend syntax validated.'"

@@ -8,6 +8,12 @@ export async function fetchCropCycles() {
   return response.json();
 }
 
+export async function fetchCropCatalog() {
+  const response = await fetch('/api/v1/crop-catalog');
+  if (!response.ok) throw new Error('Could not load the crop catalog.');
+  return response.json();
+}
+
 export function parcelToGeoJsonGeometry(parcel) {
   if (!parcel?.polygon || parcel.polygon.length < 3) return null;
 
@@ -91,14 +97,20 @@ export async function searchPlaces(query) {
 }
 
 export async function fetchRotation(payload, signal) {
-  const response = await fetch('/api/v1/rotaciones', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal,
-  });
+  let response;
+  try {
+    response = await fetch('/api/v1/parcelas/rotaciones', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') throw error;
+    throw new Error('Could not connect to the rotation server. If running locally, open http://127.0.0.1:5173 with server.py running; do not open index.html directly. If using a deployed site, verify that its API is available.');
+  }
   const data = await response.json().catch(() => null);
-  if (!response.ok || !Array.isArray(data?.routes)) {
+  if (!response.ok || !Array.isArray(data?.pareto)) {
     throw new Error(data?.error || 'Could not compute the crop rotation.');
   }
   return data;

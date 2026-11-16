@@ -36,6 +36,7 @@ if BASE_DIR not in sys.path:
 from rotation_ranking import METRICS as ROTATION_METRICS, Candidate, rank_rotations
 from backend.services.parcel_edo1 import ParcelDataError, simulate_parcel
 from backend.services.rotation_service import ClimateUnavailable, recommend_rotation
+from backend.rotation.api import rotation_graph_response
 
 from backend.core.edo1_engine import simulate_canopy_diurnal_cycle
 from backend.core.edo2_engine import simulate_edo2_timeseries, solve_edo2_step
@@ -457,6 +458,18 @@ def crop_cycles():
             if crop.key != "suelo_desnudo_transicion"}
 
 
+def crop_catalog():
+    result = {}
+    for key, crop in CROP_CATALOG.items():
+        if key != crop.key.lower() or crop.botanical_family == "None":
+            continue
+        alias = key.split("_")[0]
+        crop_id = alias if CROP_CATALOG.get(alias) is crop else key
+        result[crop_id] = {"name": crop.name, "group": crop.group, "duration_days": crop.duration_days,
+                           "variety": crop.variety, "cycle_source": crop.cycle_source}
+    return result
+
+
 def rotation_response(payload):
     try:
         return recommend_rotation(payload), 200
@@ -585,6 +598,10 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response(crop_cycles())
             return
 
+        if path == "/api/v1/crop-catalog":
+            self.send_json_response(crop_catalog())
+            return
+
         super().do_GET()
 
     def do_POST(self):
@@ -603,6 +620,11 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
 
         if path in ("/api/v1/parcelas/simulacion", "/api/v1/parcelas/edo1"):
             result, status = parcel_edo1_response(payload)
+            self.send_json_response(result, status=status)
+            return
+
+        if path == "/api/v1/parcelas/rotaciones":
+            result, status = rotation_graph_response(payload)
             self.send_json_response(result, status=status)
             return
 
@@ -774,6 +796,25 @@ class AgroPhasorHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_json_response({"error": str(exc)}, status=400)
             return
 
+        if path in ("/api/v1/calibrar-satelital", "/calibrate/satellite"):
+            from backend.core.satellite_calibration import calibrate_parcel_realtime
+            try:
+                res = calibrate_parcel_realtime(
+                    crop_id=payload.get("crop_id", "maiz"),
+                    window_data=payload.get("window_data"),
+                    latitude=payload.get("latitude"),
+                    longitude=payload.get("longitude"),
+                    window_days=int(payload.get("window_days", 45)),
+                    slope_deg=float(payload.get("slope_deg", 8.0)),
+                    theta_fc=float(payload.get("theta_fc", 0.27)),
+                    theta_wp=float(payload.get("theta_wp", 0.12)),
+                )
+                res_json = {k: v for k, v in res.items() if k != "calibrated_crop"}
+                self.send_json_response(res_json, status=200)
+            except Exception as exc:
+                self.send_json_response({"error": str(exc)}, status=400)
+            return
+
         if path in ("/api/v1/simular/edo5/paso", "/simulate/edo5/step"):
             try:
                 step = solve_edo5_step(
@@ -901,6 +942,10 @@ if HAS_FASTAPI:
     def crop_cycles_api():
         return crop_cycles()
 
+    @app.get("/api/v1/crop-catalog")
+    def crop_catalog_api():
+        return crop_catalog()
+
     @app.get("/crops")
     def list_crops():
         """Return the list of pre-calibrated crops in the system."""
@@ -965,6 +1010,11 @@ if HAS_FASTAPI:
                 "detail": "The client must preserve the parcel selection without losing vertices.",
             }, status_code=500)
         return compute_simulation_payload(payload)
+
+    @app.post("/api/v1/parcelas/rotaciones")
+    def recommend_rotation_graph_v1(payload: Dict[str, Any]):
+        result, status = rotation_graph_response(payload)
+        return JSONResponse(result, status_code=status)
 
     @app.post("/api/v1/rotaciones")
     def recommend_rotation_v1(payload: Dict[str, Any]):
@@ -1169,6 +1219,25 @@ if HAS_FASTAPI:
                 theta_fc=float(payload.get("theta_fc", 0.30)),
                 theta_wp=float(payload.get("theta_wp", 0.14))
             )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/calibrate/satellite")
+    @app.post("/api/v1/calibrar-satelital")
+    def calibrate_satellite_api(payload: Dict[str, Any]):
+        from backend.core.satellite_calibration import calibrate_parcel_realtime
+        try:
+            res = calibrate_parcel_realtime(
+                crop_id=payload.get("crop_id", "maiz"),
+                window_data=payload.get("window_data"),
+                latitude=payload.get("latitude"),
+                longitude=payload.get("longitude"),
+                window_days=int(payload.get("window_days", 45)),
+                slope_deg=float(payload.get("slope_deg", 8.0)),
+                theta_fc=float(payload.get("theta_fc", 0.27)),
+                theta_wp=float(payload.get("theta_wp", 0.12)),
+            )
+            return {k: v for k, v in res.items() if k != "calibrated_crop"}
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 

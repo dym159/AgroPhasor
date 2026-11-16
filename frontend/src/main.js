@@ -5,8 +5,8 @@ import { renderParcelBar } from './components/parcelBar.js';
 import { createRotationsPanel } from './components/rotationsPanel.js';
 import { renderStrategyPanel } from './components/strategyPanel.js';
 import { createTimelineBar } from './components/timelineBar.js';
-import { STRATEGY_MODES, VISUAL_CROPS } from './data/mockVisualData.js';
-import { fetchCropCycles, fetchParcelSimulation } from './services/agroApi.js';
+import { STRATEGY_MODES } from './data/mockVisualData.js';
+import { fetchCropCatalog, fetchParcelSimulation } from './services/agroApi.js';
 import { createUiState } from './state/uiState.js';
 import { assignPhaseCrop } from './utils/phaseDates.js';
 
@@ -41,11 +41,7 @@ function bootstrapApp() {
   const timelineEl = document.getElementById('timeline-bar');
 
   const store = createUiState();
-  const rotationsPanel = createRotationsPanel(rotationsEl, (stages) => {
-    const phases = stages.map(({ crop_id, start, harvest, residue_fraction, irrigation_mm_day }) => ({ cropId: crop_id, start, harvest, residue_fraction, irrigation_mm_day }));
-    store.setState({ phases });
-    scheduleParcelSimulation();
-  });
+  const rotationsPanel = createRotationsPanel(rotationsEl);
   let parcelSimulationController = null;
   let parcelSimulationTimer = null;
   let lastParcelSignature = '';
@@ -135,7 +131,7 @@ function bootstrapApp() {
       const current = store.getState();
       if (current.knobsLocked || current.knobs[knobId] === value) return;
       const nextKnobs = rebalanceKnobs(current.knobs, knobId, value);
-      store.setState({ knobs: nextKnobs, selectedSubRouteId: null });
+      store.setState({ knobs: nextKnobs, selectedSubRouteId: null, rotationRequested: true });
     },
     () => store.setState({ knobsLocked: !store.getState().knobsLocked })
   );
@@ -144,6 +140,7 @@ function bootstrapApp() {
     store.setState({
       selectedCropIds: ids,
       previewCropId: ids.includes(preferredCropId) ? preferredCropId : ids.at(-1) ?? null,
+      ...(ids.length ? { rotationRequested: true } : {}),
     });
     scheduleParcelSimulation();
   }
@@ -191,7 +188,7 @@ function bootstrapApp() {
       const { phases, cropCycles } = store.getState();
       const phase = phases[phaseIndex];
       if (!phase || phase.cropId === cropId) return;
-      if (cropId && !VISUAL_CROPS.some((crop) => crop.id === cropId)) return;
+      if (cropId && !Object.hasOwn(cropCycles, cropId)) return;
 
       const nextPhases = assignPhaseCrop(phases, phaseIndex, cropId, cropCycles);
       store.setState({ phases: nextPhases });
@@ -265,6 +262,7 @@ function bootstrapApp() {
           selectedStrategyId: strategyId,
           selectedSubRouteId: subRouteId,
           knobs: store.getState().knobsLocked ? store.getState().knobs : branch?.weights ?? strategy.weights,
+          rotationRequested: true,
         });
       },
     });
@@ -280,11 +278,13 @@ function bootstrapApp() {
   store.subscribe(renderAll);
   renderAll(store.getState());
   scheduleParcelSimulation();
-  fetchCropCycles().then((cropCycles) => {
+  fetchCropCatalog().then((cropCatalog) => {
+    const cropCycles = Object.fromEntries(Object.entries(cropCatalog)
+      .map(([id, crop]) => [id, crop.duration_days]));
     const { phases } = store.getState();
     const pending = phases.findIndex((phase) => !phase.harvest && cropCycles[phase.cropId]);
     store.setState({
-      cropCycles,
+      cropCatalog, cropCycles,
       ...(pending >= 0 ? { phases: assignPhaseCrop(phases, pending, phases[pending].cropId, cropCycles) } : {}),
     });
   }).catch((error) => {

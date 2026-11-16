@@ -27,7 +27,7 @@ class EDO5StepOutput:
     """Physical outputs of a single ODE 5 integration step dt."""
     h_current_mm: float                 # Current fertile horizon depth H(t+dt) [mm]
     h_initial_mm: float                 # Original fertile depth H(0) [mm]
-    dh_dt_mm_day: float                 # Instantaneous erosion rate dH/dt <= 0 [mm/day]
+    dh_dt_mm_day: float                 # Effective mean rate (H1 - H0)/dt <= 0 [mm/day]
     erosion_loss_step_mm: float         # Soil loss during step Delta_H [mm]
     accumulated_erosion_mm: float       # Cumulative total loss H(0) - H(t) [mm]
     soil_retention_ratio: float         # Retained soil fraction H(t)/H(0) in [0, 1]
@@ -98,6 +98,8 @@ def solve_edo5_step(
     - current_nutrients_kg_ha: Current [N, P, K] vector to compute mechanical drag.
     - kappa_er: Visual scale factor for 3D mesh subsidence [m/mm].
     """
+    if not math.isfinite(dt_days) or dt_days <= 0:
+        raise ValueError("dt_days must be positive and finite.")
     # 1. Load agrophysical constants
     if k_er_cultivo is None:
         k_er_cultivo = float(GLOBAL_CONSTANTS.get("k_er_cultivo", 0.0004))
@@ -166,8 +168,8 @@ def solve_edo5_step(
     retention_ratio = h_next / h0 if h0 > 0.0 else 0.0
 
     # 7. Soil physical feedback to ODE 2
-    w_cc_updated = round(theta_fc * h_next, 2)
-    w_pmp_updated = round(theta_wp * h_next, 2)
+    w_cc_updated = theta_fc * h_next
+    w_pmp_updated = theta_wp * h_next
 
     # 8. Biogeochemical feedback to ODE 3 (nutrient runoff drag)
     nut_drag = {"N": 0.0, "P": 0.0, "K": 0.0}
@@ -175,10 +177,12 @@ def solve_edo5_step(
         n_curr = max(0.0, current_nutrients_kg_ha.get("N", 0.0))
         p_curr = max(0.0, current_nutrients_kg_ha.get("P", 0.0))
         k_curr = max(0.0, current_nutrients_kg_ha.get("K", 0.0))
-        # Loss proportional to organic horizon wear: xi * |dH/dt| * Nutrient
-        nut_drag["N"] = round(xi_n * effective_loss * n_curr, 4)
-        nut_drag["P"] = round(xi_p * effective_loss * p_curr, 4)
-        nut_drag["K"] = round(xi_k * effective_loss * k_curr, 4)
+        # Loss proportional to relative organic horizon wear: xi * |dH/dt| * Nutrient
+        # Exact integral for isolated drag X' = -xi * H_loss * X.
+        # ODE 3 remains the source of truth when combined with other fluxes.
+        nut_drag["N"] = -math.expm1(-xi_n * effective_loss) * n_curr
+        nut_drag["P"] = -math.expm1(-xi_p * effective_loss) * p_curr
+        nut_drag["K"] = -math.expm1(-xi_k * effective_loss) * k_curr
 
     # 9. 3D WebGL visual layer
     mesh_subsidence = round(kappa_er * accumulated_loss, 4)
@@ -186,10 +190,10 @@ def solve_edo5_step(
     is_bedrock = h_next <= 0.05
 
     return EDO5StepOutput(
-        h_current_mm=round(h_next, 4),
+        h_current_mm=h_next,
         h_initial_mm=round(h0, 4),
-        dh_dt_mm_day=round(dh_dt, 6),
-        erosion_loss_step_mm=round(effective_loss, 6),
+        dh_dt_mm_day=-effective_loss/dt_days,
+        erosion_loss_step_mm=effective_loss,
         accumulated_erosion_mm=round(accumulated_loss, 4),
         soil_retention_ratio=round(retention_ratio, 4),
         topographic_slope_deg=clamped_slope,

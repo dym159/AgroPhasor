@@ -8,6 +8,8 @@ import json
 import os
 from typing import Dict, Any, List, Optional, Union, Tuple
 
+from backend.models.crop_parameters import normalize_catalog_dict
+
 
 class EDO5ValidationError(ValueError):
     """Exception raised for critical agrophysical validation errors in ODE 5."""
@@ -46,6 +48,8 @@ def validate_edo5_catalog(
         data = source
     else:
         raise TypeError("source must be a file path (str) or a dictionary.")
+
+    data = normalize_catalog_dict(data)
 
     errors: List[str] = []
     warnings: List[str] = []

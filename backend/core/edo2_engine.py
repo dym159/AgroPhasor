@@ -65,11 +65,11 @@ def compute_soil_limits(
         theta_fc=theta_fc,
         theta_wp=theta_wp,
         zr_mm=zr,
-        w_cc=round(w_cc, 2),
-        w_pmp=round(w_pmp, 2),
-        w_crit=round(w_crit, 2),
-        raw=round(w_cc - w_crit, 2),
-        taw=round(w_cc - w_pmp, 2)
+        w_cc=w_cc,
+        w_pmp=w_pmp,
+        w_crit=w_crit,
+        raw=w_cc - w_crit,
+        taw=w_cc - w_pmp
     )
 
 
@@ -102,7 +102,8 @@ def solve_edo2_step(
     tau_warning_days: float = 2.0,
     is_crop: bool = True,
     depth_mm: Optional[float] = None,
-    canopy_temp_c: Optional[float] = None
+    canopy_temp_c: Optional[float] = None,
+    is_daylight: bool = True
 ) -> EDO2StepOutput:
     """
     Integrates one time step dt of ODE 2 (Root-Zone Water Balance).
@@ -126,6 +127,8 @@ def solve_edo2_step(
     - tau_warning_days: Look-ahead window for fast-drying alert [days].
     - is_crop: True if q(t)=Crop, False if q(t)=Transition (no transpiration).
     """
+    if not math.isfinite(dt_days) or dt_days <= 0:
+        raise ValueError("dt_days must be positive and finite.")
     if e_suelo0 is None:
         e_suelo0 = float(GLOBAL_CONSTANTS.get("E_suelo0_mm_dia", 4.2))
     if lambda_b is None:
@@ -150,7 +153,7 @@ def solve_edo2_step(
 
     # 3. Stomatal conductance factor gamma_c(W) (AgroPhasor.pdf Sec. 3.3)
     eps = 1e-4
-    gamma_rel = relative_stomatal_conductance(w_current_mm, limits) if is_crop and crop.gamma_max > 0 else 0.0
+    gamma_rel = relative_stomatal_conductance(w_current_mm, limits) if is_crop and is_daylight and crop.gamma_max > 0 else 0.0
 
     # Daily effective conductance: gamma_max_daily [mm / (kPa · day)]
     # If gamma_max is in kg/(m²·s·kPa), multiply by 86400 s/day
@@ -194,6 +197,9 @@ def solve_edo2_step(
     if w_tentative < 0 and source < 0 and loss_rate > 0:
         equilibrium = source / loss_rate
         active_time = math.log((w_current_mm - equilibrium) / -equilibrium) / loss_rate
+    elif w_tentative < 0 and source < 0 and loss_rate == 0:
+        # Linear bound W(t) = W0 + source*t: halt losses once W is exhausted.
+        active_time = max(0.0, min(dt_days, -w_current_mm / source))
     if loss_rate > 0:
         equilibrium = source / loss_rate
         water_integral = equilibrium * active_time + (w_current_mm - equilibrium) * (-math.expm1(-loss_rate * active_time)) / loss_rate
@@ -217,14 +223,14 @@ def solve_edo2_step(
     is_drying_alert = projected_w <= w_crit
 
     return EDO2StepOutput(
-        soil_water_mm=round(w_next, 2),
+        soil_water_mm=w_next,
         dw_dt=round(dw_dt, 3),
-        etc_mm=round(transpiration_total + evaporation_total, 3),
-        transpiration_mm=round(transpiration_total, 3),
-        evaporation_soil_mm=round(evaporation_total, 3),
-        drainage_mm=round(drainage_total, 3),
-        runoff_mm=round(runoff, 3),
-        infiltration_mm=round(total_infil * dt_days, 3),
+        etc_mm=transpiration_total + evaporation_total,
+        transpiration_mm=transpiration_total,
+        evaporation_soil_mm=evaporation_total,
+        drainage_mm=drainage_total,
+        runoff_mm=runoff,
+        infiltration_mm=total_infil * dt_days,
         gamma_c_relative=round(gamma_rel, 3),
         vpd_kpa=round(vpd, 3),
         is_irrigation_needed=is_irrigation,

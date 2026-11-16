@@ -1,10 +1,9 @@
 """
 Analytical Solver Engine for ODE 1 (AgroPhasor).
-Implements the exact step-by-step integrating factor solution with Penman linearization
-formally derived in Sections 6.1 to 6.4 of the technical specification.
+Implements the exact solution with frozen latent heat flux (PDF Section 4.2).
 
 Governing equations:
-H_eff = hc + lambda_max * f_W * Delta
+H_eff = hc
 tau_eff = Cp / H_eff
 T_eq = T_ext + (alpha * f_rad - lambda_max * f_W * VPD_air) / H_eff
 T(t + dt) = T_eq + (T(t) - T_eq) * exp(-dt / tau_eff)
@@ -47,16 +46,16 @@ def solve_edo1_step(
 ) -> EDO1StepOutput:
     """
     Solves a time step (dt) of ODE 1 for a crop cell.
-    Applies the exact analytical formulation with Penman linearization (unconditionally stable).
+    Freezes Q_lat at the initial temperature of the step (PDF Section 4.2).
     """
+    if dt_seconds <= 0 or type(sub_steps) is not int or sub_steps < 1:
+        raise ValueError("dt_seconds and sub_steps must be positive.")
     dt_sub = dt_seconds / float(sub_steps)
     T = t_current_c
     
     # Actual air vapor pressure [kPa]
     ea_air = actual_vapor_pressure(t_ext_c, rh_pct)
     es_air = saturation_vapor_pressure(t_ext_c)
-    vpd_air = max(0.0, es_air - ea_air)
-    delta_penman = penman_saturation_slope(t_ext_c)
     
     # Stomatal conductance factor based on soil moisture level
     is_daylight = f_rad_wm2 > 5.0
@@ -68,13 +67,14 @@ def solve_edo1_step(
     )
     
     # Effective heat dissipation coefficient
-    # H_eff = h_c + lambda_ev * gamma_c * Delta (combines convection and evaporative slope)
-    h_eff = crop.hc + (crop.lambda_gamma_max * fw * delta_penman)
+    # Latent flux is treated as a constant source rather than dissipation.
+    # PDF Section 4.2: Q_lat frozen at initial T, without Penman slope linearization.
+    h_eff = crop.hc
     tau_eff = crop.Cp / max(1e-4, h_eff)
     
     # Theoretical equilibrium temperature (Eq. 17)
     radiative_gain = crop.alpha * f_rad_wm2
-    latent_loss = crop.lambda_gamma_max * fw * vpd_air
+    latent_loss = crop.lambda_gamma_max * fw * max(0.0, saturation_vapor_pressure(t_current_c) - ea_air)
     t_eq = t_ext_c + (radiative_gain - latent_loss) / max(1e-4, h_eff)
     
     # Exact exponential integration over sub-steps (Eq. 18)

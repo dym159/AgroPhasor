@@ -84,6 +84,7 @@ if ((Test-Path "$repoRoot/backend") -or (Test-Path "$repoRoot/requirements.txt")
     Write-Host "   Running Python test suite..." -ForegroundColor Gray
     $pythonExe = $null
     $candidates = @(
+        "$repoRoot\.venv\Scripts\python.exe",
         "C:\Users\Krishna\AppData\Local\Programs\Python\Python313\python.exe",
         "C:\Users\Krishna\AppData\Local\Programs\Python\Python312\python.exe",
         "py",
@@ -103,7 +104,7 @@ if ((Test-Path "$repoRoot/backend") -or (Test-Path "$repoRoot/requirements.txt")
     }
 
     if ($pythonExe) {
-        & $pythonExe -m unittest discover tests
+        & $pythonExe -m pytest tests
         if ($LASTEXITCODE -ne 0) {
             Write-Host "ERROR: Python unit tests failed." -ForegroundColor Red
             exit 1

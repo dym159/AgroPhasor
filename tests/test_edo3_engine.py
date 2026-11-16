@@ -30,13 +30,25 @@ from backend.services.parcel_edo3 import ParcelEDO3Service
 from backend.main import compute_simulation_payload
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JSON_PATH = os.path.join(BASE_DIR, "gemini-code-1794737993920.json")
+JSON_PATH = os.path.join(BASE_DIR, "gemini-code.json")
 
 
 class TestEDO3Engine(unittest.TestCase):
 
+    def test_reported_losses_match_mass_balance_in_transition(self):
+        crop = get_crop_parameters("papa")
+        result = solve_edo3_step(
+            100, 40, 120, 100, 120, 20, crop, biomass_t_ha=0,
+            erosion_rate_mm_day=2, is_crop=False, dt_days=3,
+            k_min0=0, xi_n=0, xi_k=0, xi_p=.008, k_ln=.035, k_lk=.015,
+        )
+        self.assertAlmostEqual(result.n_kg_ha, 100 * math.exp(-100 * .035 / 22 * 3))
+        self.assertAlmostEqual(result.leaching_n_kg, 100 - result.n_kg_ha, places=3)
+        self.assertAlmostEqual(result.leaching_k_kg, 120 - result.k_kg_ha, places=3)
+        self.assertAlmostEqual(result.erosion_loss_p_kg, 40 - result.p_kg_ha, places=3)
+
     def test_json_catalog_validation_success(self):
-        """Verify that gemini-code-1794737993920.json is 100% valid for ODE 3."""
+        """Verify that gemini-code.json is 100% valid for ODE 3."""
         self.assertTrue(os.path.exists(JSON_PATH), f"File does not exist: {JSON_PATH}")
         
         result = validate_edo3_catalog(JSON_PATH)

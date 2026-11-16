@@ -29,6 +29,90 @@ def _percentile_summary(values, decimals=2):
     }
 
 
+def compute_dynamic_surface_color(
+    depth_mm: float,
+    eta_w: float,
+    eta_n: float,
+    biomass_t_ha: float,
+    growing: bool,
+    thermal_comfort: float = 1.0,
+    h0_mm: float = 400.0,
+):
+    """Compute a composite RGB color reflecting soil moisture, fertility, erosion, and canopy/stover cover."""
+    base_retention = max(0.0, min(1.0, depth_mm / max(1.0, h0_mm)))
+    erosion_loss_mm = max(0.0, h0_mm - depth_mm)
+    # Amplify seasonal erosion (e.g. 0..1.5 mm) so hillslope wear is visually discernible
+    erosion_vis = max(1.0 - base_retention, min(0.65, erosion_loss_mm / 1.5))
+
+    w_clamped = max(0.0, min(1.0, float(eta_w)))
+    n_clamped = max(0.0, min(1.0, float(eta_n)))
+    t_clamped = max(0.0, min(1.0, float(thermal_comfort)))
+
+    # Moist fertile soil (dark loam) vs parched dry earth (pale ochre)
+    moist_soil = (72.0, 48.0, 25.0)
+    dry_soil = (158.0, 118.0, 76.0)
+    soil_r = dry_soil[0] + (moist_soil[0] - dry_soil[0]) * (0.75 * w_clamped + 0.25 * n_clamped)
+    soil_g = dry_soil[1] + (moist_soil[1] - dry_soil[1]) * (0.75 * w_clamped + 0.25 * n_clamped)
+    soil_b = dry_soil[2] + (moist_soil[2] - dry_soil[2]) * (0.75 * w_clamped + 0.25 * n_clamped)
+
+    # Blend toward eroded bedrock gray (128, 128, 128) as topsoil wears down
+    soil_r = soil_r + (128.0 - soil_r) * erosion_vis
+    soil_g = soil_g + (128.0 - soil_g) * erosion_vis
+    soil_b = soil_b + (128.0 - soil_b) * erosion_vis
+
+    b_pos = max(0.0, float(biomass_t_ha))
+    if growing:
+        canopy_cover = 1.0 - math.exp(-0.45 * b_pos)
+        vigor = max(0.0, min(1.0, 0.45 * w_clamped + 0.30 * n_clamped + 0.25 * t_clamped))
+        # Healthy green canopy vs stressed yellowish-olive canopy
+        healthy_green = (42.0, 146.0, 68.0)
+        stressed_olive = (174.0, 144.0, 52.0)
+        veg_r = stressed_olive[0] + (healthy_green[0] - stressed_olive[0]) * vigor
+        veg_g = stressed_olive[1] + (healthy_green[1] - stressed_olive[1]) * vigor
+        veg_b = stressed_olive[2] + (healthy_green[2] - stressed_olive[2]) * vigor
+        alpha = 0.82 * canopy_cover
+        r = soil_r * (1.0 - alpha) + veg_r * alpha
+        g = soil_g * (1.0 - alpha) + veg_g * alpha
+        b = soil_b * (1.0 - alpha) + veg_b * alpha
+    else:
+        # Harvest stover / crop residue during fallow transition
+        stover_cover = 1.0 - math.exp(-0.35 * b_pos)
+        stover_gold = (168.0, 134.0, 62.0)
+        alpha = 0.65 * stover_cover
+        r = soil_r * (1.0 - alpha) + stover_gold[0] * alpha
+        g = soil_g * (1.0 - alpha) + stover_gold[1] * alpha
+        b = soil_b * (1.0 - alpha) + stover_gold[2] * alpha
+
+    return (
+        int(round(max(0.0, min(255.0, r)))),
+        int(round(max(0.0, min(255.0, g)))),
+        int(round(max(0.0, min(255.0, b)))),
+    )
+
+
+def _select_snapshot_offsets(plan, first_day, last_day, target_day, max_regular=60):
+    total_days = (last_day - first_day).days + 1
+    step = max(1, (total_days - 1) // max(1, max_regular))
+    offsets = set(range(0, total_days, step))
+    offsets.add(0)
+    offsets.add(total_days - 1)
+    offsets.add((target_day - first_day).days)
+    for idx, (p_start, p_end, _) in enumerate(plan):
+        s_off = (p_start - first_day).days
+        e_off = (p_end - first_day).days
+        mid_off = s_off + max(0, (e_off - s_off) // 2)
+        q1_off = s_off + max(0, (e_off - s_off) // 4)
+        q3_off = s_off + max(0, (3 * (e_off - s_off)) // 4)
+        offsets.update([s_off, q1_off, mid_off, q3_off, max(0, e_off - 1), e_off])
+        if idx + 1 < len(plan):
+            next_s_off = (plan[idx + 1][0] - first_day).days
+            if next_s_off > e_off:
+                offsets.add(min(total_days - 1, e_off + 1))
+                offsets.add(e_off + (next_s_off - e_off) // 2)
+                offsets.add(max(0, next_s_off - 1))
+    return sorted(off for off in offsets if 0 <= off < total_days)
+
+
 def _simulate_plan_trajectory(
     plan,
     phases,
@@ -38,6 +122,7 @@ def _simulate_plan_trajectory(
     slope_deg,
     altitude_offset_c=0.0,
     collect_stats=False,
+    snapshot_offsets=None,
 ):
     """Advance the coupled 5-ODE system across dated crop phases and fallow transitions."""
     state = (104., (100., 40., 120.), 400., plan[0][2].B0_t_ha, ())
@@ -70,6 +155,7 @@ def _simulate_plan_trajectory(
         else None
     )
     daily_records = [] if collect_stats else None
+    captured_snapshots = {} if snapshot_offsets is not None else None
 
     while day <= end_day:
         start, end, crop = plan[stage]
@@ -125,6 +211,16 @@ def _simulate_plan_trajectory(
             temp_val = float(temp_adj)
             rad_val = float(radiation) / 0.0864
 
+        if captured_snapshots is not None and offset in snapshot_offsets:
+            captured_snapshots[offset] = (
+                state,
+                dict(diagnostic),
+                growing,
+                crop,
+                stage,
+                float(organic_matter),
+            )
+
         if collect_stats:
             if growing:
                 pstat = phase_stats[stage]
@@ -153,6 +249,8 @@ def _simulate_plan_trajectory(
 
         day += timedelta(days=1)
 
+    if captured_snapshots is not None:
+        return state, diagnostic, growing, crop, phase_stats, daily_records, captured_snapshots
     return state, diagnostic, growing, crop, phase_stats, daily_records
 
 
@@ -333,66 +431,183 @@ def replay_plan(
     timestamps = sorted(hourly["T2M"])
 
     target_offset = (target - first).days
-    target_weather = rep_daily[target_offset]
     base_air_ref = [hourly["T2M"][ts] for ts in timestamps]
     base_rad_wm2 = [
         hourly["ALLSKY_SFC_SW_DWN"][ts] / .0036 if radiation_mj else hourly["ALLSKY_SFC_SW_DWN"][ts]
         for ts in timestamps
     ]
-    if forecast_active and isinstance(target_weather, dict):
-        temp_shift = target_weather["T_NASA"] - (sum(base_air_ref) / len(base_air_ref))
-        mean_rad = sum(base_rad_wm2) / len(base_rad_wm2)
-        rad_scale = max(0.2, min(2.5, target_weather["f_rad_W_m2"] / mean_rad)) if mean_rad > 10.0 else 1.0
-        base_air = [t + temp_shift for t in base_air_ref]
-        base_rad = [r * rad_scale for r in base_rad_wm2]
-        target_ea_kpa = target_weather["e_a_kPa"]
-    else:
-        base_air = base_air_ref
-        base_rad = base_rad_wm2
-        target_ea_kpa = None
+    base_rh_ref = [hourly["RH2M"][ts] for ts in timestamps]
+    mean_air_ref = sum(base_air_ref) / len(base_air_ref)
+    mean_rad_ref = sum(base_rad_wm2) / len(base_rad_wm2)
+
+    def _diurnal_forcing_for_offset(day_offset):
+        day_weather = rep_daily[day_offset]
+        if forecast_active and isinstance(day_weather, dict):
+            temp_shift = day_weather["T_NASA"] - mean_air_ref
+            rad_scale = max(0.2, min(2.5, day_weather["f_rad_W_m2"] / mean_rad_ref)) if mean_rad_ref > 10.0 else 1.0
+            return (
+                [t + temp_shift for t in base_air_ref],
+                [r * rad_scale for r in base_rad_wm2],
+                day_weather["e_a_kPa"],
+            )
+        if isinstance(day_weather, (tuple, list)):
+            rain_w, temp_w, _, _ = day_weather[:4]
+            temp_shift = float(temp_w) - mean_air_ref
+            return (
+                [t + temp_shift for t in base_air_ref],
+                base_rad_wm2,
+                None,
+            )
+        return base_air_ref, base_rad_wm2, None
+
+    def _evaluate_cell_state(snap_tuple, alt_offset_c, day_air, day_rad, day_ea_kpa):
+        state, diagnostic, growing, crop_obj, stage_idx, _ = snap_tuple
+        water, nutrients, depth, biomass, _ = state
+        limits = compute_soil_limits(crop_obj, depth_mm=depth)
+        thermal_crop = replace(crop_obj, W_fc=limits.w_cc, W_pmp=limits.w_pmp, W_crit=limits.w_crit)
+        if not growing:
+            thermal_crop = replace(thermal_crop, gamma_max=0, lambda_gamma_max=0, Cp=18000, alpha=.72, hc=24)
+        air = [t + alt_offset_c for t in day_air]
+        if day_ea_kpa is not None:
+            rh_hourly = [
+                max(5.0, min(100.0, 100.0 * day_ea_kpa / max(1e-6, saturation_vapor_pressure(t))))
+                for t in air
+            ]
+        else:
+            rh_hourly = base_rh_ref
+        thermal = simulate_canopy_diurnal_cycle(air, day_rad, rh_hourly, water, thermal_crop)
+        eta_n = compute_liebig_factor(*nutrients, crop_obj.K_N, crop_obj.K_P, crop_obj.K_K)[0]
+        eta_w = relative_stomatal_conductance(water, limits)
+        comfort_hourly = [thermal_comfort_index(t, crop_obj.T_opt, crop_obj.delta_T_tol) for t in thermal["t_canopy_hourly"]]
+        mean_comfort = sum(comfort_hourly) / max(1, len(comfort_hourly))
+        indices = [c_val * eta_w * eta_n for c_val in comfort_hourly]
+        b_pos = max(0.0, float(biomass))
+        canopy_cover_pct = round((1.0 - math.exp(-0.45 * b_pos)) * 100.0, 1) if growing else 0.0
+        ndvi_val = round(0.15 + 0.72 * (1.0 - math.exp(-0.45 * b_pos)), 3) if growing else round(0.12 + 0.18 * (1.0 - math.exp(-0.35 * b_pos)), 3)
+        base_color = compute_soil_color(depth / 400.0)
+        dyn_color = compute_dynamic_surface_color(
+            depth_mm=depth,
+            eta_w=eta_w,
+            eta_n=eta_n,
+            biomass_t_ha=b_pos,
+            growing=growing,
+            thermal_comfort=mean_comfort,
+            h0_mm=400.0,
+        )
+        return {
+            "soil_water_mm": water,
+            "nutrientes_n_kg_ha": nutrients[0],
+            "nutrientes_p_kg_ha": nutrients[1],
+            "nutrientes_k_kg_ha": nutrients[2],
+            "biomass_t_ha": biomass,
+            "canopy_cover_pct": canopy_cover_pct,
+            "ndvi_satelital": ndvi_val,
+            "h_current_mm": depth,
+            "accumulated_erosion_mm": 400.0 - depth,
+            "soil_color_rgb": dyn_color,
+            "base_soil_color_rgb": base_color,
+            "shield_enabled": growing,
+            "hourly_environmental_index": indices,
+            "hourly_air_temps": air,
+            "hourly_canopy_temps": thermal["t_canopy_hourly"],
+            "lissajous_area": thermal["lissajous_area"],
+            "mean_canopy_temp": thermal["mean_canopy_temp"],
+            "eta_nutrientes": eta_n,
+            "water_condition_index": round(eta_w, 4),
+            "is_irrigation_needed": growing and diagnostic["irrigation_needed"],
+            "suggested_irrigation_mm": diagnostic["suggested_irrigation_mm"] if growing else 0,
+            "_growing": growing,
+            "_crop": crop_obj,
+            "_stage": stage_idx,
+        }
+
+    snapshot_offsets = _select_snapshot_offsets(plan, first, last, target)
+    snapshot_offset_set = set(snapshot_offsets)
+    diurnal_by_offset = {off: _diurnal_forcing_for_offset(off) for off in snapshot_offsets}
+    cell_snapshots_by_offset = {off: [] for off in snapshot_offsets}
+
+    target_growing = True
+    target_crop = plan[0][2]
 
     for cell in cells:
         alt_offset_c = -.0065 * (cell["altitude_m"] - altitude)
-        state, diagnostic, growing, crop, _, _ = _simulate_plan_trajectory(
+        _, _, _, _, _, _, captured = _simulate_plan_trajectory(
             plan,
             phases,
             rep_daily,
             first,
-            target,
+            last,
             cell["slope_deg"],
             altitude_offset_c=alt_offset_c,
             collect_stats=False,
+            snapshot_offsets=snapshot_offset_set,
         )
-        water, nutrients, depth, biomass, _ = state
-        limits = compute_soil_limits(crop, depth_mm=depth)
-        thermal_crop = replace(crop, W_fc=limits.w_cc, W_pmp=limits.w_pmp, W_crit=limits.w_crit)
-        if not growing:
-            thermal_crop = replace(thermal_crop, gamma_max=0, lambda_gamma_max=0, Cp=18000, alpha=.72, hc=24)
-        air = [t + alt_offset_c for t in base_air]
-        if target_ea_kpa is not None:
-            rh_hourly = [
-                max(5.0, min(100.0, 100.0 * target_ea_kpa / max(1e-6, saturation_vapor_pressure(t))))
-                for t in air
-            ]
-        else:
-            rh_hourly = [hourly["RH2M"][ts] for ts in timestamps]
-        thermal = simulate_canopy_diurnal_cycle(air, base_rad, rh_hourly, water, thermal_crop)
-        eta_n = compute_liebig_factor(*nutrients, crop.K_N, crop.K_P, crop.K_K)[0]
-        eta_w = relative_stomatal_conductance(water, limits)
-        indices = [thermal_comfort_index(t, crop.T_opt, crop.delta_T_tol) * eta_w * eta_n
-                   for t in thermal["t_canopy_hourly"]]
+        for off in snapshot_offsets:
+            day_air, day_rad, day_ea_kpa = diurnal_by_offset[off]
+            evaluated = _evaluate_cell_state(captured[off], alt_offset_c, day_air, day_rad, day_ea_kpa)
+            if off == target_offset:
+                target_growing = evaluated["_growing"]
+                target_crop = evaluated["_crop"]
+                cell.update({k: v for k, v in evaluated.items() if not k.startswith("_")})
+            cell_snapshots_by_offset[off].append(evaluated)
 
-        cell.update(
-            soil_water_mm=water, nutrientes_n_kg_ha=nutrients[0], nutrientes_p_kg_ha=nutrients[1],
-            nutrientes_k_kg_ha=nutrients[2], biomass_t_ha=biomass, h_current_mm=depth,
-            accumulated_erosion_mm=400-depth, soil_color_rgb=compute_soil_color(depth/400),
-            shield_enabled=growing, hourly_environmental_index=indices,
-            hourly_air_temps=air, hourly_canopy_temps=thermal["t_canopy_hourly"],
-            lissajous_area=thermal["lissajous_area"], mean_canopy_temp=thermal["mean_canopy_temp"],
-            eta_nutrientes=eta_n,
-            is_irrigation_needed=growing and diagnostic["irrigation_needed"],
-            suggested_irrigation_mm=diagnostic["suggested_irrigation_mm"] if growing else 0,
-        )
+    growing = target_growing
+    crop = target_crop
+
+    timeline_snapshots = []
+    for off in snapshot_offsets:
+        snap_date = first + timedelta(days=off)
+        eval_cells = cell_snapshots_by_offset[off]
+        first_eval = eval_cells[0]
+        s_growing = first_eval["_growing"]
+        s_crop = first_eval["_crop"]
+        s_stage = first_eval["_stage"]
+        timeline_snapshots.append({
+            "date": snap_date.isoformat(),
+            "day_index": off,
+            "phase_index": s_stage,
+            "phase": "cultivo" if s_growing else "transicion",
+            "crop": s_crop.name,
+            "crop_id": s_crop.key,
+            "lot_mean_soil_water_mm": round(sum(c["area_m2"] * ec["soil_water_mm"] for c, ec in zip(cells, eval_cells)) / area, 2),
+            "lot_mean_n_kg_ha": round(sum(c["area_m2"] * ec["nutrientes_n_kg_ha"] for c, ec in zip(cells, eval_cells)) / area, 2),
+            "lot_mean_p_kg_ha": round(sum(c["area_m2"] * ec["nutrientes_p_kg_ha"] for c, ec in zip(cells, eval_cells)) / area, 2),
+            "lot_mean_k_kg_ha": round(sum(c["area_m2"] * ec["nutrientes_k_kg_ha"] for c, ec in zip(cells, eval_cells)) / area, 2),
+            "lot_mean_biomass_t_ha": round(sum(c["area_m2"] * ec["biomass_t_ha"] for c, ec in zip(cells, eval_cells)) / area, 2),
+            "lot_mean_canopy_cover_pct": round(sum(c["area_m2"] * ec["canopy_cover_pct"] for c, ec in zip(cells, eval_cells)) / area, 1),
+            "lot_mean_h_mm": round(sum(c["area_m2"] * ec["h_current_mm"] for c, ec in zip(cells, eval_cells)) / area, 3),
+            "lot_mean_accumulated_erosion_mm": round(sum(c["area_m2"] * ec["accumulated_erosion_mm"] for c, ec in zip(cells, eval_cells)) / area, 3),
+            "lot_mean_temp": round(sum(c["area_m2"] * ec["mean_canopy_temp"] for c, ec in zip(cells, eval_cells)) / area, 2),
+            "lot_mean_eta_nutrientes": round(sum(c["area_m2"] * ec["eta_nutrientes"] for c, ec in zip(cells, eval_cells)) / area, 3),
+            "irrigation_alert": any(ec["is_irrigation_needed"] for ec in eval_cells),
+            "suggested_irrigation_mm": round(max(ec["suggested_irrigation_mm"] for ec in eval_cells), 2),
+            "cells": [
+                {
+                    "soil_water_mm": round(ec["soil_water_mm"], 2),
+                    "nutrientes_n_kg_ha": round(ec["nutrientes_n_kg_ha"], 2),
+                    "nutrientes_p_kg_ha": round(ec["nutrientes_p_kg_ha"], 2),
+                    "nutrientes_k_kg_ha": round(ec["nutrientes_k_kg_ha"], 2),
+                    "biomass_t_ha": round(ec["biomass_t_ha"], 3),
+                    "canopy_cover_pct": ec["canopy_cover_pct"],
+                    "ndvi_satelital": ec["ndvi_satelital"],
+                    "h_current_mm": round(ec["h_current_mm"], 4),
+                    "accumulated_erosion_mm": round(ec["accumulated_erosion_mm"], 4),
+                    "soil_color_rgb": list(ec["soil_color_rgb"]),
+                    "base_soil_color_rgb": list(ec["base_soil_color_rgb"]),
+                    "shield_enabled": ec["shield_enabled"],
+                    "hourly_environmental_index": [round(v, 4) for v in ec["hourly_environmental_index"]],
+                    "hourly_air_temps": [round(v, 2) for v in ec["hourly_air_temps"]],
+                    "hourly_canopy_temps": [round(v, 2) for v in ec["hourly_canopy_temps"]],
+                    "lissajous_area": round(ec["lissajous_area"], 3),
+                    "mean_canopy_temp": round(ec["mean_canopy_temp"], 2),
+                    "eta_nutrientes": round(ec["eta_nutrientes"], 4),
+                    "water_condition_index": ec["water_condition_index"],
+                    "is_irrigation_needed": ec["is_irrigation_needed"],
+                    "suggested_irrigation_mm": round(ec["suggested_irrigation_mm"], 2),
+                }
+                for ec in eval_cells
+            ],
+        })
 
     ensemble_phase_stats = []
     ensemble_daily_records = []
@@ -436,6 +651,7 @@ def replay_plan(
         montecarlo_confidence_pct=overall_confidence_pct,
         phase_forecasts=phase_forecasts,
         monthly_forecast=monthly_forecast,
+        timeline_snapshots=timeline_snapshots,
         climate_forecast={
             **forecast["metadata"],
             "overall_confidence_pct": overall_confidence_pct,

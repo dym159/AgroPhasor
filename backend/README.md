@@ -93,16 +93,17 @@ Receives the 30×30 m cell grid generated on the map and the raw hourly JSON fro
 ### 2. `GET /crops`
 Lists the available crops and their thermal comfort and wilting-point parameters.
 
-### 3. Additional Implemented Endpoints (ODE 1–5 & Decision Support)
-- **Health & Geolocation:** `GET /health`, `GET /api/v1/health`, `GET /api/places`, `GET /api/v1/crop-cycles`
-- **Parcel Simulation, Forecasting & Plan Routes:** `POST /api/v1/parcelas/simulacion` (alias `/api/v1/parcelas/edo1`), `POST /api/v1/rotaciones`, `POST /api/v1/simular`, `POST /api/v1/parcelas`, `POST /api/v1/clima/predecir` (alias `/api/v1/climate/forecast`), `POST /simulate/edo1/point`
+### 3. Additional Implemented Endpoints (ODE 1–5, Calibration & Rotation Optimization)
+- **Health, Catalog & Geolocation:** `GET /health`, `GET /api/v1/health`, `GET /api/places`, `GET /api/v1/crop-cycles`, `GET /api/v1/crop-catalog`
+- **Parcel Simulation, Forecasting & Rotation Endpoints:** `POST /api/v1/parcelas/simulacion` (alias `/api/v1/parcelas/edo1`), `POST /api/v1/parcelas/rotaciones`, `POST /api/v1/rotaciones`, `POST /api/v1/simular`, `POST /api/v1/parcelas`, `POST /api/v1/clima/predecir` (alias `/api/v1/climate/forecast`), `POST /simulate/edo1/point`
+- **Real-Time Satellite Calibration:** `POST /calibrate/satellite` (alias `/api/v1/calibrar-satelital`)
 - **ODE 2–5 Solvers:** `POST /simulate/edo2` (`/api/v1/simular/edo2` in the built-in HTTP fallback), `POST /simulate/edo3` (`/api/v1/simular/edo3`), `POST /simulate/edo3/rotation` (`/api/v1/simular/edo3/rotacion`), `POST /simulate/edo4` (`/api/v1/simular/edo4`), `POST /simulate/edo4/grid` (`/api/v1/simular/edo4/malla`), `POST /simulate/edo5` (`/api/v1/simular/edo5`), `POST /simulate/edo5/step` (`/api/v1/simular/edo5/paso`), `POST /simulate/edo5/grid` (`/api/v1/simular/edo5/malla`)
 - **Catalog Validators:** `POST /api/v1/validate/catalog`, `POST /api/v1/validate/catalog/edo3`..`edo5`
 
 ---
 
 ## 🧪 Running Unit Tests
-To verify that the physics and formulas satisfy all validation criteria:
+To verify that the physics, satellite calibration, rotation graph search, and API endpoints pass all checks:
 ```bash
-python -m unittest discover -s tests -v
+python -m pytest tests
 ```

@@ -23,7 +23,7 @@ class TestRotationRecommendation(TestCase):
         self.assertEqual(len(stages), 3)
         self.assertEqual(stages[0]["crop_id"], "papa")
         self.assertEqual(stages[0]["price_pen_kg"], .91)
-        self.assertEqual(stages[0]["harvest"], "2027-03-25")
+        self.assertEqual(stages[0]["harvest"], "2027-03-05")
         for previous, following in zip(stages, stages[1:]):
             self.assertNotEqual(previous["crop_id"], following["crop_id"])
             gap = date.fromisoformat(following["start"]) - date.fromisoformat(previous["harvest"])
