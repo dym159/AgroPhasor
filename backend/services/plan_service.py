@@ -5,13 +5,17 @@ import math
 import numpy as np
 
 from backend.core.climate_generator import mc_day_to_weather
-from backend.core.edo1_engine import simulate_canopy_diurnal_cycle
+from backend.core.edo1_engine import simulate_canopy_diurnal_cycle, compute_shield_state_and_color
 from backend.core.edo2_engine import compute_soil_limits, relative_stomatal_conductance
 from backend.core.edo3_engine import compute_liebig_factor
 from backend.core.physics import saturation_vapor_pressure, thermal_comfort_index
-from backend.core.edo4_engine import execute_harvest_event
-from backend.core.edo5_engine import compute_soil_color
-from backend.models.crop_parameters import CROP_CATALOG
+from backend.core.edo4_engine import execute_harvest_event, execute_partial_cut
+from backend.core.edo5_engine import (
+    compute_soil_color,
+    compute_soil_vitality_index,
+    compute_terrain_height_variation,
+)
+from backend.models.crop_parameters import CROP_CATALOG, GLOBAL_CONSTANTS
 from backend.services.climate_service import (
     history_from_annual_climate,
     predict_climate_scenarios,
@@ -445,10 +449,12 @@ def replay_plan(
         if forecast_active and isinstance(day_weather, dict):
             temp_shift = day_weather["T_NASA"] - mean_air_ref
             rad_scale = max(0.2, min(2.5, day_weather["f_rad_W_m2"] / mean_rad_ref)) if mean_rad_ref > 10.0 else 1.0
+            rain_w = float(day_weather.get("P0_mm", 0.0))
             return (
                 [t + temp_shift for t in base_air_ref],
                 [r * rad_scale for r in base_rad_wm2],
                 day_weather["e_a_kPa"],
+                rain_w,
             )
         if isinstance(day_weather, (tuple, list)):
             rain_w, temp_w, _, _ = day_weather[:4]
@@ -457,10 +463,11 @@ def replay_plan(
                 [t + temp_shift for t in base_air_ref],
                 base_rad_wm2,
                 None,
+                float(rain_w),
             )
-        return base_air_ref, base_rad_wm2, None
+        return base_air_ref, base_rad_wm2, None, 0.0
 
-    def _evaluate_cell_state(snap_tuple, alt_offset_c, day_air, day_rad, day_ea_kpa):
+    def _evaluate_cell_state(snap_tuple, alt_offset_c, day_air, day_rad, day_ea_kpa, day_rain=0.0):
         state, diagnostic, growing, crop_obj, stage_idx, _ = snap_tuple
         water, nutrients, depth, biomass, _ = state
         limits = compute_soil_limits(crop_obj, depth_mm=depth)
@@ -478,22 +485,54 @@ def replay_plan(
         thermal = simulate_canopy_diurnal_cycle(air, day_rad, rh_hourly, water, thermal_crop)
         eta_n = compute_liebig_factor(*nutrients, crop_obj.K_N, crop_obj.K_P, crop_obj.K_K)[0]
         eta_w = relative_stomatal_conductance(water, limits)
-        comfort_hourly = [thermal_comfort_index(t, crop_obj.T_opt, crop_obj.delta_T_tol) for t in thermal["t_canopy_hourly"]]
-        mean_comfort = sum(comfort_hourly) / max(1, len(comfort_hourly))
-        indices = [c_val * eta_w * eta_n for c_val in comfort_hourly]
+        thermal_comfort = [thermal_comfort_index(t, crop_obj.T_opt, crop_obj.delta_T_tol) for t in thermal["t_canopy_hourly"]]
+        raw_indices = [tc * eta_w * eta_n for tc in thermal_comfort]
+        mean_tc = sum(thermal_comfort) / max(1, len(thermal_comfort))
+        mean_psi = sum(raw_indices) / max(1, len(raw_indices))
+        al_eff = thermal["lissajous_area"] * eta_w * mean_tc
+        shield_eval = compute_shield_state_and_color(
+            lissajous_area=al_eff,
+            psi_environmental=mean_psi,
+            is_crop=growing,
+        )
+        eta_l = shield_eval["eta_lissajous"]
+        indices = [round(p, 4) for p in raw_indices]
+        shield_scores = [
+            compute_shield_state_and_color(lissajous_area=al_eff, psi_environmental=p, is_crop=growing)["shield_score"]
+            for p in raw_indices
+        ]
+
         b_pos = max(0.0, float(biomass))
         canopy_cover_pct = round((1.0 - math.exp(-0.45 * b_pos)) * 100.0, 1) if growing else 0.0
         ndvi_val = round(0.15 + 0.72 * (1.0 - math.exp(-0.45 * b_pos)), 3) if growing else round(0.12 + 0.18 * (1.0 - math.exp(-0.35 * b_pos)), 3)
-        base_color = compute_soil_color(depth / 400.0)
-        dyn_color = compute_dynamic_surface_color(
+        base_color = compute_soil_color(
+            retention_ratio=depth / 400.0,
+            eta_nutrientes=eta_n,
+            water_saturation=eta_w,
+        )
+        height_var = compute_terrain_height_variation(
+            precip_mm=day_rain,
+            accumulated_erosion_mm=400.0 - depth,
+            slope_deg=mean_slope,
+            biomass_t_ha=biomass,
+            is_transition=not growing,
+            altitude_m=altitude,
+        )
+        soil_color = compute_dynamic_surface_color(
             depth_mm=depth,
             eta_w=eta_w,
             eta_n=eta_n,
             biomass_t_ha=b_pos,
             growing=growing,
-            thermal_comfort=mean_comfort,
+            thermal_comfort=mean_tc,
             h0_mm=400.0,
         )
+        soil_vitality = compute_soil_vitality_index(
+            retention_ratio=depth / 400.0,
+            eta_nutrientes=eta_n,
+            water_saturation=eta_w,
+        )
+
         return {
             "soil_water_mm": water,
             "nutrientes_n_kg_ha": nutrients[0],
@@ -504,10 +543,18 @@ def replay_plan(
             "ndvi_satelital": ndvi_val,
             "h_current_mm": depth,
             "accumulated_erosion_mm": 400.0 - depth,
-            "soil_color_rgb": dyn_color,
+            "rain_height_variation_mm": height_var["rain_height_variation_mm"],
+            "visual_height_delta_m": height_var["visual_height_delta_m"],
+            "soil_vitality_index": soil_vitality,
+            "soil_color_rgb": soil_color,
             "base_soil_color_rgb": base_color,
             "shield_enabled": growing,
+            "eta_lissajous": eta_l if growing else 0.0,
+            "shield_score": shield_eval["shield_score"] if growing else 0.0,
+            "shield_state": shield_eval["shield_state"],
+            "shield_color_rgb": shield_eval["shield_color_rgb"],
             "hourly_environmental_index": indices,
+            "hourly_shield_score": shield_scores if growing else None,
             "hourly_air_temps": air,
             "hourly_canopy_temps": thermal["t_canopy_hourly"],
             "lissajous_area": thermal["lissajous_area"],
@@ -543,8 +590,8 @@ def replay_plan(
             snapshot_offsets=snapshot_offset_set,
         )
         for off in snapshot_offsets:
-            day_air, day_rad, day_ea_kpa = diurnal_by_offset[off]
-            evaluated = _evaluate_cell_state(captured[off], alt_offset_c, day_air, day_rad, day_ea_kpa)
+            day_air, day_rad, day_ea_kpa, day_rain = diurnal_by_offset[off]
+            evaluated = _evaluate_cell_state(captured[off], alt_offset_c, day_air, day_rad, day_ea_kpa, day_rain=day_rain)
             if off == target_offset:
                 target_growing = evaluated["_growing"]
                 target_crop = evaluated["_crop"]
@@ -592,10 +639,18 @@ def replay_plan(
                     "ndvi_satelital": ec["ndvi_satelital"],
                     "h_current_mm": round(ec["h_current_mm"], 4),
                     "accumulated_erosion_mm": round(ec["accumulated_erosion_mm"], 4),
+                    "rain_height_variation_mm": ec["rain_height_variation_mm"],
+                    "visual_height_delta_m": ec["visual_height_delta_m"],
+                    "soil_vitality_index": ec["soil_vitality_index"],
                     "soil_color_rgb": list(ec["soil_color_rgb"]),
                     "base_soil_color_rgb": list(ec["base_soil_color_rgb"]),
                     "shield_enabled": ec["shield_enabled"],
+                    "eta_lissajous": ec["eta_lissajous"],
+                    "shield_score": ec["shield_score"],
+                    "shield_state": ec["shield_state"],
+                    "shield_color_rgb": list(ec["shield_color_rgb"]),
                     "hourly_environmental_index": [round(v, 4) for v in ec["hourly_environmental_index"]],
+                    "hourly_shield_score": [round(v, 4) for v in ec["hourly_shield_score"]] if ec["hourly_shield_score"] else None,
                     "hourly_air_temps": [round(v, 2) for v in ec["hourly_air_temps"]],
                     "hourly_canopy_temps": [round(v, 2) for v in ec["hourly_canopy_temps"]],
                     "lissajous_area": round(ec["lissajous_area"], 3),

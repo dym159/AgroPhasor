@@ -44,21 +44,124 @@ class EDO5StepOutput:
     mesh_subsidence_m: float            # 3D mesh geometric subsidence [m]
     soil_color_rgb: Tuple[int, int, int] # Interpolated soil color (Brown -> Bedrock Gray)
     is_bedrock_exposed: bool            # Critical alert: H <= 0.05 mm (bedrock exposed)
+    rain_height_variation_mm: float = 0.0 # Rainfall-induced height variation P0(t) [mm]
+    visual_height_delta_m: float = 0.0    # Total 3D visual elevation change (erosion + rain) [m]
+    soil_vitality_index: float = 1.0      # Combined edaphic index (nutrients + moisture + H) [0, 1]
+
+
+def compute_soil_vitality_index(
+    retention_ratio: float = 1.0,
+    eta_nutrientes: Optional[float] = None,
+    water_saturation: Optional[float] = None,
+    omega_nutrientes: Optional[float] = None,
+    omega_humedad: Optional[float] = None,
+) -> float:
+    """
+    Computes the Surface Edaphic Vitality Index I_soil in [0, 1], governing
+    terrain color transition between Fertile Brown (1.0) and Degraded/Dry Gray (0.0)
+    as a function of nutrients (eta_N), soil moisture saturation (S_W), and fertile depth H(t)/H(0).
+    """
+    h_ratio = max(0.0, min(1.0, float(retention_ratio)))
+    if eta_nutrientes is None and water_saturation is None:
+        return round(h_ratio, 4)
+
+    w_nut = float(
+        omega_nutrientes
+        if omega_nutrientes is not None
+        else GLOBAL_CONSTANTS.get("suelo_color_peso_nutrientes", 0.55)
+    )
+    w_hum = float(
+        omega_humedad
+        if omega_humedad is not None
+        else GLOBAL_CONSTANTS.get("suelo_color_peso_humedad", 0.45)
+    )
+    total_w = max(1e-6, w_nut + w_hum)
+    w_nut /= total_w
+    w_hum /= total_w
+
+    nut_val = max(0.0, min(1.0, float(eta_nutrientes if eta_nutrientes is not None else 1.0)))
+    hum_val = max(0.0, min(1.0, float(water_saturation if water_saturation is not None else 1.0)))
+
+    combined = h_ratio * (w_nut * nut_val + w_hum * hum_val)
+    return round(max(0.0, min(1.0, combined)), 4)
 
 
 def compute_soil_color(
-    retention_ratio: float
+    retention_ratio: float = 1.0,
+    eta_nutrientes: Optional[float] = None,
+    water_saturation: Optional[float] = None,
+    omega_nutrientes: Optional[float] = None,
+    omega_humedad: Optional[float] = None,
 ) -> Tuple[int, int, int]:
     """
-    Interpolates terrain color for the 3D interface (AgroPhasor.pdf Sec. 2.6.1):
-    - retention_ratio = 1.0 (Intact soil): Fertile organic brown (101, 67, 33)
-    - retention_ratio = 0.0 (Fully eroded soil): Bedrock gray (128, 128, 128)
+    Interpolates terrain color in the 3D WebGL interface (AgroPhasor.pdf Sec. 2.6.1)
+    as a function of nutrients (`eta_nutrientes`), soil moisture (`water_saturation`),
+    and fertile topsoil fraction (`retention_ratio`):
+    - I_soil = 1.0 (Moist, nutrient-rich, intact soil): Fertile organic brown (101, 67, 33)
+    - I_soil = 0.0 (Dry, nutrient-depleted, or eroded soil): Rocky / arid gray (128, 128, 128)
     """
-    ratio = max(0.0, min(1.0, retention_ratio))
+    ratio = compute_soil_vitality_index(
+        retention_ratio=retention_ratio,
+        eta_nutrientes=eta_nutrientes,
+        water_saturation=water_saturation,
+        omega_nutrientes=omega_nutrientes,
+        omega_humedad=omega_humedad,
+    )
     r = int(round(128.0 + (101.0 - 128.0) * ratio))
     g = int(round(128.0 + (67.0 - 128.0) * ratio))
     b = int(round(128.0 + (33.0 - 128.0) * ratio))
     return (r, g, b)
+
+
+def compute_terrain_height_variation(
+    precip_mm: float,
+    accumulated_erosion_mm: float,
+    slope_deg: float = 0.0,
+    biomass_t_ha: float = 0.0,
+    is_transition: bool = False,
+    altitude_m: float = 0.0,
+    lambda_b: Optional[float] = None,
+    kappa_z: Optional[float] = None,
+    kappa_er: Optional[float] = None,
+    kappa_rain: Optional[float] = None,
+    beta_splash: Optional[float] = None,
+) -> Dict[str, float]:
+    """
+    Terrain elevation variation equation as a function of precipitation P_0(t)
+    and cumulative erosion wear Delta_H (AgroPhasor.pdf Sec. 1.6.2 and 2.6.1):
+
+    Delta_H_rain(P_0) = P_0(t) * (beta_splash + (1 - beta_splash)*sin(theta)) * exp(-lambda_B * B) * mode_mult
+    z_visual = kappa_z * z_i,j - kappa_er * Delta_H - kappa_rain * Delta_H_rain(P_0)
+    """
+    lb = float(lambda_b if lambda_b is not None else GLOBAL_CONSTANTS.get("lambda_B_ha_t", 0.45))
+    kz = float(kappa_z if kappa_z is not None else GLOBAL_CONSTANTS.get("kappa_z_visual", 1.0))
+    ker_v = float(kappa_er if kappa_er is not None else GLOBAL_CONSTANTS.get("kappa_er_visual", 0.05))
+    krain_v = float(
+        kappa_rain if kappa_rain is not None else GLOBAL_CONSTANTS.get("kappa_lluvia_visual_m_mm", 0.002)
+    )
+    b_splash = float(
+        beta_splash if beta_splash is not None else GLOBAL_CONSTANTS.get("beta_splash_pluvial", 0.25)
+    )
+
+    p0 = max(0.0, float(precip_mm))
+    sin_theta = math.sin(math.radians(max(0.0, min(85.0, float(slope_deg)))))
+    veg_cover = math.exp(-lb * max(0.0, float(biomass_t_ha)))
+    mode_mult = 1.75 if is_transition else 1.0
+
+    # Effective rainfall-induced height variation (raindrop impact + runoff) [equivalent mm]
+    rain_variation_mm = p0 * (b_splash + (1.0 - b_splash) * sin_theta) * veg_cover * mode_mult
+    erosion_sink_m = ker_v * max(0.0, float(accumulated_erosion_mm))
+    rain_sink_m = krain_v * rain_variation_mm
+    total_delta_m = -(erosion_sink_m + rain_sink_m)
+    z_visual_m = kz * float(altitude_m) + total_delta_m
+
+    return {
+        "rain_height_variation_mm": round(rain_variation_mm, 4),
+        "erosion_subsidence_m": round(erosion_sink_m, 4),
+        "rain_subsidence_m": round(rain_sink_m, 4),
+        "visual_height_delta_m": round(total_delta_m, 4),
+        "z_visual_m": round(z_visual_m, 4),
+    }
 
 
 def solve_edo5_step(
@@ -78,7 +181,9 @@ def solve_edo5_step(
     xi_p: Optional[float] = None,
     xi_k: Optional[float] = None,
     dt_days: float = 1.0,
-    kappa_er: float = 0.001
+    kappa_er: float = 0.001,
+    soil_water_mm: Optional[float] = None,
+    eta_nutrientes: Optional[float] = None,
 ) -> EDO5StepOutput:
     """
     Analytically solves one time step dt of ODE 5:
@@ -184,9 +289,32 @@ def solve_edo5_step(
         nut_drag["P"] = -math.expm1(-xi_p * effective_loss) * p_curr
         nut_drag["K"] = -math.expm1(-xi_k * effective_loss) * k_curr
 
-    # 9. 3D WebGL visual layer
-    mesh_subsidence = round(kappa_er * accumulated_loss, 4)
-    soil_color = compute_soil_color(retention_ratio)
+    # 9. 3D WebGL visual layer (elevation from rain/erosion + color from nutrients and moisture)
+    height_var = compute_terrain_height_variation(
+        precip_mm=p0,
+        accumulated_erosion_mm=accumulated_loss,
+        slope_deg=clamped_slope,
+        biomass_t_ha=clamped_biomass,
+        is_transition=is_transition,
+        lambda_b=lambda_b,
+    )
+    mesh_subsidence = round(kappa_er * accumulated_loss + height_var["rain_subsidence_m"], 4)
+
+    water_sat = None
+    if soil_water_mm is not None:
+        span_w = max(1e-4, w_cc_updated - w_pmp_updated)
+        water_sat = max(0.0, min(1.0, (float(soil_water_mm) - w_pmp_updated) / span_w)) if w_cc_updated > 0 else 0.0
+
+    vitality = compute_soil_vitality_index(
+        retention_ratio=retention_ratio,
+        eta_nutrientes=eta_nutrientes,
+        water_saturation=water_sat,
+    )
+    soil_color = compute_soil_color(
+        retention_ratio=retention_ratio,
+        eta_nutrientes=eta_nutrientes,
+        water_saturation=water_sat,
+    )
     is_bedrock = h_next <= 0.05
 
     return EDO5StepOutput(
@@ -206,7 +334,10 @@ def solve_edo5_step(
         nutrient_drag_kg_ha=nut_drag,
         mesh_subsidence_m=mesh_subsidence,
         soil_color_rgb=soil_color,
-        is_bedrock_exposed=is_bedrock
+        is_bedrock_exposed=is_bedrock,
+        rain_height_variation_mm=height_var["rain_height_variation_mm"],
+        visual_height_delta_m=height_var["visual_height_delta_m"],
+        soil_vitality_index=vitality,
     )
 
 

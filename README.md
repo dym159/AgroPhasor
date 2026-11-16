@@ -17,9 +17,9 @@
 The repository currently integrates the full end-to-end stack—from the five coupled differential equation engines in Python to the interactive 2.5D/3D web workspace:
 
 ### 1. Five Coupled Agro-Physical ODE Engines (`backend/core/` & `backend/models/`)
-- **ODE 1 — Canopy Thermal Energy Balance (`edo1_engine.py`, `topoclimatic.py`, `physics.py`):**
+- **ODE 1 — Canopy Thermal Energy Balance (`edo1_engine.py`, `topoclimatic.py`, `physics.py`, `shield_calibration.py`):**
   - Solves hourly canopy temperature $T(t)$ per 30×30 m cell using an exact integrating-factor step with frozen daily latent heat flux ($\bar{Q}_{\text{lat}}$ held constant across fast thermal sub-steps, `h_eff = crop.hc`), zero stomatal conductance at night and below wilting point ($W \le W_{\text{pmp}}$), topoclimatic altitude lapse rates, SRTM v3 slope/aspect solar adjustments, and transpiration cooling modulated by root-zone water availability.
-  - Computes 24-hour air-vs-canopy **Lissajous phase-portrait trajectories**, thermal shield states, and frost/heat stress alerts.
+  - Computes 24-hour air-vs-canopy **Lissajous phase-portrait trajectories** ($A_L$), biome-calibrated Hill-curve Environmental Shield scores & continuous Red-to-Blue RGB gradients (`compute_shield_state_and_color`, validated via 4-fold stratified CV in `shield_calibration.py`), and frost/heat stress alerts.
 - **ODE 2 — Root-Zone Water Balance (`edo2_engine.py`, `edo2_validator.py`):**
   - Tracks daily root-zone soil moisture $W(t)$ bounded in $[0, W_{cc}(H)]$ via $\frac{dW}{dt} = P_0(t)\cos\theta + \eta_{\text{irrig}} I(t) - ET_c(T, W) - k_d \sin\theta \, W$, converting excess moisture above $W_{cc}(H)$ directly into surface runoff.
   - Models relative stomatal conductance $\gamma_c(W)/\gamma_{\max}$, biomass-shaded soil evaporation ($E_{\text{soil},0}(W/W_{cc})e^{-\lambda_B B}$), hillslope gravitational drainage, predictive fast-drying warnings, wilting alerts ($W \le W_{\text{pmp}}$), and replenishment irrigation suggestions $(W_{cc} - W)/\eta_{\text{irrigation}}$.
@@ -31,7 +31,7 @@ The repository currently integrates the full end-to-end stack—from the five co
   - Executes both full harvest jumps—computing commercial yield $Y_k = HI \cdot (1 - r_{\text{res}}) \cdot B(t^-)$, residual stover $B(t^+) = r_{\text{res}} B(t^-)$, organic matter incorporation $\Delta OM = \xi_{OM} B(t^-)$—and partial multi-harvest cuts (`execute_partial_cut`, e.g., perennial strawberry), bare-soil transition decay $\frac{dB}{dt} = -k_{\text{dec}} B$, canopy cover, and simulated NDVI proxies.
 - **ODE 5 — Topsoil Erosion & Fertile Depth Evolution (`edo5_engine.py`, `edo5_validator.py`):**
   - Tracks fertile soil thickness $H(t)$ (mm) via $\frac{dH}{dt} = -k_{\text{er}}(q)\, P_0(t)\,\sin\theta\, e^{-\lambda_B B(t)}$, combining rainfall $P_0(t)$, SRTM slope $\sin\theta$, discrete crop/tillage erodibility $k_{\text{er}}(q)$, and exponential canopy/stover cover protection.
-  - Dynamically contracts root-zone water thresholds ($W_{cc}(H) = \theta_{fc} H$, $W_{\text{pmp}}(H) = \theta_{wp} H$), tracks nutrient runoff drag and 3D mesh subsidence, shifts soil RGB color from fertile brown toward bedrock gray, and raises bedrock exposure alerts when $H \le 0.05\text{ mm}$.
+  - Dynamically contracts root-zone water thresholds ($W_{cc}(H) = \theta_{fc} H$, $W_{\text{pmp}}(H) = \theta_{wp} H$), tracks nutrient runoff drag, rainfall-driven height variation (`compute_terrain_height_variation`), 3D mesh subsidence, soil vitality & chromatic shift from fertile brown `(101, 67, 33)` toward bedrock gray `(128, 128, 128)`, and bedrock exposure alerts when $H \le 0.05\text{ mm}$.
 
 ### 2. Satellite Calibration, Exact Rotation Optimizer & Climate Forecasting (`backend/core/`, `backend/rotation/`, `backend/services/`)
 - **Real-Time Satellite Calibration Engine (`satellite_calibration.py`):**
@@ -48,8 +48,8 @@ The repository currently integrates the full end-to-end stack—from the five co
 - **Decision & Planning Panels:** Strategy mode presets (`strategyPanel.js`), auto-balancing priority knobs with lock/unlock (`knobsPanel.js`), filterable draggable crop catalog loaded dynamically via `/api/v1/crop-catalog` (`cropsPanel.js`), multi-phase planting calendar with date inspection (`timelineBar.js`), and the regional rotation workflow panel supporting 3–6 stages, Peruvian department detection/override, and one-click Apply/Undo timeline synchronization (`rotationsPanel.js`).
 
 ### 4. Verification & Test Coverage (`tests/`)
-- **105 Python unit, regression, and agronomic validation tests** (`pytest tests`) validating ODE 1–5 numerical stability and PDF equations, satellite out-of-sample backtesting, partial harvests, Fourier/AR(1)-Gamma climate forecasting, regional department matching, exact/adaptive rotation graph search, and FastAPI/HTTP API contracts.
-- **14 Node.js tests** (`npm test` / `node --test tests/*.mjs`) validating Terrarium DEM decoding, 3D mesh erosion geometry, client-side Pareto re-ranking across knobs `w1`–`w4`, and rotation UI workflows.
+- **109 Python unit, regression, and agronomic validation tests** (`pytest tests`) validating ODE 1–5 numerical stability and PDF equations, satellite out-of-sample backtesting, 4-fold biome shield calibration, partial harvests, Fourier/AR(1)-Gamma climate forecasting, regional department matching, exact/adaptive rotation graph search, and FastAPI/HTTP API contracts.
+- **15 Node.js tests** (`npm test` / `node --test tests/*.mjs`) validating Terrarium DEM decoding, 3D mesh erosion/rain subsidence geometry, soil color vitality, client-side Pareto re-ranking across knobs `w1`–`w4`, and rotation UI workflows.
 
 ---
 
@@ -85,10 +85,10 @@ Then open [http://127.0.0.1:5173](http://127.0.0.1:5173) in your browser.
 ## 🧪 Running Tests
 
 ```bash
-# Python backend, physics, satellite calibration & rotation test suite (105 tests)
+# Python backend, physics, satellite/shield calibration & rotation test suite (109 tests)
 python -m pytest tests
 
-# Node.js frontend unit & UI workflow tests (14 tests)
+# Node.js frontend unit & UI workflow tests (15 tests)
 npm test
 ```
 
@@ -155,4 +155,6 @@ Run the full verification suite at any time before opening a Pull Request:
 - [ODE Numerical Corrections & Verification](docs/CORRECCIONES_EDO.md)
 - [Exact Rotation Graph Optimizer](backend/rotation/README.md)
 - [Rotation Panel UI Behavior](frontend/ROTACIONES.md)
+- [Peru Crop Rotation Data Sources](docs/fuentes-rotacion-peru.md)
+- [60-Crop Peru Rotation Inventory](docs/inventario-60-cultivos-peru.md)
 - [AgroPhasor Mathematical & Physical Specification (PDF)](Agrophasor.pdf)

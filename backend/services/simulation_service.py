@@ -18,7 +18,11 @@ from backend.core.topoclimatic import (
     topographic_solar_factor,
     convert_nasa_radiation_to_wm2
 )
-from backend.core.edo1_engine import solve_edo1_step, compute_lissajous_area
+from backend.core.edo1_engine import (
+    solve_edo1_step,
+    compute_lissajous_area,
+    compute_shield_state_and_color,
+)
 
 
 class SimulationService:
@@ -105,7 +109,7 @@ class SimulationService:
                     soil_water_mm=soil_water_mm,
                     crop=crop,
                     dt_seconds=3600.0,
-                    sub_steps=2
+                    sub_steps=12
                 )
                 
                 t_curr = step_res.t_canopy_c
@@ -120,12 +124,13 @@ class SimulationService:
             all_canopy_means.append(mean_temp)
             
             mean_comfort = sum(comfort_list) / float(len(comfort_list))
-            if mean_comfort >= 0.75:
-                shield_color = "Cobalt Blue (Optimal)"
-            elif mean_comfort >= 0.45:
-                shield_color = "Amber (Moderate Stress)"
-            else:
-                shield_color = "Deep Red (Critical Stress)"
+            is_crop_mode = crop.botanical_family != "None"
+            shield_info = compute_shield_state_and_color(
+                lissajous_area=al_area,
+                psi_environmental=mean_comfort,
+                is_crop=is_crop_mode,
+            )
+            shield_color = shield_info["shield_label"]
                 
             cells_output.append({
                 "cell_id": cell_id,
@@ -134,6 +139,10 @@ class SimulationService:
                 "max_canopy_temp": round(max(canopy_temps), 2),
                 "min_canopy_temp": round(min(canopy_temps), 2),
                 "lissajous_area": round(al_area, 2),
+                "eta_lissajous": shield_info["eta_lissajous"],
+                "shield_score": shield_info["shield_score"],
+                "shield_state": shield_info["shield_state"],
+                "shield_color_rgb": shield_info["shield_color_rgb"],
                 "thermal_shield": shield_color,
                 "fever_hours_count": fever_hours,
                 "hourly_canopy_temps": canopy_temps,

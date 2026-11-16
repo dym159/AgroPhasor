@@ -52,26 +52,7 @@ export class AgroPhysicsEngine {
     const cooling = (W / this.BASELINE.W_max) * 2.8 + (rRes * 1.2);
     const T = Number((this.BASELINE.T_base + deltaText - cooling).toFixed(1));
 
-    // 3. WATER EROSION AND SOIL SUBSIDENCE
-    // Soil loss equation: slope sin(theta), rainfall energy (1 + deltaP0/100), and residue protection
-    const slopeRad = (slopeTheta * Math.PI) / 180;
-    const sinTheta = Math.sin(slopeRad);
-    const rainEnergy = Math.max(0.2, 1.0 + (deltaP0 / 100));
-    const residueCoverProtection = 1.0 - (rRes * 0.88); // Up to 88% reduction with residue cover
-    
-    // Annual erosion rate (mm/year)
-    const erosionRateMmYear = Number((4.5 * sinTheta * rainEnergy * residueCoverProtection).toFixed(2));
-    
-    // Physical subsidence for 2.5D visualization (mm lost in simulated scenario)
-    const erosionSinkingMm = Math.min(65, erosionRateMmYear * 6.5);
-    const currentH = Math.max(120, this.BASELINE.H_base - erosionSinkingMm);
-
-    // Soil color: Dark fertile brown (#1b3a24 / #3b2314) -> Rocky gray (#52525b / #71717a)
-    // Degradation factor (0 = 100% fertile, 1 = fully degraded rocky soil)
-    const degradationFactor = Math.min(1.0, (erosionSinkingMm / 55) * 0.6 + (1 - (W / this.BASELINE.W_max)) * 0.4);
-    const soilColor = this.interpolateSoilColor(degradationFactor);
-
-    // 4. CHEMICAL HEALTH VIA LIEBIG'S LAW OF THE MINIMUM (eta_nutrientes)
+    // 3. CHEMICAL HEALTH VIA LIEBIG'S LAW OF THE MINIMUM (eta_nutrientes)
     const eta_N = Math.min(1.0, Math.max(0.1, fertN / this.BASELINE.N_opt));
     const eta_P = Math.min(1.0, Math.max(0.1, fertP / this.BASELINE.P_opt));
     const eta_K = Math.min(1.0, Math.max(0.1, fertK / this.BASELINE.K_opt));
@@ -91,6 +72,28 @@ export class AgroPhysicsEngine {
 
     eta_nutrientes = Number(eta_nutrientes.toFixed(3));
 
+    // 4. TERRAIN HEIGHT VARIATION BY PRECIPITATION AND SLOPE
+    const slopeRad = (slopeTheta * Math.PI) / 180;
+    const sinTheta = Math.sin(slopeRad);
+    const rainEnergy = Math.max(0.2, 1.0 + (deltaP0 / 100));
+    const betaSplash = 0.25;
+    const rainTopographicFactor = betaSplash + (1.0 - betaSplash) * sinTheta;
+    const residueCoverProtection = 1.0 - (rRes * 0.88);
+
+    // Annual pluvial erosion/wear rate (mm/year) governed by rainfall
+    const erosionRateMmYear = Number((5.2 * rainEnergy * rainTopographicFactor * residueCoverProtection).toFixed(2));
+
+    // Physical subsidence for 2.5D visualization (mm lost due to rainfall)
+    const erosionSinkingMm = Math.min(65, erosionRateMmYear * 6.5);
+    const currentH = Math.max(120, this.BASELINE.H_base - erosionSinkingMm);
+    const retentionRatio = currentH / this.BASELINE.H_base;
+
+    // Terrain soil color (Fertile brown <-> Arid/degraded gray) from nutrients and moisture
+    const waterSaturation = Math.max(0, Math.min(1, (W - 25) / (this.BASELINE.W_max - 25)));
+    const soilVitalityIndex = Math.max(0, Math.min(1, retentionRatio * (0.55 * eta_nutrientes + 0.45 * waterSaturation)));
+    const degradationFactor = Math.min(1.0, 1.0 - soilVitalityIndex);
+    const soilColor = this.interpolateSoilColor(degradationFactor);
+
     // 5. ABOVEGROUND BIOMASS B (t/ha)
     let B = 0;
     if (stage === "cultivo") {
@@ -99,7 +102,9 @@ export class AgroPhysicsEngine {
       B = Number((15.5 * eta_nutrientes * waterFactor * tempFactor).toFixed(1));
     }
 
-    // 6. ENVIRONMENTAL SHIELD INDEX (Psi) AND ITS 4 STATES
+    // 6. LISSAJOUS AREA AND ENVIRONMENTAL SHIELD (Psi: RED [low area] <-> BLUE [healthy area])
+    let lissajousArea = 0;
+    let eta_lissajous = 0;
     let Psi = 0;
     let shieldState = "desactivado";
     let shieldColor = "#64748b";
@@ -113,28 +118,27 @@ export class AgroPhysicsEngine {
     } else {
       const waterResilience = Math.min(1.0, W / 140);
       const thermalResilience = Math.max(0.1, 1.0 - Math.max(0, (Math.abs(T - 16.5) - 2) * 0.12));
-      const soilResilience = Math.max(0.1, 1.0 - degradationFactor);
+      // Lissajous hysteresis loop area A_L (°C^2) proportional to stomatal conductance and thermal comfort
+      lissajousArea = Number((32.0 * waterResilience * thermalResilience * (0.5 + 0.5 * eta_nutrientes)).toFixed(2));
+      eta_lissajous = Number((lissajousArea / (lissajousArea + 18.0)).toFixed(3));
 
-      // Weighted resilience score
-      Psi = Number((
-        0.35 * waterResilience +
-        0.30 * eta_nutrientes +
-        0.20 * thermalResilience +
-        0.15 * soilResilience
-      ).toFixed(2));
+      const psiBio = waterResilience * thermalResilience * eta_nutrientes;
+      Psi = Number((0.55 * eta_lissajous + 0.45 * psiBio).toFixed(2));
 
-      // Strict classification into the 3 active states
+      // Continuous color RED (249,64,70) -> BLUE (42,155,255) based on shield area/level
+      const rCol = Math.round(249 + (42 - 249) * Psi);
+      const gCol = Math.round(64 + (155 - 64) * Psi);
+      const bCol = Math.round(70 + (255 - 70) * Psi);
+      shieldColor = `rgb(${rCol}, ${gCol}, ${bCol})`;
+
       if (Psi >= 0.70) {
         shieldState = "azul_cobalto";
-        shieldColor = "#2563eb"; // Cobalt Blue
         shieldName = "Cobalt Blue (Optimal Resilience)";
       } else if (Psi >= 0.38) {
         shieldState = "violeta_ambar";
-        shieldColor = "#8b5cf6"; // Violet / Amber
         shieldName = "Violet / Amber (Moderate Stress)";
       } else {
         shieldState = "rojo_intenso";
-        shieldColor = "#dc2626"; // Deep Red
         shieldName = "Deep Red (Critical Stress)";
       }
     }
@@ -174,7 +178,10 @@ export class AgroPhysicsEngine {
       eta_K: Number(eta_K.toFixed(2)),
       limitingNutrient,
 
-      // Environmental shield
+      // Environmental shield and Lissajous area
+      lissajousArea,
+      eta_lissajous,
+      soilVitalityIndex: Number(soilVitalityIndex.toFixed(3)),
       Psi,
       shieldState, // "azul_cobalto" | "violeta_ambar" | "rojo_intenso" | "desactivado"
       shieldColor,

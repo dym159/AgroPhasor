@@ -727,6 +727,10 @@ body {
   background: linear-gradient(to right, #f94046, #2a9bff);
 }
 
+.terrain-legend-canopy {
+  background: linear-gradient(to right, #654321, #a8863e, #2a9244);
+}
+
 .terrain-legend-soil {
   background: linear-gradient(to right, #654321, #808080);
 }
@@ -835,6 +839,18 @@ body {
   border-left: 2px solid var(--accent-claude);
   padding: 5px 8px 7px;
   background: var(--bg-canvas);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.timeline-phase:hover {
+  background: var(--bg-surface-elevated);
+}
+
+.timeline-phase.is-active {
+  background: rgba(52, 211, 153, 0.11);
+  border-top-color: #10b981;
+  border-left-color: #10b981;
 }
 
 .timeline-phase.is-drop-target {
@@ -957,7 +973,21 @@ body {
   border-radius: var(--radius-sm);
   font-size: .75rem;
 }
-.timeline-bottom[hidden] { display: none; }
+.timeline-bottom[hidden],
+.timeline-evolution[hidden] { display: none; }
+
+.timeline-evolution {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.timeline-evolution-slider {
+  accent-color: #10b981;
+}
 
 .rotation-form input[type="checkbox"] {
   width: auto;
@@ -971,7 +1001,6 @@ body {
   border-radius: 5px;
 }
 
-<<<<<<< HEAD
 .timeline-phase-forecast {
   display: block;
   margin-top: 4px;

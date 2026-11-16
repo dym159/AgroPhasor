@@ -8,7 +8,7 @@ import { createTimelineBar } from './components/timelineBar.js';
 import { STRATEGY_MODES } from './data/mockVisualData.js';
 import { fetchCropCatalog, fetchParcelSimulation } from './services/agroApi.js';
 import { createUiState } from './state/uiState.js';
-import { assignPhaseCrop } from './utils/phaseDates.js';
+import { addDays, applyTimelineSnapshot, assignPhaseCrop } from './utils/phaseDates.js';
 
 function rebalanceKnobs(currentKnobs, changedId, nextValue) {
   const clamped = Math.max(0, Math.min(100, Math.round(nextValue)));
@@ -49,8 +49,18 @@ function bootstrapApp() {
   function scheduleParcelSimulation({ retry = false } = {}) {
     const state = store.getState();
     const hasParcel = state.hasActiveTerrain && state.selectedParcel?.polygon?.length;
-    const activePhase = state.phases.find((phase) => phase.start <= (state.simulationDate ?? state.phases[0]?.start)
-      && (phase.harvest ?? '9999-12-31') > (state.simulationDate ?? state.phases[0]?.start));
+    const isPlanActive = !state.isBareSoil && state.phases.length > 0 && state.phases.every((phase) => phase.cropId && phase.harvest);
+    const defaultPlanDate = isPlanActive
+      ? (addDays(state.phases.at(-1).harvest, -1) || state.phases.at(-1).harvest)
+      : state.phases[0]?.start;
+    const effectiveSimDate = isPlanActive
+      && state.simulationDate
+      && state.simulationDate >= state.phases[0].start
+      && state.simulationDate <= state.phases.at(-1).harvest
+      ? state.simulationDate
+      : defaultPlanDate;
+    const activePhase = state.phases.find((phase) => phase.start <= (effectiveSimDate ?? state.phases[0]?.start)
+      && (phase.harvest ?? '9999-12-31') >= (effectiveSimDate ?? state.phases[0]?.start));
     const selectedCrop = activePhase?.cropId ?? state.phases.find((phase) => phase.cropId)?.cropId ?? state.previewCropId;
     const cropId = state.isBareSoil ? 'transicion' : selectedCrop ?? 'papa';
     if (!hasParcel) {
@@ -68,9 +78,11 @@ function bootstrapApp() {
     const signature = JSON.stringify([
       state.selectedParcel.id,
       state.selectedParcel.polygon,
-      cropId,
-      state.phases, state.simulationDate,
-      state.climateDeltaT, state.climateDeltaPct,
+      isPlanActive ? 'plan' : cropId,
+      state.phases,
+      isPlanActive && state.parcelSimulationResult?.timeline_snapshots?.length ? 'cached-timeline' : effectiveSimDate,
+      state.climateDeltaT,
+      state.climateDeltaPct,
       !state.isBareSoil && !selectedCrop,
     ]);
     if (!retry && signature === lastParcelSignature) return;
@@ -96,10 +108,10 @@ function bootstrapApp() {
           state.selectedParcel,
           cropId,
           controller.signal,
-          !state.isBareSoil && state.phases.length && state.phases.every((phase) => phase.cropId && phase.harvest)
+          isPlanActive
             ? {
                 phases: state.phases,
-                selected_date: state.simulationDate && state.simulationDate >= state.phases[0].start && state.simulationDate <= state.phases.at(-1).harvest ? state.simulationDate : state.phases[0].start,
+                selected_date: effectiveSimDate,
                 delta_T_whatif: state.climateDeltaT ?? 0,
                 delta_P_pct_whatif: state.climateDeltaPct ?? 0,
               }
@@ -107,12 +119,20 @@ function bootstrapApp() {
         );
         if (controller.signal.aborted) return;
 
-        const cropLabel = result.reference_crop_used || (!state.isBareSoil && !selectedCrop)
-          ? `${result.crop} (reference)` : result.crop;
+        const hydrated = isPlanActive && result.timeline_snapshots?.length
+          ? applyTimelineSnapshot(result, effectiveSimDate)
+          : result;
+
+        const cropLabel = hydrated.reference_crop_used || (!state.isBareSoil && !selectedCrop)
+          ? `${hydrated.crop} (reference)` : hydrated.crop;
+        const phaseTag = hydrated.plan_simulation
+          ? ` (${hydrated.phase === 'transicion' ? 'Fallow' : `Phase ${(hydrated.phase_index ?? 0) + 1}`})`
+          : '';
 
         store.setState({
-          parcelSimulationResult: result,
-          parcelSimulationStatusText: `${cropLabel} · ${result.date} · ${result.cells_count} 30 m cells`,
+          ...(isPlanActive && !state.simulationDate ? { simulationDate: effectiveSimDate } : {}),
+          parcelSimulationResult: hydrated,
+          parcelSimulationStatusText: `${cropLabel}${phaseTag} · ${hydrated.date} · ${hydrated.cells_count} 30 m cells`,
         });
       } catch (error) {
         if (controller.signal.aborted) return;
@@ -166,6 +186,19 @@ function bootstrapApp() {
 
   const timelineBar = createTimelineBar(timelineEl, store.getState(), {
     onInspectDate: (simulationDate) => {
+      const current = store.getState();
+      if (!current.isBareSoil && current.parcelSimulationResult?.timeline_snapshots?.length) {
+        const hydrated = applyTimelineSnapshot(current.parcelSimulationResult, simulationDate);
+        const phaseTag = hydrated.plan_simulation
+          ? ` (${hydrated.phase === 'transicion' ? 'Fallow' : `Phase ${(hydrated.phase_index ?? 0) + 1}`})`
+          : '';
+        store.setState({
+          simulationDate,
+          parcelSimulationResult: hydrated,
+          parcelSimulationStatusText: `${hydrated.crop}${phaseTag} · ${hydrated.date} · ${hydrated.cells_count} 30 m cells`,
+        });
+        return;
+      }
       store.setState({ simulationDate });
       scheduleParcelSimulation();
     },
@@ -181,7 +214,11 @@ function bootstrapApp() {
         : existing;
       const cropId = last ? '' : previewCropId ?? '';
       const phases = assignPhaseCrop([...prefix, { start }], prefix.length, cropId, cropCycles);
-      store.setState({ phases });
+      const lastAdded = phases.at(-1);
+      const nextSimDate = lastAdded?.harvest
+        ? (addDays(lastAdded.harvest, -1) || lastAdded.harvest)
+        : store.getState().simulationDate;
+      store.setState({ phases, ...(nextSimDate ? { simulationDate: nextSimDate } : {}) });
       scheduleParcelSimulation();
     },
     onAssignCrop: (phaseIndex, cropId) => {
@@ -191,7 +228,11 @@ function bootstrapApp() {
       if (cropId && !Object.hasOwn(cropCycles, cropId)) return;
 
       const nextPhases = assignPhaseCrop(phases, phaseIndex, cropId, cropCycles);
-      store.setState({ phases: nextPhases });
+      const assignedPhase = nextPhases[phaseIndex];
+      const nextSimDate = assignedPhase?.harvest
+        ? (addDays(assignedPhase.harvest, -1) || assignedPhase.harvest)
+        : store.getState().simulationDate;
+      store.setState({ phases: nextPhases, ...(nextSimDate ? { simulationDate: nextSimDate } : {}) });
       scheduleParcelSimulation();
     },
     onClimateWhatIf: (climateDeltaT, climateDeltaPct) => {

@@ -212,6 +212,18 @@ class TestPhaseAndMonthlyIntegration(TestCase):
         self.assertLess(cold_res["montecarlo_confidence_pct"], res["montecarlo_confidence_pct"])
         self.assertGreater(cold_res["phase_forecasts"][1]["frost_risk_pct"], res["phase_forecasts"][1]["frost_risk_pct"])
 
+        # Timeline snapshots cover the full rotation from start to final harvest
+        snapshots = res.get("timeline_snapshots", [])
+        self.assertGreaterEqual(len(snapshots), 10)
+        self.assertEqual(snapshots[0]["date"], "2026-11-15")
+        self.assertEqual(snapshots[-1]["date"], "2027-07-07")
+        self.assertTrue(any(s["phase"] == "transicion" for s in snapshots))
+        # Verify terrain color and biomass evolve between phase start and pre-harvest peak
+        p1_start = next(s for s in snapshots if s["date"] == "2026-11-15")
+        p1_peak = next(s for s in snapshots if s["date"] == "2027-03-24")
+        self.assertGreater(p1_peak["lot_mean_biomass_t_ha"], p1_start["lot_mean_biomass_t_ha"])
+        self.assertNotEqual(p1_peak["cells"][0]["soil_color_rgb"], p1_start["cells"][0]["soil_color_rgb"])
+
     def test_rotation_and_climate_forecast_endpoint(self):
         today = date(2026, 11, 15)
         nasa_hist = _build_mock_nasa_daily_payload(today - timedelta(days=1120), today, base_temp=15.0, lag_days=2)

@@ -66,6 +66,7 @@ export function mountTerrainVisualizer(container, state, callbacks) {
   const context = canvas.getContext('2d');
   const legend = createElement('div', { className: 'terrain-legend' }, [
     createElement('div', {}, ['Shield · critical', createElement('span', { className: 'terrain-legend-shield' }), 'Optimal']),
+    createElement('div', {}, ['Canopy · bare', createElement('span', { className: 'terrain-legend-canopy' }), 'Vigorous']),
     createElement('div', {}, ['Fertile soil', createElement('span', { className: 'terrain-legend-soil' }), 'Bedrock']),
   ]);
   const shieldStatus = createElement('div', { className: 'terrain-legend', attrs: { role: 'status' } });
@@ -155,13 +156,26 @@ export function mountTerrainVisualizer(container, state, callbacks) {
       y: centerY + (depth([x, y]) * sinTilt - z * cosTilt) * scale,
     });
     const sorted = [...surface.cells].sort((a, b) => depth(a.center) - depth(b.center));
-    for (const { polygons, z, color } of sorted) {
+    for (const { cell, polygons, z, color } of sorted) {
+      const erosionMm = cell?.accumulated_erosion_mm ?? 0;
+      const seasonalSink = erosionMm > 0 && erosionMm < 20
+        ? Math.min(0.085, erosionMm * 0.045)
+        : 0;
+      const canopyLift = cell?.shield_enabled && cell?.biomass_t_ha > 0
+        ? Math.min(0.045, cell.biomass_t_ha * 0.0038)
+        : 0;
+      const cellZ = z - seasonalSink + canopyLift;
+      const sideRgb = cell?.base_soil_color_rgb;
+      const sideColor = Array.isArray(sideRgb) && sideRgb.length === 3
+        ? `rgb(${Math.round(sideRgb[0] * 0.62)},${Math.round(sideRgb[1] * 0.62)},${Math.round(sideRgb[2] * 0.62)})`
+        : '#3a302b';
+
       for (const rings of polygons) {
         const path = new Path2D();
         for (const [index, ring] of rings.entries()) {
-          const top = ring.map((vertex) => project(vertex, z));
+          const top = ring.map((vertex) => project(vertex, cellZ));
           const bottom = ring.map((vertex) => project(vertex, surface.floor));
-          drawCellSides(context, top, bottom, index > 0);
+          drawCellSides(context, top, bottom, index > 0, sideColor);
           traceRing(path, top);
         }
         context.fillStyle = color;
@@ -175,38 +189,70 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     const shieldCells = sorted.filter(({ cell }) => cell?.shield_enabled);
     if (!shieldCells.length) return;
 
-    // The entire grid shares a single baseline elevation, even across eroded cells.
-    const shieldZ = Math.max(...sorted.map(({ z }) => z)) + 0.22;
-    for (const { cell, center, polygons } of shieldCells) {
+    for (const { cell, center, polygons, z } of shieldCells) {
+      const envIndex = Math.max(
+        0,
+        Math.min(1, cell.hourly_shield_score?.[hour] ?? cell.hourly_environmental_index?.[hour] ?? cell.shield_score ?? 0)
+      );
+      const color = shieldColor(envIndex);
+      const cellShieldZ = z + 0.055;
+
+      // 1. Protective shield covering each cell's geometry
+      for (const rings of polygons) {
+        const shieldPoly = new Path2D();
+        for (const ring of rings) {
+          const topShield = ring.map((vertex) => project(vertex, cellShieldZ));
+          traceRing(shieldPoly, topShield);
+        }
+        context.fillStyle = color;
+        context.globalAlpha = 0.20 + 0.20 * envIndex;
+        context.fill(shieldPoly, 'evenodd');
+        context.globalAlpha = 0.85;
+        context.strokeStyle = color;
+        context.lineWidth = 1.4;
+        context.stroke(shieldPoly);
+      }
+      context.globalAlpha = 1;
+
+      // 2. Lissajous curve centered inside the cell shield
       const air = cell.hourly_air_temps;
       const canopy = cell.hourly_canopy_temps;
       if (!air?.length || canopy?.length !== air.length) continue;
       const meanAir = air.reduce((sum, value) => sum + value, 0) / air.length;
       const meanCanopy = canopy.reduce((sum, value) => sum + value, 0) / canopy.length;
+      const ampAir = Math.max(2.5, ...air.map((value) => Math.abs(value - meanAir)));
+      const ampDiff = Math.max(
+        1.5,
+        ...air.map((value, idx) => Math.abs((canopy[idx] - meanCanopy) - (value - meanAir)))
+      );
       const vertices = polygons.flat(2);
-      const radius = Math.min(
-        Math.max(...vertices.map(([x]) => x)) - Math.min(...vertices.map(([x]) => x)),
-        Math.max(...vertices.map(([, y]) => y)) - Math.min(...vertices.map(([, y]) => y))
-      ) * .43;
-      // A shared temperature scale preserves differences in Lissajous area.
-      const trajectory = air.map((value, index) => project([
-        center[0] + (value - meanAir) / 20 * radius,
-        center[1] + (canopy[index] - meanCanopy) / 20 * radius,
-      ], shieldZ));
+      const spanX = Math.max(...vertices.map(([x]) => x)) - Math.min(...vertices.map(([x]) => x));
+      const spanY = Math.max(...vertices.map(([, y]) => y)) - Math.min(...vertices.map(([, y]) => y));
+      const radius = Math.min(spanX, spanY) * 0.34;
+      // Minor semi-axis reflects the Lissajous buffering area while keeping visual legibility
+      const minorRatio = 0.28 + 0.62 * envIndex;
+      const trajectory = air.map((value, index) => {
+        const phase = (2 * Math.PI * index) / air.length;
+        const uNorm = Math.max(-1, Math.min(1, (value - meanAir) / ampAir));
+        const diffNorm = Math.max(-1, Math.min(1, ((canopy[index] - meanCanopy) - (value - meanAir)) / ampDiff));
+        const vNorm = Math.max(-1, Math.min(1, 0.35 * diffNorm + 0.65 * Math.cos(phase))) * minorRatio;
+        const dx = (uNorm * cosYaw + vNorm * sinYaw) * radius;
+        const dy = (-uNorm * sinYaw + vNorm * cosYaw) * radius;
+        return project([center[0] + dx, center[1] + dy], cellShieldZ + 0.008);
+      });
       const path = new Path2D();
       traceRing(path, trajectory);
       path.closePath();
-      const color = shieldColor(cell.hourly_environmental_index[hour] ?? 0);
       context.fillStyle = color;
-      context.globalAlpha = .4;
+      context.globalAlpha = 0.32;
       context.fill(path);
       context.globalAlpha = 1;
       context.strokeStyle = color;
-      context.lineWidth = 1.5;
+      context.lineWidth = 1.6;
       context.stroke(path);
       const point = trajectory[Math.min(hour, trajectory.length - 1)];
       context.beginPath();
-      context.arc(point.x, point.y, 2, 0, Math.PI * 2);
+      context.arc(point.x, point.y, 2.4, 0, Math.PI * 2);
       context.fill();
     }
   }
@@ -220,10 +266,16 @@ export function mountTerrainVisualizer(container, state, callbacks) {
         ? `Suggested irrigation · ${Number(simulation.suggested_irrigation_mm).toFixed(1)} mm`
         : 'Soil moisture above irrigation threshold';
       const fertility = Number(simulation.lot_mean_eta_nutrientes);
+      const erosionMm = simulation.lot_mean_accumulated_erosion_mm != null
+        ? Number(simulation.lot_mean_accumulated_erosion_mm)
+        : Math.max(0, 400 - Number(simulation.lot_mean_h_mm ?? 400));
+      const planStats = simulation.plan_simulation
+        ? `Biomass ${Number(simulation.lot_mean_biomass_t_ha ?? 0).toFixed(1)} t/ha (${Math.round(simulation.lot_mean_canopy_cover_pct ?? 0)}% cover) · W ${Number(simulation.lot_mean_soil_water_mm ?? 0).toFixed(0)} mm · Erosion ${erosionMm.toFixed(2)} mm · `
+        : '';
       const forecastTag = simulation.montecarlo_confidence_pct != null
         ? ` · MC confidence ${simulation.montecarlo_confidence_pct}% (${simulation.climate_forecast?.mc_scenarios ?? ''} scenarios)`
         : simulation.plan_simulation ? ` · ${simulation.climate_source || 'Plan scenario'}` : '';
-      diagnostics.textContent = `${water} · Nutrient sufficiency ${Math.round(fertility * 100)}%${forecastTag}`;
+      diagnostics.textContent = `${planStats}${water} · Nutrient sufficiency ${Math.round(fertility * 100)}%${forecastTag}`;
     }
     retry.hidden = !nextState.parcelSimulationFailed;
     bareSoil.classList.toggle('btn-active', nextState.isBareSoil);
@@ -232,6 +284,8 @@ export function mountTerrainVisualizer(container, state, callbacks) {
     shieldStatus.hidden = Boolean(hasShield);
     shieldStatus.textContent = nextState.isBareSoil
       ? 'Bare soil · thermal shield disabled'
+      : nextState.parcelSimulationResult?.phase === 'transicion'
+      ? 'Fallow / crop residue transition · canopy shield inactive'
       : nextState.parcelSimulationFailed || nextState.parcelSimulationResult ? 'Thermal shield unavailable'
       : 'Computing thermal shield…';
     if (!nextState.parcelSimulationResult && !previewRequested) {
@@ -246,7 +300,7 @@ export function mountTerrainVisualizer(container, state, callbacks) {
 
     result = nextState.parcelSimulationResult;
     mesh = result ? buildParcelSimulationMesh(nextState.selectedParcel, result.cells) : null;
-    hour = result ? Math.min(12, result.timestamps.length - 1) : 0;
+    hour = result ? Math.min(hourControl.valueAsNumber || 12, result.timestamps.length - 1) : 0;
     legend.hidden = !result;
     legend.firstElementChild.hidden = !hasShield;
     shieldStatus.classList.toggle('terrain-legend-offset', Boolean(result && !hasShield));
@@ -271,7 +325,7 @@ function traceRing(path, ring) {
   path.closePath();
 }
 
-function drawCellSides(context, top, bottom, isHole) {
+function drawCellSides(context, top, bottom, isHole, sideColor = '#3a302b') {
   let signedArea = 0;
   for (let i = 0; i < top.length; i++) {
     const a = top[i];
@@ -279,7 +333,7 @@ function drawCellSides(context, top, bottom, isHole) {
     signedArea += a.x * b.y - a.y * b.x;
   }
   const sign = Math.sign(signedArea) * (isHole ? -1 : 1);
-  context.fillStyle = '#3a302b';
+  context.fillStyle = sideColor;
   for (let i = 0; i < top.length; i++) {
     const next = (i + 1) % top.length;
     if ((top[next].x - top[i].x) * sign >= 0) continue;

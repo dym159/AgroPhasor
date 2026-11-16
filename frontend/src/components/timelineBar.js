@@ -1,6 +1,6 @@
-import { CROP_DRAG_TYPE, TIMELINE_MONTHS } from '../data/mockVisualData.js';
+import { CROP_DRAG_TYPE, TIMELINE_MONTHS, VISUAL_CROPS } from '../data/mockVisualData.js';
 import { clearChildren, createElement } from '../utils/dom.js';
-import { formatPhaseDate, monthStart } from '../utils/phaseDates.js';
+import { addDays, daysBetween, formatPhaseDate, monthStart } from '../utils/phaseDates.js';
 
 export function createTimelineBar(container, initialState, callbacks) {
   if (!container) return { update: () => {} };
@@ -8,6 +8,7 @@ export function createTimelineBar(container, initialState, callbacks) {
   clearChildren(container);
   let state = initialState;
   let monthIndex = 0;
+  let playTimer = null;
 
   const yearInput = createElement('input', {
     type: 'number',
@@ -43,6 +44,22 @@ export function createTimelineBar(container, initialState, callbacks) {
     phaseList,
   );
 
+  const playButton = createElement('button', {
+    type: 'button',
+    className: 'btn btn-compact',
+    text: '▶ Play',
+    attrs: { 'aria-label': 'Play rotation evolution' },
+    onClick: () => togglePlay(),
+  });
+  const evolutionSlider = createElement('input', {
+    type: 'range',
+    className: 'timeline-slider timeline-evolution-slider',
+    attrs: { min: 0, max: 100, value: 0, 'aria-label': 'Scrub across crop rotation timeline' },
+  });
+  const evolutionProgress = createElement('span', {
+    className: 'timeline-phase-label',
+    attrs: { 'aria-live': 'polite' },
+  });
   const inspectionDate = createElement('input', { type: 'date', attrs: { 'aria-label': 'Date to simulate' } });
   const inspectButton = createElement('button', {
     type: 'button', className: 'btn btn-compact', text: 'Simulate date',
@@ -50,9 +67,70 @@ export function createTimelineBar(container, initialState, callbacks) {
       if (inspectionDate.value && inspectionDate.checkValidity()) callbacks.onInspectDate(inspectionDate.value);
     },
   });
-  const inspection = createElement('label', { className: 'timeline-bottom' }, [
-    'Parcel evolution', inspectionDate, inspectButton,
+  const inspection = createElement('div', { className: 'timeline-evolution' }, [
+    createElement('div', { className: 'timeline-bottom' }, [
+      playButton,
+      evolutionProgress,
+      inspectionDate,
+      inspectButton,
+    ]),
+    evolutionSlider,
   ]);
+
+  evolutionSlider.addEventListener('input', () => {
+    if (!state.phases.length) return;
+    const startIso = state.phases[0].start;
+    const targetIso = addDays(startIso, evolutionSlider.valueAsNumber);
+    if (targetIso) {
+      inspectionDate.value = targetIso;
+      callbacks.onInspectDate(targetIso);
+    }
+  });
+
+  inspectionDate.addEventListener('change', () => {
+    if (inspectionDate.value && inspectionDate.checkValidity()) {
+      callbacks.onInspectDate(inspectionDate.value);
+    }
+  });
+
+  function stopPlay() {
+    if (playTimer) {
+      clearInterval(playTimer);
+      playTimer = null;
+      playButton.textContent = '▶ Play';
+    }
+  }
+
+  function togglePlay() {
+    if (playTimer) {
+      stopPlay();
+      return;
+    }
+    if (!state.phases.length || state.phases.some((p) => !p.cropId || !p.harvest)) return;
+    playButton.textContent = '⏸ Pause';
+    const totalDays = Math.max(1, Number(evolutionSlider.max) || 1);
+    const stepDays = Math.max(1, Math.round(totalDays / 75));
+    if (evolutionSlider.valueAsNumber >= totalDays) {
+      evolutionSlider.value = '0';
+    }
+    playTimer = setInterval(() => {
+      if (!state.phases.length || state.phases.some((p) => !p.cropId || !p.harvest)) {
+        stopPlay();
+        return;
+      }
+      const maxVal = Math.max(1, Number(evolutionSlider.max) || 1);
+      const nextVal = Math.min(maxVal, evolutionSlider.valueAsNumber + stepDays);
+      evolutionSlider.value = String(nextVal);
+      const nextDate = addDays(state.phases[0].start, nextVal);
+      if (nextDate) {
+        inspectionDate.value = nextDate;
+        callbacks.onInspectDate(nextDate);
+      }
+      if (nextVal >= maxVal) {
+        stopPlay();
+      }
+    }, 110);
+  }
 
   const deltaTInput = createElement('input', {
     type: 'number',
@@ -72,7 +150,7 @@ export function createTimelineBar(container, initialState, callbacks) {
   const forecastSummary = createElement('summary', { text: 'Monte Carlo climate forecast' });
   const forecastMeta = createElement('p', { className: 'timeline-forecast-meta' });
   const forecastTableWrap = createElement('div', { className: 'timeline-forecast-scroll' });
-  const forecastPanel = createElement('details', { className: 'timeline-forecast' }, [
+  const forecastPanel = createElement('details', { className: 'timeline-forecast', attrs: { open: '' } }, [
     forecastSummary,
     createElement('div', { className: 'timeline-whatif' }, [
       createElement('label', {}, ['ΔT (°C)', deltaTInput]),
@@ -133,14 +211,36 @@ export function createTimelineBar(container, initialState, callbacks) {
 
   function renderPhases() {
     phaseList.hidden = state.phases.length === 0;
-    inspection.hidden = !state.phases.length || state.phases.some((phase) => !phase.cropId || !phase.harvest);
-    if (!inspection.hidden) {
-      inspectionDate.min = state.phases[0].start;
-      inspectionDate.max = state.phases.at(-1).harvest;
-      inspectionDate.value = state.simulationDate ?? state.phases[0].start;
+    const planReady = state.phases.length > 0 && state.phases.every((phase) => phase.cropId && phase.harvest);
+    inspection.hidden = !planReady;
+    if (!planReady) {
+      stopPlay();
+    } else {
+      const startIso = state.phases[0].start;
+      const endIso = state.phases.at(-1).harvest;
+      const totalDays = Math.max(1, daysBetween(startIso, endIso));
+      const activeDate = state.simulationDate && state.simulationDate >= startIso && state.simulationDate <= endIso
+        ? state.simulationDate
+        : endIso;
+      const currentDay = Math.max(0, Math.min(totalDays, daysBetween(startIso, activeDate)));
+      inspectionDate.min = startIso;
+      inspectionDate.max = endIso;
+      inspectionDate.value = activeDate;
+      evolutionSlider.max = String(totalDays);
+      evolutionSlider.value = String(currentDay);
+      const activePhaseIdx = state.phases.findIndex((p) => activeDate >= p.start && activeDate <= p.harvest);
+      const phaseTag = activePhaseIdx >= 0
+        ? `Phase ${activePhaseIdx + 1}/${state.phases.length}`
+        : 'Transition / Fallow';
+      evolutionProgress.textContent = `Parcel evolution · ${phaseTag} · Day ${currentDay}/${totalDays}`;
     }
+
+    const currentSimDate = state.simulationDate ?? state.phases.at(-1)?.harvest ?? state.phases[0]?.start;
     phaseList.replaceChildren(...state.phases.map((phase, index) => {
       const start = formatPhaseDate(phase.start);
+      const isPhaseActive = Boolean(
+        currentSimDate && phase.start <= currentSimDate && (!phase.harvest || currentSimDate <= phase.harvest)
+      );
       const cropSelect = createElement('select', {
         className: 'timeline-phase-crop', attrs: { 'aria-label': `Crop starting ${start}` },
       }, [
@@ -154,7 +254,11 @@ export function createTimelineBar(container, initialState, callbacks) {
             }))),
       ]);
       cropSelect.value = phase.cropId;
-      cropSelect.addEventListener('change', () => callbacks.onAssignCrop(index, cropSelect.value));
+      cropSelect.addEventListener('change', (e) => {
+        e.stopPropagation();
+        callbacks.onAssignCrop(index, cropSelect.value);
+      });
+      cropSelect.addEventListener('click', (e) => e.stopPropagation());
       const phaseForecast = state.parcelSimulationResult?.phase_forecasts?.[index];
       const forecastText = phaseForecast
         ? `Conf ${phaseForecast.confidence_pct}% · ${phaseForecast.yield_t_ha?.p50 ?? 0} t/ha · ${phaseForecast.climate?.temp_mean_c ?? '-'}°C · ${phaseForecast.climate?.precip_total_p50_mm ?? '-'} mm`
@@ -163,9 +267,14 @@ export function createTimelineBar(container, initialState, callbacks) {
         ? `Yield p10–p90: ${phaseForecast.yield_t_ha?.p10}–${phaseForecast.yield_t_ha?.p90} t/ha · Frost risk: ${phaseForecast.frost_risk_pct}% · Heat risk: ${phaseForecast.heat_risk_pct}% · Mean water stress: ${phaseForecast.water_stress_days_mean} d`
         : '';
       const segment = createElement('div', {
-        className: 'timeline-phase', attrs: { role: 'group', 'aria-label': `Phase ${index + 1}` },
+        className: `timeline-phase${isPhaseActive ? ' is-active' : ''}`,
+        attrs: {
+          role: 'group',
+          'aria-label': `Phase ${index + 1}`,
+          title: phase.harvest ? 'Click to inspect terrain at this phase' : '',
+        },
       }, [
-        createElement('span', { className: 'timeline-phase-date', text: `Start · ${start}` }),
+        createElement('span', { className: 'timeline-phase-date', text: `Phase ${index + 1} · ${start}` }),
         createElement('span', { className: 'timeline-phase-date', text: phase.harvest
           ? `${phase.manualEnd ? 'Manual end' : 'Estimated harvest'} · ${formatPhaseDate(phase.harvest)}`
           : phase.cropId ? 'Set the end month and year' : 'Choose a crop' }),
@@ -176,6 +285,17 @@ export function createTimelineBar(container, initialState, callbacks) {
           attrs: { title: forecastTitle },
         })] : []),
       ]);
+      segment.addEventListener('click', () => {
+        if (!phase.harvest || !planReady) return;
+        stopPlay();
+        const peakDate = addDays(phase.harvest, -1) || phase.harvest;
+        const midDate = addDays(phase.start, Math.max(1, Math.floor(daysBetween(phase.start, phase.harvest) / 2)));
+        let nextTarget = peakDate;
+        if (currentSimDate === peakDate) nextTarget = phase.harvest;
+        else if (currentSimDate === phase.harvest) nextTarget = phase.start;
+        else if (currentSimDate === phase.start) nextTarget = midDate;
+        callbacks.onInspectDate(nextTarget);
+      });
       segment.addEventListener('dragover', (event) => {
         if (!event.dataTransfer.types.includes(CROP_DRAG_TYPE)) return;
         event.preventDefault();
@@ -239,12 +359,13 @@ export function createTimelineBar(container, initialState, callbacks) {
   function update(next) {
     const phasesChanged = next.phases !== state.phases;
     const catalogChanged = next.cropCatalog !== state.cropCatalog;
+    const simDateChanged = next.simulationDate !== state.simulationDate;
     const forecastChanged = next.parcelSimulationResult !== state.parcelSimulationResult
       || next.climateDeltaT !== state.climateDeltaT
       || next.climateDeltaPct !== state.climateDeltaPct;
     const added = next.phases.length > state.phases.length;
     state = next;
-    if (!phasesChanged && !catalogChanged && !forecastChanged) return;
+    if (!phasesChanged && !catalogChanged && !forecastChanged && !simDateChanged) return;
     if (phasesChanged) syncDate();
     renderPhases();
     if (added) phaseList.scrollLeft = phaseList.scrollWidth;

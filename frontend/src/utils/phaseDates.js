@@ -75,12 +75,20 @@ export function applyTimelineSnapshot(baseResult, targetDate) {
       ndvi_satelital: Number(lerp(cA.ndvi_satelital ?? 0.15, cB.ndvi_satelital ?? 0.15, t).toFixed(3)),
       h_current_mm: Number(lerp(cA.h_current_mm, cB.h_current_mm, t).toFixed(4)),
       accumulated_erosion_mm: Number(lerp(cA.accumulated_erosion_mm, cB.accumulated_erosion_mm, t).toFixed(4)),
+      rain_height_variation_mm: Number(lerp(cA.rain_height_variation_mm ?? 0, cB.rain_height_variation_mm ?? 0, t).toFixed(4)),
+      visual_height_delta_m: Number(lerp(cA.visual_height_delta_m ?? 0, cB.visual_height_delta_m ?? 0, t).toFixed(5)),
+      soil_vitality_index: Number(lerp(cA.soil_vitality_index ?? 1, cB.soil_vitality_index ?? 1, t).toFixed(4)),
       soil_color_rgb: cA.soil_color_rgb.map((ch, i) => Math.round(lerp(ch, cB.soil_color_rgb[i], t))),
       base_soil_color_rgb: (cA.base_soil_color_rgb ?? cA.soil_color_rgb).map((ch, i) =>
         Math.round(lerp(ch, (cB.base_soil_color_rgb ?? cB.soil_color_rgb)[i], t))
       ),
       shield_enabled: cA.shield_enabled,
+      eta_lissajous: Number(lerp(cA.eta_lissajous ?? 0, cB.eta_lissajous ?? 0, t).toFixed(4)),
+      shield_score: Number(lerp(cA.shield_score ?? 0, cB.shield_score ?? 0, t).toFixed(4)),
       hourly_environmental_index: lerpArray(cA.hourly_environmental_index, cB.hourly_environmental_index, t, 4),
+      hourly_shield_score: cA.hourly_shield_score && cB.hourly_shield_score
+        ? lerpArray(cA.hourly_shield_score, cB.hourly_shield_score, t, 4)
+        : (cA.hourly_shield_score ?? cB.hourly_shield_score),
       hourly_air_temps: lerpArray(cA.hourly_air_temps, cB.hourly_air_temps, t, 2),
       hourly_canopy_temps: lerpArray(cA.hourly_canopy_temps, cB.hourly_canopy_temps, t, 2),
       lissajous_area: Number(lerp(cA.lissajous_area, cB.lissajous_area, t).toFixed(3)),
