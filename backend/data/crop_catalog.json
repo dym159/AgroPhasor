@@ -4,8 +4,8 @@
       "dt_simulacion_seg": 86400.0,
       "dt_lissajous_seg": 3600.0,
       "dt_macro_astar_dias": 10.0,
-      "epsilon_regularizador": 1e-6,
-      "umbral_taylor_phi1": 1e-8,
+      "epsilon_regularizador": 1e-06,
+      "umbral_taylor_phi1": 1e-08,
       "tau_aviso_riego_dias": 3.0,
       "kappa_z_visual": 1.0,
       "kappa_er_visual": 0.05,
@@ -44,10 +44,26 @@
       "default": 0.08
     },
     "respaldo_hidrico_por_textura": {
-      "arenoso": { "theta_fc": 0.14, "theta_wp": 0.06, "mult_erodabilidad": 0.75 },
-      "franco": { "theta_fc": 0.27, "theta_wp": 0.12, "mult_erodabilidad": 1.00 },
-      "arcilloso": { "theta_fc": 0.39, "theta_wp": 0.21, "mult_erodabilidad": 0.85 },
-      "limoso": { "theta_fc": 0.32, "theta_wp": 0.14, "mult_erodabilidad": 1.35 }
+      "arenoso": {
+        "theta_fc": 0.14,
+        "theta_wp": 0.06,
+        "mult_erodabilidad": 0.75
+      },
+      "franco": {
+        "theta_fc": 0.27,
+        "theta_wp": 0.12,
+        "mult_erodabilidad": 1.0
+      },
+      "arcilloso": {
+        "theta_fc": 0.39,
+        "theta_wp": 0.21,
+        "mult_erodabilidad": 0.85
+      },
+      "limoso": {
+        "theta_fc": 0.32,
+        "theta_wp": 0.14,
+        "mult_erodabilidad": 1.35
+      }
     },
     "umbrales_quimicos_phi_pH_EC": {
       "pH_optimo_min": 5.8,
@@ -77,26 +93,35 @@
       "secano": 0.0,
       "gravedad": 0.55,
       "aspersion": 0.75,
-      "goteo": 0.90
+      "goteo": 0.9
     },
-    "r_res_rastrojo_default": 0.30,
-    "costo_riego_usd_mm_ha": 1.20,
-    "pareto_f2_peso_suelo_omega_H": 0.50,
-    "pareto_f2_peso_nutrientes_omega_N": 0.50
+    "r_res_rastrojo_default": 0.3,
+    "costo_riego_usd_mm_ha": 1.2,
+    "pareto_f2_peso_suelo_omega_H": 0.5,
+    "pareto_f2_peso_nutrientes_omega_N": 0.5
   },
   "guia_calibracion_satelital": {
     "edo1_termica": {
-      "parametros_ajustables": ["h_c_W_m2C", "Cp_c_J_m2C", "h_suelo_W_m2C"],
+      "parametros_ajustables": [
+        "h_c_W_m2C",
+        "Cp_c_J_m2C",
+        "h_suelo_W_m2C"
+      ],
       "fuente_observacion": "ECOSTRESS (LST) y NASA POWER (TS)",
       "metodo": "Minimos cuadrados no lineales sobre ventana historica de 30-60 dias"
     },
     "edo2_hidrologica": {
-      "parametros_ajustables": ["hidrologia_por_clase_drenaje_ssurgo", "E_suelo0_mm_dia"],
+      "parametros_ajustables": [
+        "hidrologia_por_clase_drenaje_ssurgo",
+        "E_suelo0_mm_dia"
+      ],
       "fuente_observacion": "SMAP (humedad superficial) y OpenET (ET real)",
       "metodo": "Ajuste de tasa de secado post-lluvia tras eventos GPM/IMERG"
     },
     "edo4_biomasa": {
-      "parametros_ajustables": ["kp_c_t_ha_MJ_m2"],
+      "parametros_ajustables": [
+        "kp_c_t_ha_MJ_m2"
+      ],
       "fuente_observacion": "Sentinel-2 y Landsat (series temporales NDVI/EVI)",
       "metodo": "Escalamiento de curva normalizada B(t)/B_max frente a vigor satelital"
     }
@@ -114,7 +139,7 @@
       },
       "termodinamica_edo1": {
         "Cp_c_J_m2C": 48000.0,
-        "alpha_c": 0.80,
+        "alpha_c": 0.8,
         "h_c_W_m2C": 28.0,
         "T_opt_C": 25.0,
         "dT_tol_C": 14.0,
@@ -146,7 +171,9 @@
       "economia_pareto_f3": {
         "precio_mercado_usd_t": 220.0,
         "costo_insumos_usd_ha": 650.0
-      }
+      },
+      "nombre": "Maíz",
+      "grupo": "Granos"
     },
     "Frijol_Phaseolus_vulgaris": {
       "familia_botanica": "Fabaceae",
@@ -168,7 +195,7 @@
         "T_letal_C": 37.0
       },
       "hidrologia_edo2_edo4": {
-        "gamma_max_mm_dia_kPa": 12.10,
+        "gamma_max_mm_dia_kPa": 12.1,
         "Zr_mm": 600.0,
         "p_agotamiento": 0.45,
         "K_W_mm": 35.0
@@ -176,7 +203,7 @@
       "nutrientes_edo3_edo4": {
         "F_fix_kg_t_dia": 0.14,
         "F_sol_kg_t_dia": 0.05,
-        "ka_N_mm_inv_dia": 0.00010,
+        "ka_N_mm_inv_dia": 0.0001,
         "ka_P_mm_inv_dia": 0.00014,
         "ka_K_mm_inv_dia": 0.00013,
         "K_N_kg_ha": 20.0,
@@ -186,12 +213,27 @@
       "biomasa_edo4": {
         "kp_c_t_ha_MJ_m2": 0.013,
         "B_max_t_ha": 7.5,
-        "B0_t_ha": 0.20,
+        "B0_t_ha": 0.2,
         "km0_c_dia": 0.009
       },
       "economia_pareto_f3": {
         "precio_mercado_usd_t": 850.0,
         "costo_insumos_usd_ha": 520.0
+      },
+      "nombre": "Frijol",
+      "grupo": "Leguminosas",
+      "calendarios": {
+        "Cusco": {
+          "duracion_dias": 120,
+          "meses_siembra": [
+            9,
+            10,
+            11,
+            12,
+            1
+          ],
+          "fuente": "INIA 425 Martín Cusco, Compendio de cultivares INIA, pp. 188–189"
+        }
       }
     },
     "Fresa_Fragaria_ananassa": {
@@ -202,7 +244,7 @@
         "t_inicio_cosecha_dias": 75,
         "intervalo_corte_dias": 12,
         "f_corte_parcial": 0.18,
-        "HI_indice_cosecha_final": 0.20
+        "HI_indice_cosecha_final": 0.2
       },
       "termodinamica_edo1": {
         "Cp_c_J_m2C": 32000.0,
@@ -214,7 +256,7 @@
         "T_letal_C": 34.0
       },
       "hidrologia_edo2_edo4": {
-        "gamma_max_mm_dia_kPa": 11.80,
+        "gamma_max_mm_dia_kPa": 11.8,
         "Zr_mm": 350.0,
         "p_agotamiento": 0.35,
         "K_W_mm": 28.0
@@ -224,7 +266,7 @@
         "F_sol_kg_t_dia": 0.03,
         "ka_N_mm_inv_dia": 0.00014,
         "ka_P_mm_inv_dia": 0.00016,
-        "ka_K_mm_inv_dia": 0.00020,
+        "ka_K_mm_inv_dia": 0.0002,
         "K_N_kg_ha": 28.0,
         "K_P_kg_ha": 20.0,
         "K_K_kg_ha": 42.0
@@ -260,7 +302,7 @@
         "T_letal_C": 32.0
       },
       "hidrologia_edo2_edo4": {
-        "gamma_max_mm_dia_kPa": 12.50,
+        "gamma_max_mm_dia_kPa": 12.5,
         "Zr_mm": 500.0,
         "p_agotamiento": 0.35,
         "K_W_mm": 32.0
@@ -278,13 +320,758 @@
       "biomasa_edo4": {
         "kp_c_t_ha_MJ_m2": 0.016,
         "B_max_t_ha": 16.0,
-        "B0_t_ha": 0.30,
+        "B0_t_ha": 0.3,
         "km0_c_dia": 0.008
       },
       "economia_pareto_f3": {
         "precio_mercado_usd_t": 340.0,
         "costo_insumos_usd_ha": 1150.0
+      },
+      "nombre": "Papa",
+      "grupo": "Tubérculos"
+    }
+  },
+  "cultivos_referencia": {
+    "caupi": {
+      "nombre": "Caupí",
+      "variedad": "Vaina Verde",
+      "familia_botanica": "Fabaceae",
+      "grupo": "Leguminosas",
+      "duracion_dias": 90,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=208",
+      "calendarios": {
+        "Lambayeque": {
+          "duracion_dias": 90,
+          "meses_siembra": [
+            10,
+            11,
+            12,
+            1,
+            2,
+            3
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=208"
+        },
+        "Piura": {
+          "duracion_dias": 90,
+          "meses_siembra": [
+            10,
+            11,
+            12,
+            1,
+            2,
+            3
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=208"
+        },
+        "Tumbes": {
+          "duracion_dias": 90,
+          "meses_siembra": [
+            10,
+            11,
+            12,
+            1,
+            2,
+            3
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=208"
+        },
+        "La Libertad": {
+          "duracion_dias": 90,
+          "meses_siembra": [
+            10,
+            11,
+            12,
+            1,
+            2,
+            3
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=208"
+        }
       }
+    },
+    "haba": {
+      "nombre": "Haba",
+      "variedad": "Siwina",
+      "familia_botanica": "Fabaceae",
+      "grupo": "Leguminosas",
+      "duracion_dias": 158,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=216",
+      "calendarios": {
+        "Apurímac": {
+          "duracion_dias": 158,
+          "meses_siembra": [
+            9,
+            10
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=216"
+        },
+        "Puno": {
+          "duracion_dias": 158,
+          "meses_siembra": [
+            9,
+            10
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=216"
+        },
+        "Cusco": {
+          "duracion_dias": 158,
+          "meses_siembra": [
+            9,
+            10
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=216"
+        },
+        "Ayacucho": {
+          "duracion_dias": 158,
+          "meses_siembra": [
+            9,
+            10
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=216"
+        }
+      }
+    },
+    "arveja": {
+      "nombre": "Arveja",
+      "variedad": "Remate",
+      "familia_botanica": "Fabaceae",
+      "grupo": "Leguminosas",
+      "duracion_dias": 150,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=236",
+      "calendarios": {
+        "Junín": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=236"
+        },
+        "Cajamarca": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=236"
+        },
+        "Huancavelica": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=236"
+        },
+        "Áncash": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=236"
+        },
+        "Ayacucho": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=236"
+        }
+      }
+    },
+    "tarwi": {
+      "nombre": "Tarwi",
+      "variedad": "Masacanchino",
+      "familia_botanica": "Fabaceae",
+      "grupo": "Leguminosas",
+      "duracion_dias": 208,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=242",
+      "calendarios": {
+        "Apurímac": {
+          "duracion_dias": 208,
+          "meses_siembra": [
+            10,
+            11
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=242"
+        },
+        "La Libertad": {
+          "duracion_dias": 208,
+          "meses_siembra": [
+            10,
+            11
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=242"
+        },
+        "Cajamarca": {
+          "duracion_dias": 208,
+          "meses_siembra": [
+            10,
+            11
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=242"
+        },
+        "Amazonas": {
+          "duracion_dias": 208,
+          "meses_siembra": [
+            10,
+            11
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=242"
+        }
+      }
+    },
+    "lenteja": {
+      "nombre": "Lenteja",
+      "variedad": "Argentino Precoz",
+      "familia_botanica": "Fabaceae",
+      "grupo": "Leguminosas",
+      "duracion_dias": 125,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=248"
+    },
+    "arroz": {
+      "nombre": "Arroz",
+      "variedad": "La Unión 23",
+      "familia_botanica": "Poaceae",
+      "grupo": "Granos",
+      "duracion_dias": 133,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=254"
+    },
+    "trigo": {
+      "nombre": "Trigo",
+      "variedad": "Antapampino",
+      "familia_botanica": "Poaceae",
+      "grupo": "Granos",
+      "duracion_dias": 125,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=288",
+      "calendarios": {
+        "Cajamarca": {
+          "duracion_dias": 125,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=288"
+        },
+        "Pasco": {
+          "duracion_dias": 125,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=288"
+        },
+        "Junín": {
+          "duracion_dias": 125,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=288"
+        },
+        "Huancavelica": {
+          "duracion_dias": 125,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=288"
+        },
+        "Huánuco": {
+          "duracion_dias": 125,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=288"
+        }
+      }
+    },
+    "triticale": {
+      "nombre": "Triticale",
+      "variedad": "Salkantay",
+      "familia_botanica": "Poaceae",
+      "grupo": "Granos",
+      "duracion_dias": 103,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=320",
+      "calendarios": {
+        "Pasco": {
+          "duracion_dias": 103,
+          "meses_siembra": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=320"
+        },
+        "Junín": {
+          "duracion_dias": 103,
+          "meses_siembra": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=320"
+        },
+        "Huancavelica": {
+          "duracion_dias": 103,
+          "meses_siembra": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=320"
+        },
+        "Huánuco": {
+          "duracion_dias": 103,
+          "meses_siembra": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=320"
+        },
+        "Ayacucho": {
+          "duracion_dias": 103,
+          "meses_siembra": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=320"
+        }
+      }
+    },
+    "cebada": {
+      "nombre": "Cebada",
+      "variedad": "La Milagrosa",
+      "familia_botanica": "Poaceae",
+      "grupo": "Granos",
+      "duracion_dias": 137,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=326",
+      "calendarios": {
+        "Cajamarca": {
+          "duracion_dias": 137,
+          "meses_siembra": [
+            11,
+            12,
+            1
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=326"
+        },
+        "Pasco": {
+          "duracion_dias": 137,
+          "meses_siembra": [
+            11,
+            12,
+            1
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=326"
+        },
+        "Junín": {
+          "duracion_dias": 137,
+          "meses_siembra": [
+            11,
+            12,
+            1
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=326"
+        },
+        "Huancavelica": {
+          "duracion_dias": 137,
+          "meses_siembra": [
+            11,
+            12,
+            1
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=326"
+        },
+        "Huánuco": {
+          "duracion_dias": 137,
+          "meses_siembra": [
+            11,
+            12,
+            1
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=326"
+        }
+      }
+    },
+    "avena": {
+      "nombre": "Avena para semilla",
+      "variedad": "Katekyl",
+      "familia_botanica": "Poaceae",
+      "grupo": "Granos",
+      "duracion_dias": 190,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=334",
+      "calendarios": {
+        "Cajamarca": {
+          "duracion_dias": 190,
+          "meses_siembra": [
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=334"
+        },
+        "Amazonas": {
+          "duracion_dias": 190,
+          "meses_siembra": [
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=334"
+        },
+        "La Libertad": {
+          "duracion_dias": 190,
+          "meses_siembra": [
+            10,
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=334"
+        }
+      }
+    },
+    "vicia": {
+      "nombre": "Vicia para grano",
+      "variedad": "Caxamarca",
+      "familia_botanica": "Fabaceae",
+      "grupo": "Leguminosas",
+      "duracion_dias": 195,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=352"
+    },
+    "quinua": {
+      "nombre": "Quinua",
+      "variedad": "Atipaq",
+      "familia_botanica": "Amaranthaceae",
+      "grupo": "Granos",
+      "duracion_dias": 155,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=364",
+      "calendarios": {
+        "Puno": {
+          "duracion_dias": 155,
+          "meses_siembra": [
+            10,
+            11
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=364"
+        }
+      }
+    },
+    "kiwicha": {
+      "nombre": "Kiwicha",
+      "variedad": "La Frondosa",
+      "familia_botanica": "Amaranthaceae",
+      "grupo": "Granos",
+      "duracion_dias": 153,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=390",
+      "calendarios": {
+        "Puno": {
+          "duracion_dias": 153,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=390"
+        },
+        "Cusco": {
+          "duracion_dias": 153,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=390"
+        },
+        "Ayacucho": {
+          "duracion_dias": 153,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=390"
+        },
+        "Apurímac": {
+          "duracion_dias": 153,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=390"
+        },
+        "Huancavelica": {
+          "duracion_dias": 153,
+          "meses_siembra": [
+            11,
+            12
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=390"
+        }
+      }
+    },
+    "canihua": {
+      "nombre": "Cañihua",
+      "variedad": "Illpa",
+      "familia_botanica": "Amaranthaceae",
+      "grupo": "Granos",
+      "duracion_dias": 140,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=398",
+      "calendarios": {
+        "Puno": {
+          "duracion_dias": 140,
+          "meses_siembra": [
+            10,
+            11
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=398"
+        }
+      }
+    },
+    "algodon": {
+      "nombre": "Algodón",
+      "variedad": "Colorina",
+      "familia_botanica": "Malvaceae",
+      "grupo": "Industriales",
+      "duracion_dias": 168,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=400",
+      "calendarios": {
+        "San Martín": {
+          "duracion_dias": 168,
+          "meses_siembra": [
+            12,
+            1,
+            2,
+            3
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=400"
+        }
+      }
+    },
+    "ajo": {
+      "nombre": "Ajo",
+      "variedad": "Donajus",
+      "familia_botanica": "Amaryllidaceae",
+      "grupo": "Hortalizas",
+      "duracion_dias": 150,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=422",
+      "calendarios": {
+        "Arequipa": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=422"
+        },
+        "Ica": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=422"
+        },
+        "Lima": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=422"
+        },
+        "Áncash": {
+          "duracion_dias": 150,
+          "meses_siembra": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=422"
+        }
+      }
+    },
+    "zanahoria": {
+      "nombre": "Zanahoria",
+      "variedad": "Huaralina Precoz",
+      "familia_botanica": "Apiaceae",
+      "grupo": "Hortalizas",
+      "duracion_dias": 100,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=430",
+      "calendarios": {
+        "Lima": {
+          "duracion_dias": 100,
+          "meses_siembra": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=430"
+        },
+        "Ica": {
+          "duracion_dias": 100,
+          "meses_siembra": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=430"
+        },
+        "Junín": {
+          "duracion_dias": 115,
+          "meses_siembra": [],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=430"
+        }
+      }
+    },
+    "camote": {
+      "nombre": "Camote",
+      "variedad": "Bondadosa",
+      "familia_botanica": "Convolvulaceae",
+      "grupo": "Raíces y tubérculos",
+      "duracion_dias": 113,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=92"
+    },
+    "oca": {
+      "nombre": "Oca",
+      "variedad": "K’eny Rojo",
+      "familia_botanica": "Oxalidaceae",
+      "grupo": "Raíces y tubérculos",
+      "duracion_dias": 190,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=106",
+      "calendarios": {
+        "Puno": {
+          "duracion_dias": 190,
+          "meses_siembra": [
+            9
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=106"
+        }
+      }
+    },
+    "pallar": {
+      "nombre": "Pallar",
+      "variedad": "Iqueño Precoz",
+      "familia_botanica": "Fabaceae",
+      "grupo": "Leguminosas",
+      "duracion_dias": 125,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=442",
+      "calendarios": {
+        "Ica": {
+          "duracion_dias": 125,
+          "meses_siembra": [
+            3,
+            4
+          ],
+          "fuente": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/00d5f440-ebef-4b68-a70a-d240ac46bc1f/content#page=442"
+        }
+      }
+    },
+    "yuca": {
+      "nombre": "Yuca",
+      "familia_botanica": "Euphorbiaceae",
+      "grupo": "Raíces y tubérculos",
+      "duracion_dias": 240,
+      "fuente_ciclo": "https://cdn.www.gob.pe/uploads/document/file/6064998/4344772-observatorio-de-siembras-y-perspectivas-de-produccion-yuca.pdf?v=1712843397",
+      "calendarios": {
+        "Amazonas": {
+          "duracion_dias": 240,
+          "meses_siembra": [],
+          "fuente": "https://cdn.www.gob.pe/uploads/document/file/6064998/4344772-observatorio-de-siembras-y-perspectivas-de-produccion-yuca.pdf?v=1712843397"
+        },
+        "Junín": {
+          "duracion_dias": 360,
+          "meses_siembra": [],
+          "fuente": "https://cdn.www.gob.pe/uploads/document/file/6064998/4344772-observatorio-de-siembras-y-perspectivas-de-produccion-yuca.pdf?v=1712843397"
+        },
+        "Ucayali": {
+          "duracion_dias": 270,
+          "meses_siembra": [],
+          "fuente": "https://cdn.www.gob.pe/uploads/document/file/6064998/4344772-observatorio-de-siembras-y-perspectivas-de-produccion-yuca.pdf?v=1712843397"
+        },
+        "San Martín": {
+          "duracion_dias": 180,
+          "meses_siembra": [],
+          "fuente": "https://cdn.www.gob.pe/uploads/document/file/6064998/4344772-observatorio-de-siembras-y-perspectivas-de-produccion-yuca.pdf?v=1712843397"
+        }
+      }
+    },
+    "olluco": {
+      "nombre": "Olluco",
+      "familia_botanica": "Basellaceae",
+      "grupo": "Raíces y tubérculos",
+      "duracion_dias": 200,
+      "fuente_ciclo": "https://www2.congreso.gob.pe/sicr/cendocbib/con4_uibd.nsf/EA54F80C677EA73C05257D20007700FD/%24FILE/Gu%C3%ADaCampoCultivosAndinos.pdf"
+    },
+    "paprika": {
+      "nombre": "Ají páprika",
+      "familia_botanica": "Solanaceae",
+      "grupo": "Hortalizas",
+      "duracion_dias": 135,
+      "fuente_ciclo": "https://repositorio.inia.gob.pe/server/api/core/bitstreams/4023af50-e2e0-45fd-b047-8e3cd142ae66/content#page=18"
     }
   }
 }
